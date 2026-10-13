@@ -3267,6 +3267,9 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 
 	if (m_curState != newState)
 	{
+		// A model swap invalidates the early prepared render pose as well
+		// as turret bone IDs, even when it happens during a render frame.
+		m_lastPreparedPresentationFrame = (UnsignedInt)-1;
 		// Bone identities may change with the model condition state.
 		for (Int turret = 0; turret < MAX_TURRETS; ++turret)
 			m_turretRenderPose[turret].valid = FALSE;
