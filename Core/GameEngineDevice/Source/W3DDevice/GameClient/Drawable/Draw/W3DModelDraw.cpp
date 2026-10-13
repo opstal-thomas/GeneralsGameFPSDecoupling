@@ -2050,12 +2050,15 @@ void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 }
 
 //-------------------------------------------------------------------------------------------------
-// Only models that already own live bone-attached particle systems require
-// early preparation. Initial particle systems still start through the normal
-// draw path, avoiding eager offscreen effect creation.
+// Existing tracked emitters must follow the current interpolated bones.
+// Additionally, allow new bone-attached systems to be initialized before
+// the particle update when this model was already visible. Never create
+// offscreen/newly spawned state particles eagerly across the entire scene.
 Bool W3DModelDraw::needsVisualPosePreparation() const
 {
-	return m_renderObject != nullptr && !m_particleSystemIDs.empty();
+	return m_renderObject != nullptr &&
+		(!m_particleSystemIDs.empty() ||
+		 (m_needRecalcBoneParticleSystems && m_renderObject->Is_Really_Visible()));
 }
 
 //-------------------------------------------------------------------------------------------------
