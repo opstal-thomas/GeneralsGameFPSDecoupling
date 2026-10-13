@@ -40,6 +40,7 @@
 #include "Lib/BaseType.h"
 
 #include "Common/BuildAssistant.h"
+#include "Common/DrawableInterpolationMath.h"
 #include "Common/FramePacer.h"
 #include "Common/GameUtility.h"
 #include "Common/GlobalData.h"
@@ -175,6 +176,8 @@ W3DView::W3DView()
 	m_FXPitch = 1.0f;
 	m_freezeTimeForCameraMovement = false;
 	m_lastScreenToTerrainValid = false;
+	m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = INVALID_ID;
 
 	//Enhancements from CNC3 WST 4/15/2003. JSC Integrated 5/20/03.
 	m_scriptedState = 0;
@@ -921,6 +924,8 @@ void W3DView::set3DCameraLookAt(const Coord3D &pos, const Coord3D &dir, Real rol
 void W3DView::reset()
 {
 	View::reset();
+	m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = INVALID_ID;
 
 	// Just in case...
 	setTimeMultiplier(1); // Set time rate back to 1.
