@@ -56,6 +56,24 @@ namespace DrawableInterpolationMath
 		return quaternionDot > -cosineThreshold && quaternionDot < cosineThreshold;
 	}
 
+	// Integrate the authored 30 Hz recoil rate over fractional presentation
+	// frames. Full steps preserve the legacy distance, and subdivisions compose.
+	inline float recoilDampingFactor(float damping, float thirtyHzSteps)
+	{
+		if (!(thirtyHzSteps > 0.0f) || !(damping >= 0.0f))
+			return 1.0f;
+		return powf(damping, thirtyHzSteps);
+	}
+
+	inline float recoilTravel(float rate, float damping, float thirtyHzSteps)
+	{
+		if (!(thirtyHzSteps > 0.0f))
+			return 0.0f;
+		if (!(damping >= 0.0f) || fabsf(damping - 1.0f) < 0.00001f)
+			return rate * thirtyHzSteps;
+		return rate * (1.0f - recoilDampingFactor(damping, thirtyHzSteps)) / (1.0f - damping);
+	}
+
 	inline float presentationBlend(float perThirtyHzStep, float thirtyHzFrameRatio)
 	{
 		// Convert a legacy blend (e.g. 10% per 30 Hz render) into an

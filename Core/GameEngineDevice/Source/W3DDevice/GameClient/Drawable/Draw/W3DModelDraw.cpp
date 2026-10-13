@@ -2078,15 +2078,16 @@ void W3DModelDraw::prepareVisualPose(const Matrix3D* transformMtx)
 }
 
 //-------------------------------------------------------------------------------------------------
-// Ordinary models retain the previous on-demand render path. Models which
-// were prepared before particle simulation must not advance animation and
-// client recoil a second time when their draw module is submitted.
+// Stateful render preparation may run only once per presentation frame,
+// even when different cameras or render passes submit the same model.
 void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
 {
 	if (!TheGameClient ||
 		m_lastPreparedPresentationFrame != TheGameClient->getPresentationFrameID())
 	{
 		updateVisualPoseState(transformMtx);
+		if (TheGameClient)
+			m_lastPreparedPresentationFrame = TheGameClient->getPresentationFrameID();
 	}
 }
 
@@ -2602,6 +2603,12 @@ void W3DModelDraw::handleClientRecoil()
 
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
 
+	// Recoil is client presentation, not game state: integrate authored 30 Hz
+	// rates using the elapsed render delta, and hold while time is frozen.
+	const Real recoilSteps = TheFramePacer && !TheFramePacer->isTimeFrozen() &&
+		!TheFramePacer->isGameHalted() && (!TheGameLogic || !TheGameLogic->isGamePaused()) ?
+		TheFramePacer->getBaseOverUpdateFpsRatio() : 0.0f;
+
 	// do recoil, if any
 	for (int wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)
 	{
@@ -2634,25 +2641,33 @@ void W3DModelDraw::handleClientRecoil()
 
 					case WeaponRecoilInfo::RECOIL_START:
 					case WeaponRecoilInfo::RECOIL:
-						recoils[i].m_shift += recoils[i].m_recoilRate;
-						recoils[i].m_recoilRate *= d->m_recoilDamping;			// recoil decelerates
-						if (recoils[i].m_shift >= d->m_maxRecoil)
+						if (recoilSteps > 0.0f)
 						{
-							recoils[i].m_shift = d->m_maxRecoil;
-							recoils[i].m_state = WeaponRecoilInfo::SETTLE;
-						}
-						else if (fabs(recoils[i].m_recoilRate) < TINY_RECOIL)
-						{
-							recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							recoils[i].m_shift += DrawableInterpolationMath::recoilTravel(
+									recoils[i].m_recoilRate, d->m_recoilDamping, recoilSteps);
+							recoils[i].m_recoilRate *= DrawableInterpolationMath::recoilDampingFactor(
+									d->m_recoilDamping, recoilSteps);
+							if (recoils[i].m_shift >= d->m_maxRecoil)
+							{
+								recoils[i].m_shift = d->m_maxRecoil;
+								recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							}
+							else if (fabs(recoils[i].m_recoilRate) < TINY_RECOIL)
+							{
+								recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							}
 						}
 						break;
 
 					case WeaponRecoilInfo::SETTLE:
-						recoils[i].m_shift -= d->m_recoilSettle;
-						if (recoils[i].m_shift <= 0.0f)
+						if (recoilSteps > 0.0f)
 						{
-							recoils[i].m_shift = 0.0f;
-							recoils[i].m_state = WeaponRecoilInfo::IDLE;
+							recoils[i].m_shift -= d->m_recoilSettle * recoilSteps;
+							if (recoils[i].m_shift <= 0.0f)
+							{
+								recoils[i].m_shift = 0.0f;
+								recoils[i].m_state = WeaponRecoilInfo::IDLE;
+							}
 						}
 						break;
 				}

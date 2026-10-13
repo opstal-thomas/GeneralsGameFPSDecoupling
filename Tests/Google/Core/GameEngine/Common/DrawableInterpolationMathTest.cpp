@@ -104,3 +104,37 @@ TEST(DrawableInterpolationMath, QuaternionSlerpUsesShortestYawAcrossWrap)
 	EXPECT_LT(forward.X, -0.99f);
 	EXPECT_NEAR(0.0f, forward.Y, 0.03f);
 }
+
+
+TEST(DrawableInterpolationMath, RecoilPreservesAuthoredThirtyHzStep)
+{
+	const float rate = 5.0f;
+	const float damping = 0.75f;
+	EXPECT_NEAR(rate, DrawableInterpolationMath::recoilTravel(rate, damping, 1.0f), 0.00001f);
+	EXPECT_NEAR(rate * damping, rate * DrawableInterpolationMath::recoilDampingFactor(damping, 1.0f), 0.00001f);
+	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::recoilTravel(rate, damping, 0.0f));
+	EXPECT_FLOAT_EQ(1.0f, DrawableInterpolationMath::recoilDampingFactor(damping, 0.0f));
+	EXPECT_FLOAT_EQ(4.0f, DrawableInterpolationMath::recoilTravel(2.0f, 1.0f, 2.0f));
+}
+
+TEST(DrawableInterpolationMath, RecoilDistanceComposesAcrossPresentationRates)
+{
+	const float initialRate = 3.5f;
+	const float damping = 0.8f;
+	const float reference = DrawableInterpolationMath::recoilTravel(initialRate, damping, 30.0f);
+	const unsigned int renderRates[] = { 30, 60, 144, 240 };
+	for (unsigned int i = 0; i < sizeof(renderRates) / sizeof(renderRates[0]); ++i)
+	{
+		const float frameRatio = 30.0f / renderRates[i];
+		float rate = initialRate;
+		float traveled = 0.0f;
+		for (unsigned int frame = 0; frame < renderRates[i]; ++frame)
+		{
+			traveled += DrawableInterpolationMath::recoilTravel(rate, damping, frameRatio);
+			rate *= DrawableInterpolationMath::recoilDampingFactor(damping, frameRatio);
+		}
+		EXPECT_NEAR(reference, traveled, 0.001f);
+		EXPECT_NEAR(initialRate * DrawableInterpolationMath::recoilDampingFactor(damping, 30.0f),
+			rate, 0.001f);
+	}
+}
