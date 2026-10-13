@@ -12,6 +12,42 @@ This branch introduces a bounded fixed-step clock for Command & Conquer: General
 - FramePacer reports the clock's interpolation alpha to existing render-side interpolators; this does not automatically interpolate translation for every drawable.
 - No changes are made to simulation object time steps, replay formats or network command serialization.
 
+## Visual interpolation (first implementation)
+
+Both games now capture each object-backed `Drawable`'s world position and
+heading after each completed simulation tick in `GameClient::step()`.
+`Drawable::draw()` interpolates only its **rendered** transform between
+the two most recent snapshots using `FramePacer::getLogicFramePhase()`.
+
+- This does **not** modify `Object`, AI, collision, pathfinding, or network
+  command serialization. Snapshot history is transient and not saved.
+- Movement and flat-ground yaw interpolate along the shortest angular arc.
+  Terrain-aligned entities retain the authoritative orientation for now.
+- Newly spawned/rebound objects snap to their initial pose, and jumps over
+  60 game-world units per simulation step snap to their newest pose to avoid
+  interpolation trails on teleports.
+- Drawables without authoritative objects continue using their existing
+  client-only transforms.
+- The presentation is effectively one fixed simulation step behind the
+  authoritative state (about 33 ms at 30 Hz), by design.
+- Existing camera tracking, UI overlays, some bone attachments and client
+  animation timing do not yet use interpolated transforms.
+- This is a feature-branch implementation requiring in-game testing of
+  moving ground vehicles, aircraft, turning units, teleport effects, and
+  object spawning/despawning.
+
+To compare with the prior rendering behavior, launch the game with:
+
+```bat
+set GENERALS_DISABLE_DRAWABLE_INTERPOLATION=1
+generalszh.exe
+```
+
+Omit the environment variable (or set it to `0`) to enable interpolation.
+It is read once when the first applicable drawable renders, so restart the
+game to change the setting. The default on this development branch is
+interpolation enabled.
+
 ## Rendering FPS configuration
 
 The rendering frame rate is intentionally independent of the fixed 30 Hz
