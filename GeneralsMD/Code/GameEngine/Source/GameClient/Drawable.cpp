@@ -2600,6 +2600,11 @@ void Drawable::captureSimulationTransform()
 		return;
 	}
 
+	// Draw modules capture turret and attachment poses from the same completed
+	// simulation tick as this drawable's body transform.
+	for (DrawModule **dm = getDrawModules(); dm && *dm; ++dm)
+		(*dm)->captureVisualSimulationState();
+
 	const Matrix3D *pose = getTransformMatrix();
 	const Vector3 translation = pose->Get_Translation();
 
