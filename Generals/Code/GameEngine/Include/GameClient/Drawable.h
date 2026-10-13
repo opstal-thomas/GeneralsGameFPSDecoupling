@@ -411,6 +411,8 @@ public:
 
 	const Matrix3D *getTransformMatrix() const;	///< return the world transform
 
+	Bool isVisualInterpolationEnabled() const; ///< Render-only visual interpolation state, honoring pause and testing overrides.
+	void getInterpolatedRenderPosition(Coord3D &outPosition) const; ///< Camera and presentation effects only.
 	void captureSimulationTransform(); ///< Snapshot authoritative pose after a logic tick (presentation-only).
 	void draw();													///< render the drawable to the given view
 	void updateDrawable(Real timeScale);														///< update the drawable
