@@ -898,7 +898,7 @@ void GameEngine::execute()
 				{
 					char line[320];
 					sprintf(line,
-						"[GeneralsFPS][Engine] Loop=%.1f/s Simulation=%.1f/s Update=%.2fms Wait=%.2fms RenderCap=%d ActiveCap=%d LimitEnabled=%d InGame=%d Network=%d\\n",
+						"[GeneralsFPS][Engine] Loop=%.1f/s Simulation=%.1f/s Update=%.2fms Wait=%.2fms RenderCap=%d ActiveCap=%d LimitEnabled=%d InGame=%d Network=%d\n",
 						1000.0 * renderedIterations / elapsedMs,
 						1000.0 * simulationTicks / elapsedMs,
 						(double)updateDuration / renderedIterations,
