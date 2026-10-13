@@ -38,6 +38,8 @@
 
 #include "Common/crc.h"
 #include "Common/CRCDebug.h"
+#include "Common/DrawableInterpolationMath.h"
+#include "Common/FramePacer.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
@@ -46,6 +48,7 @@
 #include "Common/GameLOD.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/FXList.h"
 #include "GameClient/Shadow.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
@@ -1742,6 +1745,9 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	}
 	m_needRecalcBoneParticleSystems = false;
 	m_fullyObscuredByShroud = false;
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
 
 	// only validate the current time-of-day and weather conditions by default.
 	getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(),
@@ -1784,6 +1790,10 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::onDrawableBoundToObject()
 {
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
+
 	getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(),
 											TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT,
 											TheGlobalData->m_weather == WEATHER_SNOWY);
@@ -2040,7 +2050,49 @@ void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Existing tracked emitters must follow the current interpolated bones.
+// Additionally, allow new bone-attached systems to be initialized before
+// the particle update when this model was already visible. Never create
+// offscreen/newly spawned state particles eagerly across the entire scene.
+Bool W3DModelDraw::needsVisualPosePreparation() const
+{
+	return m_renderObject != nullptr &&
+		(!m_particleSystemIDs.empty() ||
+		 (m_needRecalcBoneParticleSystems && m_renderObject->Is_Really_Visible()));
+}
+
+//-------------------------------------------------------------------------------------------------
+// Called once before particle simulation for attachment owners. All model,
+// turret, animation and bone changes run here, never on the simulation Object.
+void W3DModelDraw::prepareVisualPose(const Matrix3D* transformMtx)
+{
+	if (!TheGameClient)
+		return;
+
+	const UnsignedInt frameID = TheGameClient->getPresentationFrameID();
+	if (m_lastPreparedPresentationFrame == frameID)
+		return;
+
+	updateVisualPoseState(transformMtx);
+	m_lastPreparedPresentationFrame = frameID;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Stateful render preparation may run only once per presentation frame,
+// even when different cameras or render passes submit the same model.
 void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
+{
+	if (!TheGameClient ||
+		m_lastPreparedPresentationFrame != TheGameClient->getPresentationFrameID())
+	{
+		updateVisualPoseState(transformMtx);
+		if (TheGameClient)
+			m_lastPreparedPresentationFrame = TheGameClient->getPresentationFrameID();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::updateVisualPoseState(const Matrix3D* transformMtx)
 {
 	// update whether or not we should be animating.
 	setPauseAnimation( !getDrawable()->getShouldAnimate(getW3DModelDrawModuleData()->m_animationsRequirePower) );
@@ -2417,6 +2469,45 @@ void W3DModelDraw::stopClientParticleSystems()
 	DANGER WARNING READ ME
 	DANGER WARNING READ ME
 */
+void W3DModelDraw::captureVisualSimulationState()
+{
+	// Capture only when the owning Object has completed a fixed simulation tick.
+	// No gameplay state is modified. Missing/rebound turrets start a fresh pose.
+	const Object *obj = getDrawable()->getObject();
+	const AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : nullptr;
+
+	for (Int slot = 0; slot < MAX_TURRETS; ++slot)
+	{
+		TurretRenderPose &pose = m_turretRenderPose[slot];
+		if (!ai || !m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID) ||
+			(!m_curState->m_turrets[slot].m_turretAngleBone &&
+			 !m_curState->m_turrets[slot].m_turretPitchBone))
+		{
+			pose.valid = FALSE;
+			continue;
+		}
+
+		Real angle = 0.0f;
+		Real pitch = 0.0f;
+		ai->getTurretRotAndPitch((WhichTurretType)slot, &angle, &pitch);
+
+		if (pose.valid)
+		{
+			pose.previousYaw = pose.currentYaw;
+			pose.previousPitch = pose.currentPitch;
+		}
+		else
+		{
+			pose.previousYaw = angle;
+			pose.previousPitch = pitch;
+		}
+		pose.currentYaw = angle;
+		pose.currentPitch = pitch;
+		pose.valid = TRUE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::handleClientTurretPositioning()
 {
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID))
@@ -2429,10 +2520,20 @@ void W3DModelDraw::handleClientTurretPositioning()
 		Real turretPitch = 0;
 		if (tur.m_turretAngleBone || tur.m_turretPitchBone)
 		{
-			const Object *obj = getDrawable()->getObject();
-			if (obj)
+			if (getDrawable()->isVisualInterpolationEnabled() && m_turretRenderPose[tslot].valid)
 			{
-				const AIUpdateInterface* ai = obj->getAIUpdateInterface();
+				const TurretRenderPose &pose = m_turretRenderPose[tslot];
+				const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+				turretAngle = pose.previousYaw +
+					DrawableInterpolationMath::shortestAngleDelta(pose.previousYaw, pose.currentYaw) * alpha;
+				turretPitch = pose.previousPitch +
+					DrawableInterpolationMath::shortestAngleDelta(pose.previousPitch, pose.currentPitch) * alpha;
+			}
+			else
+			{
+				// Fallback for paused games, missing samples or A/B opt-out.
+				const Object *obj = getDrawable()->getObject();
+				const AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : nullptr;
 				if (ai)
 					ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch);
 			}
@@ -2502,6 +2603,12 @@ void W3DModelDraw::handleClientRecoil()
 
 	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
 
+	// Recoil is client presentation, not game state: integrate authored 30 Hz
+	// rates using the elapsed render delta, and hold while time is frozen.
+	const Real recoilSteps = TheFramePacer && !TheFramePacer->isTimeFrozen() &&
+		!TheFramePacer->isGameHalted() && (!TheGameLogic || !TheGameLogic->isGamePaused()) ?
+		TheFramePacer->getBaseOverUpdateFpsRatio() : 0.0f;
+
 	// do recoil, if any
 	for (int wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)
 	{
@@ -2534,25 +2641,33 @@ void W3DModelDraw::handleClientRecoil()
 
 					case WeaponRecoilInfo::RECOIL_START:
 					case WeaponRecoilInfo::RECOIL:
-						recoils[i].m_shift += recoils[i].m_recoilRate;
-						recoils[i].m_recoilRate *= d->m_recoilDamping;			// recoil decelerates
-						if (recoils[i].m_shift >= d->m_maxRecoil)
+						if (recoilSteps > 0.0f)
 						{
-							recoils[i].m_shift = d->m_maxRecoil;
-							recoils[i].m_state = WeaponRecoilInfo::SETTLE;
-						}
-						else if (fabs(recoils[i].m_recoilRate) < TINY_RECOIL)
-						{
-							recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							recoils[i].m_shift += DrawableInterpolationMath::recoilTravel(
+									recoils[i].m_recoilRate, d->m_recoilDamping, recoilSteps);
+							recoils[i].m_recoilRate *= DrawableInterpolationMath::recoilDampingFactor(
+									d->m_recoilDamping, recoilSteps);
+							if (recoils[i].m_shift >= d->m_maxRecoil)
+							{
+								recoils[i].m_shift = d->m_maxRecoil;
+								recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							}
+							else if (fabs(recoils[i].m_recoilRate) < TINY_RECOIL)
+							{
+								recoils[i].m_state = WeaponRecoilInfo::SETTLE;
+							}
 						}
 						break;
 
 					case WeaponRecoilInfo::SETTLE:
-						recoils[i].m_shift -= d->m_recoilSettle;
-						if (recoils[i].m_shift <= 0.0f)
+						if (recoilSteps > 0.0f)
 						{
-							recoils[i].m_shift = 0.0f;
-							recoils[i].m_state = WeaponRecoilInfo::IDLE;
+							recoils[i].m_shift -= d->m_recoilSettle * recoilSteps;
+							if (recoils[i].m_shift <= 0.0f)
+							{
+								recoils[i].m_shift = 0.0f;
+								recoils[i].m_state = WeaponRecoilInfo::IDLE;
+							}
 						}
 						break;
 				}
@@ -3167,6 +3282,16 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		doHideShowSubObjs(&newState->m_hideShowVec);
 	}
 	hideAllHeadlights(m_hideHeadlights);
+
+	if (m_curState != newState)
+	{
+		// A model swap invalidates the early prepared render pose as well
+		// as turret bone IDs, even when it happens during a render frame.
+		m_lastPreparedPresentationFrame = (UnsignedInt)-1;
+		// Bone identities may change with the model condition state.
+		for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+			m_turretRenderPose[turret].valid = FALSE;
+	}
 
 	const ModelConditionInfo* prevState = m_curState;	// save, to pass to adjustAnimation (could be null)
 	m_curState = newState;
@@ -4261,6 +4386,9 @@ void W3DModelDraw::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void W3DModelDraw::loadPostProcess()
 {
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
 
 	// extend base class
 	DrawModule::loadPostProcess();

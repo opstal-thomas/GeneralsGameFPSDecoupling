@@ -105,6 +105,7 @@ GameClient::GameClient()
 	m_textBearingDrawableList.clear();
 
 	m_frame = 0;
+	m_presentationFrameID = 0;
 
 	m_drawableList = nullptr;
 
@@ -453,6 +454,7 @@ void GameClient::init()
 /** Reset the game client for a new game */
 void GameClient::reset()
 {
+	m_presentationFrameID = 0;
 	Drawable *draw, *nextDraw;
 //	m_drawableHash.clear();
 //	m_drawableHash.resize(DRAWABLE_HASH_SIZE);
@@ -577,24 +579,10 @@ void GameClient::update()
 	}
 
 
-  if (TheInGameUI->isCameraTrackingDrawable())
-  {
-    Drawable *draw = TheInGameUI->getFirstSelectedDrawable();
-    if ( draw )
-    {
-      TheTacticalView->userLookAt( draw->getPosition() );
-    }
-    else
-      TheInGameUI->setCameraTrackingDrawable( FALSE );
-  }
 
+	// An active intro has its own presentation path after simulation.
 	if (m_intro != nullptr)
-	{
-		// redraw all views, update the GUI
-		TheDisplay->UPDATE();
-		TheDisplay->DRAW();
 		return;
-	}
 
 	// update the window system itself
 	{
@@ -696,6 +684,56 @@ void GameClient::update()
 		}
 	}
 
+
+	{
+		// let display string factory handle its update
+		TheDisplayStringManager->update();
+	}
+
+	{
+		// update the shell
+		TheShell->UPDATE();
+	}
+
+	{
+		// update the in game UI
+		TheInGameUI->UPDATE();
+	}
+}
+
+// Rendering must happen after all game ticks and after the interpolation alpha
+// is updated. All input/message/UI handling stays in update() so command
+// propagation and multiplayer lockstep retain their existing ordering.
+void GameClient::presentFrame()
+{
+	++m_presentationFrameID;
+	if (m_intro != nullptr)
+	{
+		TheDisplay->UPDATE();
+		TheDisplay->DRAW();
+		return;
+	}
+
+	// Camera tracking must use the same sampled pose as the model. It also
+	// belongs after fixed ticks and before W3DView::update(), not in input.
+	if (TheInGameUI->isCameraTrackingDrawable())
+	{
+		Drawable *selected = TheInGameUI->getFirstSelectedDrawable();
+		if (selected)
+		{
+			Coord3D visualPosition;
+			selected->getInterpolatedRenderPosition(visualPosition);
+			TheTacticalView->userLookAt(&visualPosition);
+		}
+		else
+		{
+			TheInGameUI->setCameraTrackingDrawable(FALSE);
+		}
+	}
+
+	const Bool freezeTime = TheGameEngine->isTimeFrozen() || TheGameEngine->isGameHalted();
+	const Int localPlayerIndex = rts::getObservedOrLocalPlayer()->getPlayerIndex();
+
 #if defined(RTS_DEBUG)
 	// need to draw the first frame, then don't draw again until TheGlobalData->m_noDraw
 	if (TheGlobalData->m_noDraw > TheGameLogic->getFrame() && TheGameLogic->getFrame() > 0)
@@ -712,6 +750,30 @@ void GameClient::update()
 	// update display
 	{
 		TheDisplay->UPDATE();
+	}
+
+	// Prepare attachment-owner poses before the particle manager advances.
+	// The W3D module only does the early work when it has attached emitters;
+	// otherwise the traditional draw path prepares the model on demand.
+	// Never do graphical preparation during headless replay validation.
+	// Switch off only the new pose-preparation phase for A/B regression tests,
+	// leaving the known-working body/turret interpolation enabled.
+	static Int prepassDisabled = -1;
+	if (prepassDisabled < 0)
+	{
+		char value[8] = { 0 };
+		prepassDisabled =
+			GetEnvironmentVariableA("GENERALS_DISABLE_VISUAL_POSE_PREPASS", value, sizeof(value)) > 0 &&
+			value[0] == '1' ? 1 : 0;
+	}
+	if (!freezeTime && !TheGlobalData->m_headless && !prepassDisabled)
+	{
+		for (Drawable *drawable = firstDrawable(); drawable;)
+		{
+			Drawable *next = drawable->getNextDrawable();
+			drawable->prepareVisualPose();
+			drawable = next;
+		}
 	}
 
 	// update all particle systems
@@ -732,20 +794,6 @@ void GameClient::update()
 		TheDisplay->DRAW();
 	}
 
-	{
-		// let display string factory handle its update
-		TheDisplayStringManager->update();
-	}
-
-	{
-		// update the shell
-		TheShell->UPDATE();
-	}
-
-	{
-		// update the in game UI
-		TheInGameUI->UPDATE();
-	}
 }
 
 void GameClient::draw()

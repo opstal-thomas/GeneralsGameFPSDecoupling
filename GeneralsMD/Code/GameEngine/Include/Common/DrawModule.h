@@ -69,6 +69,15 @@ public:
 	static ModuleType getModuleType() { return MODULETYPE_DRAW; }
 	static Int getInterfaceMask() { return MODULEINTERFACE_DRAW; }
 
+	// Presentation-only snapshots, invoked after each fixed simulation tick.
+	// Derived render modules may record the poses of animated child bones.
+	virtual void captureVisualSimulationState() {}
+
+	// Optional early update for attachment owners, called before particle
+	// simulation. No draw submission; non-participating modules pay no cost.
+	virtual Bool needsVisualPosePreparation() const { return FALSE; }
+	virtual void prepareVisualPose(const Matrix3D* transformMtx) {}
+
 	virtual void doDrawModule(const Matrix3D* transformMtx) = 0;
 
 	virtual void setShadowsEnabled(Bool enable) = 0;

@@ -394,6 +394,8 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 	m_locoInfo = nullptr;
 	m_physicsXform = nullptr;
 	m_hasRenderSamples = FALSE;
+	m_hasRenderRotationSamples = FALSE;
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 
 	// sanity
 	if( TheGameClient == nullptr || thingTemplate == nullptr )
@@ -2597,32 +2599,75 @@ void Drawable::captureSimulationTransform()
 	if (!getObject())
 	{
 		m_hasRenderSamples = FALSE;
+		m_hasRenderRotationSamples = FALSE;
 		return;
 	}
 
+	// Capture the same completed logic tick for the body's pose and any
+	// turret/attachment draw modules. This is never fed back to simulation.
+	for (DrawModule **dm = getDrawModules(); dm && *dm; ++dm)
+		(*dm)->captureVisualSimulationState();
+
 	const Matrix3D *pose = getTransformMatrix();
 	const Vector3 translation = pose->Get_Translation();
-
 	Coord3D position;
 	position.x = translation.X;
 	position.y = translation.Y;
 	position.z = translation.Z;
-	const Real yaw = pose->Get_Z_Rotation();
+
+	// Thing::m_transform is a rigid world transform (without the drawable's
+	// instance scale). Quaternion sampling preserves aircraft roll, pitch and
+	// terrain-aligned tilt while avoiding Euler angle wrap and gimbal lock.
+	Quaternion rotation = Build_Quaternion(*pose);
+	const Bool rotationValid = rotation.Is_Valid() &&
+		rotation.Length2() > 0.5f && rotation.Length2() < 1.5f;
+	if (rotationValid)
+		rotation.Normalize();
 
 	if (!m_hasRenderSamples)
 	{
 		m_previousRenderPosition = position;
 		m_currentRenderPosition = position;
-		m_previousRenderYaw = yaw;
-		m_currentRenderYaw = yaw;
+		m_hasRenderRotationSamples = rotationValid;
+		if (rotationValid)
+		{
+			m_previousRenderRotation = rotation;
+			m_currentRenderRotation = rotation;
+		}
 		m_hasRenderSamples = TRUE;
 		return;
 	}
 
 	m_previousRenderPosition = m_currentRenderPosition;
-	m_previousRenderYaw = m_currentRenderYaw;
 	m_currentRenderPosition = position;
-	m_currentRenderYaw = yaw;
+
+	if (rotationValid)
+	{
+		if (m_hasRenderRotationSamples)
+		{
+			m_previousRenderRotation = m_currentRenderRotation;
+			m_currentRenderRotation = rotation;
+
+			const Real dot = m_previousRenderRotation.X * rotation.X +
+				m_previousRenderRotation.Y * rotation.Y +
+				m_previousRenderRotation.Z * rotation.Z +
+				m_previousRenderRotation.W * rotation.W;
+			if (DrawableInterpolationMath::isRotationDiscontinuity(dot))
+				m_previousRenderRotation = m_currentRenderRotation;
+		}
+		else
+		{
+			m_previousRenderRotation = rotation;
+			m_currentRenderRotation = rotation;
+		}
+		m_hasRenderRotationSamples = TRUE;
+	}
+	else
+	{
+		// Invalid/non-rigid rotations use the authoritative matrix, never a
+		// potentially invalid quaternion that could poison a render frame.
+		m_hasRenderRotationSamples = FALSE;
+	}
 
 	const Real dx = m_currentRenderPosition.x - m_previousRenderPosition.x;
 	const Real dy = m_currentRenderPosition.y - m_previousRenderPosition.y;
@@ -2630,12 +2675,129 @@ void Drawable::captureSimulationTransform()
 	if (DrawableInterpolationMath::isTeleport(dx, dy, dz))
 	{
 		m_previousRenderPosition = m_currentRenderPosition;
-		m_previousRenderYaw = m_currentRenderYaw;
+		if (m_hasRenderRotationSamples)
+			m_previousRenderRotation = m_currentRenderRotation;
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
 /** default draw is to just call the database defined draw */
+//-------------------------------------------------------------------------------------------------
+// Presentation-only interpolation is shared by models, turrets and camera.
+// The A/B override disables all three without changing simulation state.
+Bool Drawable::isVisualInterpolationEnabled() const
+{
+	if (!getObject() || !m_hasRenderSamples || !TheFramePacer || !TheGameLogic ||
+		TheFramePacer->isTimeFrozen() || TheFramePacer->isGameHalted() ||
+		TheGameLogic->isGamePaused())
+		return FALSE;
+
+	static Int disabled = -1;
+	if (disabled < 0)
+	{
+		char value[8] = { 0 };
+		disabled = GetEnvironmentVariableA("GENERALS_DISABLE_DRAWABLE_INTERPOLATION", value, sizeof(value)) > 0 &&
+			value[0] == '1' ? 1 : 0;
+	}
+	return disabled == 0;
+}
+
+// Visual-only position; never pass this value into simulation or collision.
+void Drawable::getInterpolatedRenderPosition(Coord3D &outPosition) const
+{
+	const Matrix3D *transform = getTransformMatrix();
+	outPosition.x = transform->Get_X_Translation();
+	outPosition.y = transform->Get_Y_Translation();
+	outPosition.z = transform->Get_Z_Translation();
+
+	if (!isVisualInterpolationEnabled())
+		return;
+
+	const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+	outPosition.x = DrawableInterpolationMath::lerp(m_previousRenderPosition.x, m_currentRenderPosition.x, alpha);
+	outPosition.y = DrawableInterpolationMath::lerp(m_previousRenderPosition.y, m_currentRenderPosition.y, alpha);
+	outPosition.z = DrawableInterpolationMath::lerp(m_previousRenderPosition.z, m_currentRenderPosition.z, alpha);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::getInterpolatedWorldTransform(Matrix3D &outTransform) const
+{
+	// The body world pose is safe for view/camera code. Local art offsets,
+	// model scale and client physics belong only in buildVisualTransform().
+	outTransform = *getTransformMatrix();
+	if (!isVisualInterpolationEnabled())
+		return;
+
+	const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+	if (m_hasRenderRotationSamples)
+	{
+		Quaternion rotation;
+		Slerp(rotation, m_previousRenderRotation, m_currentRenderRotation, alpha);
+		outTransform.Set_Rotation(rotation);
+	}
+
+	Coord3D renderPosition;
+	getInterpolatedRenderPosition(renderPosition);
+	outTransform.Set_X_Translation(renderPosition.x);
+	outTransform.Set_Y_Translation(renderPosition.y);
+	outTransform.Set_Z_Translation(renderPosition.z);
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::buildVisualTransform(Matrix3D &transformMtx)
+{
+	// Build from the visual-only pose; never write it back to the Object.
+	getInterpolatedWorldTransform(transformMtx);
+	if (!isInstanceIdentity())
+	{
+#ifdef ALLOW_TEMPORARIES
+		transformMtx = transformMtx * (*getInstanceMatrix());
+#else
+		transformMtx.postMul(*getInstanceMatrix());
+#endif
+	}
+
+	if (TheGlobalData->m_showClientPhysics && getObject() && !getObject()->isDisabledByType( DISABLED_HELD ))
+	{
+		applyPhysicsXform(&transformMtx);
+	}
+
+}
+
+//-------------------------------------------------------------------------------------------------
+// Perform early pose preparation only for render modules with live attachment
+// owners; other modules still prepare on demand when their drawable is drawn.
+void Drawable::prepareVisualPose()
+{
+	if (!TheGameClient || m_hidden || m_hiddenByStealth || getFullyObscuredByShroud())
+		return;
+
+	DrawModule **modules = getDrawModules();
+	Bool needsPreparation = FALSE;
+	for (DrawModule **dm = modules; *dm; ++dm)
+	{
+		if ((*dm)->needsVisualPosePreparation())
+		{
+			needsPreparation = TRUE;
+			break;
+		}
+	}
+	if (!needsPreparation)
+		return;
+
+	const UnsignedInt presentationFrame = TheGameClient->getPresentationFrameID();
+	if (m_preparedVisualPoseFrame == presentationFrame)
+		return;
+
+	buildVisualTransform(m_preparedVisualTransform);
+	m_preparedVisualPoseFrame = presentationFrame;
+	for (DrawModule **dm = modules; *dm; ++dm)
+	{
+		if ((*dm)->needsVisualPosePreparation())
+			(*dm)->prepareVisualPose(&m_preparedVisualTransform);
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 void Drawable::draw()
 {
@@ -2674,56 +2836,13 @@ void Drawable::draw()
 	validatePos();
 #endif
 
-	// Draw from a past/current simulation snapshot without touching the
-	// authoritative Object transform. Visual presentation intentionally lags
-	// a fixed tick to allow smooth rendering between 30 Hz game updates.
-	Matrix3D transformMtx = *getTransformMatrix();
-	if (getObject() && m_hasRenderSamples && TheFramePacer && TheGameLogic &&
-		!TheFramePacer->isTimeFrozen() && !TheFramePacer->isGameHalted() &&
-		!TheGameLogic->isGamePaused())
-	{
-		// Escape hatch for regression comparison: set this to 1 before launch.
-		static Int s_interpolationDisabled = -1;
-		if (s_interpolationDisabled < 0)
-		{
-			char value[8] = { 0 };
-			s_interpolationDisabled =
-				GetEnvironmentVariableA("GENERALS_DISABLE_DRAWABLE_INTERPOLATION", value, sizeof(value)) > 0 &&
-				value[0] == '1' ? 1 : 0;
-		}
-
-		if (!s_interpolationDisabled)
-		{
-			const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
-			// Rotation occurs in local space. Keep terrain-aligned orientation
-			// authoritative until slope-aware quaternion interpolation is added.
-			if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
-			{
-				const Real angularDelta =
-					DrawableInterpolationMath::shortestAngleDelta(m_previousRenderYaw, m_currentRenderYaw);
-				transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
-			}
-			transformMtx.Set_X_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.x, m_currentRenderPosition.x, alpha));
-			transformMtx.Set_Y_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.y, m_currentRenderPosition.y, alpha));
-			transformMtx.Set_Z_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.z, m_currentRenderPosition.z, alpha));
-		}
-	}
-	if (!isInstanceIdentity())
-	{
-#ifdef ALLOW_TEMPORARIES
-		transformMtx = transformMtx * (*getInstanceMatrix());
-#else
-		transformMtx.postMul(*getInstanceMatrix());
-#endif
-	}
-
-	if (TheGlobalData->m_showClientPhysics && getObject() && !getObject()->isDisabledByType( DISABLED_HELD ))
-	{
-		applyPhysicsXform(&transformMtx);
-	}
+	// Reuse the exact matrix that supplied this frame's bone attachments.
+	// In particular, client physics must not be integrated a second time.
+	Matrix3D transformMtx;
+	if (TheGameClient && m_preparedVisualPoseFrame == TheGameClient->getPresentationFrameID())
+		transformMtx = m_preparedVisualTransform;
+	else
+		buildVisualTransform(transformMtx);
 
 	for (DrawModule** dm = getDrawModules(); *dm; ++dm)
 	{
@@ -2735,6 +2854,20 @@ void Drawable::draw()
 /** Compute the health bar region based on the health of the object and the
 	* zoom level of the camera */
 // ------------------------------------------------------------------------------------------------
+// Keep screen-space icons on the interpolated drawable while preserving
+// the object's authored health-box offset above the authoritative position.
+// This is visual-only; hit tests, Object state and UI data are unchanged.
+static void getPresentationHealthBoxPosition(const Drawable *draw, const Object *obj, Coord3D &position)
+{
+	obj->getHealthBoxPosition(position);
+	Coord3D visual;
+	draw->getInterpolatedRenderPosition(visual);
+	const Coord3D *world = obj->getPosition();
+	position.x += visual.x - world->x;
+	position.y += visual.y - world->y;
+	position.z += visual.z - world->z;
+}
+
 static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 {
 
@@ -2747,7 +2880,7 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 		return FALSE;
 
 	Coord3D p;
-	obj->getHealthBoxPosition(p);
+	getPresentationHealthBoxPosition(draw, obj, p);
 	ICoord2D screenCenter;
 	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
 		return FALSE;
@@ -2964,7 +3097,8 @@ void Drawable::drawAmmo( const IRegion2D *healthBarRegion )
 	//Int totalWidth = (boxWidth+SPACING)*numTotal;
 
 	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
+	Coord3D pos;
+	getInterpolatedRenderPosition(pos);
 	pos.x += TheGlobalData->m_ammoPipWorldOffset.x;
 	pos.y += TheGlobalData->m_ammoPipWorldOffset.y;
 	pos.z += TheGlobalData->m_ammoPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
@@ -3031,7 +3165,8 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	//Int totalWidth = (boxWidth+SPACING)*numTotal;
 
 	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
+	Coord3D pos;
+	getInterpolatedRenderPosition(pos);
 	pos.x += TheGlobalData->m_containerPipWorldOffset.x;
 	pos.y += TheGlobalData->m_containerPipWorldOffset.y;
 	pos.z += TheGlobalData->m_containerPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
@@ -3215,7 +3350,7 @@ void Drawable::drawUIText()
 		//draw an F, here
 		Coord3D p;
 		ICoord2D screenCenter;
-		obj->getHealthBoxPosition(p);
+		getPresentationHealthBoxPosition(this, obj, p);
 		if( ! TheTacticalView->worldToScreen( &p, &screenCenter ) )
 			return;
 
@@ -3748,7 +3883,9 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 	// get center position in drawable
 	ICoord2D screen;
 	Coord3D pos;
-	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
+	Coord3D visualPosition;
+	getInterpolatedRenderPosition(visualPosition);
+	getDrawableGeometryInfo().getCenterPosition(visualPosition, pos);
 
 	// convert drawable center position to screen coords
 	TheTacticalView->worldToScreen( &pos, &screen );
@@ -3775,7 +3912,9 @@ void Drawable::drawCaption( const IRegion2D *healthBarRegion )
 	// get center position in drawable
 	ICoord2D screen;
 	Coord3D pos;
-	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
+	Coord3D visualPosition;
+	getInterpolatedRenderPosition(visualPosition);
+	getDrawableGeometryInfo().getCenterPosition(visualPosition, pos);
 
 	// convert drawable center position to screen coords
 	TheTacticalView->worldToScreen( &pos, &screen );
@@ -3837,7 +3976,7 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	Coord3D p;
 	ICoord2D screenCenter;
-	obj->getHealthBoxPosition(p);
+	getPresentationHealthBoxPosition(this, obj, p);
 	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
 		return;
 
@@ -4178,8 +4317,10 @@ DrawableID Drawable::getID() const
 void Drawable::friend_bindToObject( Object *obj ) ///< bind this drawable to an object ID
 {
 	m_object = obj;
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 	// An object rebind, including load/ghost transitions, invalidates the old pose.
 	m_hasRenderSamples = FALSE;
+	m_hasRenderRotationSamples = FALSE;
 	if (getObject())
 	{
 		if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)
@@ -5469,9 +5610,11 @@ void Drawable::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void Drawable::loadPostProcess()
 {
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 	// Saved games persist authoritative transforms, not render interpolation
 	// history. Begin again from the loaded pose on the next logic tick.
 	m_hasRenderSamples = FALSE;
+	m_hasRenderRotationSamples = FALSE;
 		// if we have an object, we don't need to save/load the pos, just restore it.
 		// if we don't, we'd better save it!
 	if (m_object != nullptr)

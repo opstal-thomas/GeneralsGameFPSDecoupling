@@ -40,6 +40,7 @@
 #include "Lib/BaseType.h"
 
 #include "Common/BuildAssistant.h"
+#include "Common/DrawableInterpolationMath.h"
 #include "Common/FramePacer.h"
 #include "Common/GameUtility.h"
 #include "Common/GlobalData.h"
@@ -175,6 +176,8 @@ W3DView::W3DView()
 	m_FXPitch = 1.0f;
 	m_freezeTimeForCameraMovement = false;
 	m_lastScreenToTerrainValid = false;
+	m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = INVALID_ID;
 
 	//Enhancements from CNC3 WST 4/15/2003. JSC Integrated 5/20/03.
 	m_scriptedState = 0;
@@ -382,11 +385,9 @@ void W3DView::buildCameraTransform( Matrix3D *transform, const Vector3 &sourcePo
 	transform->Make_Identity();
 	transform->Look_At( sourcePos, targetPos, 0 );
 
-	//WST 11/12/2002 New camera shaker system
-	// TheSuperHackers @tweak The camera shaker is now decoupled from the render update.
-	// TheSuperHackers @todo Move Update_Camera_Shaker to the W3DView::update function.
-	CameraShakerSystem.Timestep(TheFramePacer->getLogicTimeStepMilliseconds());
-	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+	// TheSuperHackers @fix Sample camera shake once for the final view update,
+	// not when temporary camera matrices are constructed for constraints.
+	// Neither time progression nor random generation belongs in this helper.
 	transform->Rotate_X(m_shakerAngles.X);
 	transform->Rotate_Y(m_shakerAngles.Y);
 	transform->Rotate_Z(m_shakerAngles.Z);
@@ -752,6 +753,11 @@ void W3DView::updateCameraTransform()
 		}
 	}
 
+	// Sample the global shake exactly once for this final view transform.
+	// Camera matrix building also serves constraint probes, which must not
+	// advance or resample the effect.
+	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+
 	Matrix3D cameraTransform;
 	buildCameraTransform(&cameraTransform, sourcePos, targetPos);
 
@@ -921,6 +927,8 @@ void W3DView::set3DCameraLookAt(const Coord3D &pos, const Coord3D &dir, Real rol
 void W3DView::reset()
 {
 	View::reset();
+	m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = INVALID_ID;
 
 	// Just in case...
 	setTimeMultiplier(1); // Set time rate back to 1.
@@ -1386,12 +1394,14 @@ void W3DView::update()
 		updateTerrain();
 	}
 
-	static Real followFactor = -1;
-	ObjectID cameraLock = getCameraLock();
-	if (cameraLock == INVALID_ID)
-	{
-		followFactor = -1;
-	}
+	// Legacy following accelerated by 0.05 per rendered frame and used
+	// static state shared by every camera. Retain the 30 Hz pacing in real
+	// time, and reset independently when a different target is locked.
+	const ObjectID cameraLock = getCameraLock();
+	const Real cameraFrameRatio = TheFramePacer ? TheFramePacer->getBaseOverUpdateFpsRatio() : 1.0f;
+	if (cameraLock == INVALID_ID || cameraLock != m_lastCameraLockID)
+		m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = cameraLock;
 	if (cameraLock != INVALID_ID)
 	{
 		removeScriptedState(Scripted_MoveOnWaypointPath);
@@ -1419,16 +1429,15 @@ void W3DView::update()
 		{
 			setCameraLock(INVALID_ID);
 			setCameraLockDrawable(nullptr);
-			followFactor = -1;
+			m_cameraLockFollowFactor = -1.0f;
+			m_lastCameraLockID = INVALID_ID;
 		}
 		else
 		{
-			if (followFactor<0) {
-				followFactor = 0.05f;
-			} else {
-				followFactor += 0.05f;
-				if (followFactor>1.0f) followFactor = 1.0f;
-			}
+			if (m_cameraLockFollowFactor < 0.0f)
+				m_cameraLockFollowFactor = minf(0.05f * cameraFrameRatio, 1.0f);
+			else
+				m_cameraLockFollowFactor = minf(m_cameraLockFollowFactor + 0.05f * cameraFrameRatio, 1.0f);
 			if (getCameraLockDrawable() != nullptr)
 			{
 				Drawable* cameraLockDrawable = (Drawable *)getCameraLockDrawable();
@@ -1452,9 +1461,22 @@ void W3DView::update()
 						objPos.Y = pos.y;
 						objPos.Z = pos.z;
 
+						// Keep model-local offsets and bounding spheres from
+						// the W3D render object, but correct their world position
+						// and forward vector to the current interpolated body.
+						Matrix3D visualBody;
+						cameraLockDrawable->getInterpolatedWorldTransform(visualBody);
+						// The model's cached render transform may be one frame
+						// old at this point. Preserve the first-render-object
+						// center offset, but replace its old translation with
+						// the current interpolated body translation.
+						objPos.X += visualBody.Get_X_Translation() - transform.Get_X_Translation();
+						objPos.Y += visualBody.Get_Y_Translation() - transform.Get_Y_Translation();
+						objPos.Z += visualBody.Get_Z_Translation() - transform.Get_Z_Translation();
+
 						//get position of top of object, assuming world z roughly along local z.
 						objPos += boundingSphereRadius * 1.0f * zaxis;
-						Vector3 objview = transform.Get_X_Vector();	//get view vector of object
+						Vector3 objview = visualBody.Get_X_Vector();
 						//move camera back behind object far enough not to intersect bounding sphere
 						Vector3 camtran = objPos - objview * boundingSphereRadius*4.5f;
 
@@ -1462,7 +1484,10 @@ void W3DView::update()
 
 						Vector3 tranDiff = (camtran - prevCamTran);	//vector old position to new position.
 
-						camtran = prevCamTran + tranDiff * 0.1f;	//slowly move camera to new position.
+						// Keep the old 10% / 30 Hz damping regardless of
+						// whether the current presentation is 30 or 144 FPS.
+						const Real cameraBlend = DrawableInterpolationMath::presentationBlend(0.1f, cameraFrameRatio);
+						camtran = prevCamTran + tranDiff * cameraBlend;
 
 						Matrix3D camXForm;
 						camXForm.Look_At(camtran,objPos,0);
@@ -1472,7 +1497,13 @@ void W3DView::update()
 				}
 			}
 			else
-			{	Coord3D objpos = *cameraLockObj->getPosition();
+			{
+				Coord3D objpos = *cameraLockObj->getPosition();
+				// Follow the rendered pose, not the quantized 30 Hz Object
+				// position. This remains a camera-only read.
+				Drawable *trackedDrawable = cameraLockObj->getDrawable();
+				if (trackedDrawable)
+					trackedDrawable->getInterpolatedRenderPosition(objpos);
 				Coord3D curpos = getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
 				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
@@ -1496,8 +1527,9 @@ void W3DView::update()
 							Real ratio = 1.0f - snapThreshSqr/curDistSqr;
 
 							// move halfway there.
-							curpos.x += dx*ratio*0.5f;
-							curpos.y += dy*ratio*0.5f;
+							const Real blend = DrawableInterpolationMath::presentationBlend(ratio * 0.5f, cameraFrameRatio);
+							curpos.x += dx * blend;
+							curpos.y += dy * blend;
 						}
 						else
 						{
@@ -1505,14 +1537,17 @@ void W3DView::update()
 							Real ratio = 0.01f * m_lockDist;
 							Real dx = objpos.x-curpos.x;
 							Real dy = objpos.y-curpos.y;
-							curpos.x += dx*ratio;
-							curpos.y += dy*ratio;
+							const Real blend = DrawableInterpolationMath::presentationBlend(ratio, cameraFrameRatio);
+							curpos.x += dx * blend;
+							curpos.y += dy * blend;
 						}
 					}
 					else
 					{
-						curpos.x += dx*followFactor;
-						curpos.y += dy*followFactor;
+						const Real blend = DrawableInterpolationMath::presentationBlend(
+							m_cameraLockFollowFactor, cameraFrameRatio);
+						curpos.x += dx * blend;
+						curpos.y += dy * blend;
 					}
 				}
 				if (!(TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript()) && !TheGameLogic->isGamePaused()) {
@@ -1527,6 +1562,12 @@ void W3DView::update()
 					{
 						Matrix3D camXForm;
 						Real idealZRot = cameraLockObj->getOrientation() - M_PI_2;
+						if (trackedDrawable)
+						{
+							Matrix3D pose;
+							trackedDrawable->getInterpolatedWorldTransform(pose);
+							idealZRot = pose.Get_Z_Rotation() - M_PI_2;
+						}
 
 						if (m_snapImmediate)
 						{
@@ -1539,7 +1580,8 @@ void W3DView::update()
 							normAngle(oldZRot);
 							Real diffRot = idealZRot - oldZRot;
 							normAngle(diffRot);
-							View::setAngle(m_angle + diffRot * 0.1f);
+							View::setAngle(m_angle + diffRot *
+								DrawableInterpolationMath::presentationBlend(0.1f, cameraFrameRatio));
 						}
 					}
 				}
@@ -1579,8 +1621,9 @@ void W3DView::update()
 	}
 
 	//Process New C3 Camera Shaker system
-	if (CameraShakerSystem.IsCameraShaking())
+	if (CameraShakerSystem.IsCameraShaking() || m_shakerAngles.Length2() > 0.0f)
 	{
+		// Rebuild once after the last shake expires to clear its rotation.
 		m_recalcCamera = true;
 	}
 
@@ -3272,7 +3315,9 @@ static Real makeQuadraticS(Real t)
 // ------------------------------------------------------------------------------------------------
 void W3DView::rotateCameraOneFrame()
 {
-	m_rcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_rcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_rcInfo.curFrame >= m_rcInfo.numFrames + m_rcInfo.numHoldFrames) {
 			removeScriptedState(Scripted_Rotate);
@@ -3343,7 +3388,9 @@ void W3DView::rotateCameraOneFrame()
 // ------------------------------------------------------------------------------------------------
 void W3DView::zoomCameraOneFrame()
 {
-	m_zcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_zcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_zcInfo.curFrame >= m_zcInfo.numFrames) {
 			removeScriptedState(Scripted_Zoom);
@@ -3369,7 +3416,9 @@ void W3DView::zoomCameraOneFrame()
 // ------------------------------------------------------------------------------------------------
 void W3DView::pitchCameraOneFrame()
 {
-	m_pcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_pcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_pcInfo.curFrame >= m_pcInfo.numFrames) {
 			removeScriptedState(Scripted_Pitch);

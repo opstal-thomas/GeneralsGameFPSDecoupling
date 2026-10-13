@@ -71,6 +71,7 @@ static void drawFramerateBar();
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "W3DDevice/GameClient/W3DFileSystem.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
+#include "W3DDevice/GameClient/CameraShakeSystem.h"
 #include "W3DDevice/GameClient/W3DProfilerFrameCapture.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
@@ -1821,6 +1822,12 @@ void W3DDisplay::update()
 		primaryW3DView->updateCameraMovements();  // Update camera motion effects.
 		return;
 	}
+
+	// TheSuperHackers @fix Advance camera shake once per presentation update,
+	// using seconds (the lifetime unit). Constructing camera matrices should
+	// be side-effect free, and render-only updates should not mutate gameplay.
+	if (!freezeTime)
+		CameraShakerSystem.Timestep(TheFramePacer->getUpdateTime());
 
 	//update state of all the terrain tracks (fade, remove, etc.)
 	if (TheGlobalData->m_loadScreenRender != TRUE)

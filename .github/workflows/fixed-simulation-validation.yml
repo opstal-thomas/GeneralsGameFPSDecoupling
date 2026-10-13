@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/fixed-simulation-30hz
+      - feature/visual-presentation-smoothing
   workflow_dispatch:
 
 permissions:

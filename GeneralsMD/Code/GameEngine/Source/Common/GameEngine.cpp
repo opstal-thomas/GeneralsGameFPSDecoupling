@@ -906,6 +906,7 @@ void GameEngine::update()
 					TheGameClient->step();
 			}
 			TheFramePacer->setLogicFramePhase(1.0f);
+			TheGameClient->presentFrame();
 			return;
 		}
 
@@ -944,6 +945,7 @@ void GameEngine::update()
 
 		// Render existing previous/current logic states at arbitrary refresh rates.
 		TheFramePacer->setLogicFramePhase(fastMode ? 1.0f : m_simulationClock.getInterpolationAlpha());
+		TheGameClient->presentFrame();
 	}
 }
 

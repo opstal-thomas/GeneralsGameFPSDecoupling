@@ -76,7 +76,7 @@ typedef struct
 typedef struct
 {
 	Int			numFrames;						///< Number of frames to rotate.
-	Int			curFrame;							///< Current frame.
+	Real			curFrame;							///< Current frame.
 	Int			startTimeMultiplier;
 	Int			endTimeMultiplier;
 	Int			numHoldFrames;				///< Number of frames to hold the camera before finishing the movement
@@ -101,7 +101,7 @@ typedef struct
 typedef struct
 {
 	Int			numFrames;						///< Number of frames to pitch.
-	Int			curFrame;							///< Current frame.
+	Real			curFrame;							///< Current frame.
 	Real		angle;
 	Real		startPitch;
 	Real		endPitch;
@@ -115,7 +115,7 @@ typedef struct
 typedef struct
 {
 	Int			numFrames;						///< Number of frames to zoom.
-	Int			curFrame;							///< Current frame.
+	Real			curFrame;							///< Current frame.
 	Real		startZoom;
 	Real		endZoom;
 	Int			startTimeMultiplier;
@@ -271,6 +271,8 @@ private:
 	TRotateCameraInfo m_rcInfo;
 	TPitchCameraInfo m_pcInfo;
 	TZoomCameraInfo m_zcInfo;
+	Real m_cameraLockFollowFactor; ///< Per-view acceleration toward the camera lock target.
+	ObjectID m_lastCameraLockID; ///< Reset smoothing when switching followed objects.
 	TMoveAlongWaypointPathInfo m_mcwpInfo;					///< Move camera along waypoint path info.
 	Bool m_CameraArrivedAtWaypointOnPathFlag;
 
