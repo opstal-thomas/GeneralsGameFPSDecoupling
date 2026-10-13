@@ -512,6 +512,12 @@ void GameEngine::init()
 
 		TheSubsystemList->postProcessLoadAll();
 
+		// The original GameData.ini may request a 30 FPS presentation cap.
+		// Rendering now has an independent local Options.ini preference.
+		// This affects rendering only; the deterministic simulation clock
+		// and the gameplay INI CRC do not depend on this preference.
+		OptionPreferences renderOptions;
+		TheWritableGlobalData->m_framesPerSecondLimit = renderOptions.getRenderFPSLimit();
 		TheFramePacer->setFramesPerSecondLimit(TheGlobalData->m_framesPerSecondLimit);
 
 		TheAudio->setOn(TheGlobalData->m_audioOn && TheGlobalData->m_musicOn, AudioAffect_Music);
