@@ -411,6 +411,7 @@ public:
 
 	const Matrix3D *getTransformMatrix() const;	///< return the world transform
 
+	void captureSimulationTransform(); ///< Snapshot authoritative pose after a logic tick (presentation-only).
 	void draw();													///< render the drawable to the given view
 	void updateDrawable(Real timeScale);														///< update the drawable
 
@@ -720,6 +721,12 @@ private:
 
 	Int m_flashCount;           ///< number of times to flash the drawable
 	Color m_flashColor;					///< color to flash the drawable
+
+	Coord3D m_previousRenderPosition; ///< Previous authoritative pose for interpolation.
+	Coord3D m_currentRenderPosition;  ///< Current authoritative pose for interpolation.
+	Real m_previousRenderYaw;
+	Real m_currentRenderYaw;
+	Bool m_hasRenderSamples;        ///< Transient; not part of save games or CRCs.
 
 	Matrix3D m_instance;				///< The instance matrix that holds the initial/default position & orientation
 	Real m_instanceScale;				///< the uniform scale factor applied to the instance matrix before it is sent to W3D.
