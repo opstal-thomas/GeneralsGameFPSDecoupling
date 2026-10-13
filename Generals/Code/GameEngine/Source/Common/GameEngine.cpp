@@ -660,9 +660,7 @@ void GameEngine::resetSubsystems()
 /// -----------------------------------------------------------------------------------------------
 Bool GameEngine::canUpdateGameLogic(UnsignedInt logicTimeQueryFlags)
 {
-	// This updates the paused game status of the game logic.
-	TheGameLogic->preUpdate();
-
+	// preUpdate() runs exactly once per presentation cycle, after client update.
 	TheFramePacer->setTimeFrozen(isTimeFrozen());
 	TheFramePacer->setGameHalted(isGameHalted());
 
@@ -726,6 +724,12 @@ void GameEngine::update()
 			if (TheNetwork != nullptr)
 				TheNetwork->UPDATE();
 		}
+
+		// The client consumed hasUpdated() while rendering the previous
+		// simulation state. Reset it exactly once per rendered frame, even
+		// when no fixed simulation tick is due. Otherwise W3D::Sync and
+		// particle updates can advance repeatedly on render-only frames.
+		TheGameLogic->preUpdate();
 
 		// Multiplayer uses its own frame-data and pacing gate. Never consume
 		// extra lockstep frames here or reuse network commands across ticks.
