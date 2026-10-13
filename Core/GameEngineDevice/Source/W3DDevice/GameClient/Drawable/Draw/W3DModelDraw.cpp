@@ -48,6 +48,7 @@
 #include "Common/GameLOD.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/FXList.h"
 #include "GameClient/Shadow.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
@@ -1744,6 +1745,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	}
 	m_needRecalcBoneParticleSystems = false;
 	m_fullyObscuredByShroud = false;
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
 	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
 		m_turretRenderPose[turret].valid = FALSE;
 
@@ -1788,6 +1790,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::onDrawableBoundToObject()
 {
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
 	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
 		m_turretRenderPose[turret].valid = FALSE;
 
@@ -2047,7 +2050,45 @@ void W3DModelDraw::adjustTransformMtx(Matrix3D& mtx) const
 }
 
 //-------------------------------------------------------------------------------------------------
+// Only models that already own live bone-attached particle systems require
+// early preparation. Initial particle systems still start through the normal
+// draw path, avoiding eager offscreen effect creation.
+Bool W3DModelDraw::needsVisualPosePreparation() const
+{
+	return m_renderObject != nullptr && !m_particleSystemIDs.empty();
+}
+
+//-------------------------------------------------------------------------------------------------
+// Called once before particle simulation for attachment owners. All model,
+// turret, animation and bone changes run here, never on the simulation Object.
+void W3DModelDraw::prepareVisualPose(const Matrix3D* transformMtx)
+{
+	if (!TheGameClient)
+		return;
+
+	const UnsignedInt frameID = TheGameClient->getPresentationFrameID();
+	if (m_lastPreparedPresentationFrame == frameID)
+		return;
+
+	updateVisualPoseState(transformMtx);
+	m_lastPreparedPresentationFrame = frameID;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Ordinary models retain the previous on-demand render path. Models which
+// were prepared before particle simulation must not advance animation and
+// client recoil a second time when their draw module is submitted.
 void W3DModelDraw::doDrawModule(const Matrix3D* transformMtx)
+{
+	if (!TheGameClient ||
+		m_lastPreparedPresentationFrame != TheGameClient->getPresentationFrameID())
+	{
+		updateVisualPoseState(transformMtx);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDraw::updateVisualPoseState(const Matrix3D* transformMtx)
 {
 	// update whether or not we should be animating.
 	setPauseAnimation( !getDrawable()->getShouldAnimate(getW3DModelDrawModuleData()->m_animationsRequirePower) );
@@ -4324,6 +4365,7 @@ void W3DModelDraw::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void W3DModelDraw::loadPostProcess()
 {
+	m_lastPreparedPresentationFrame = (UnsignedInt)-1;
 	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
 		m_turretRenderPose[turret].valid = FALSE;
 
