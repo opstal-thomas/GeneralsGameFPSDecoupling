@@ -12,6 +12,31 @@ This branch introduces a bounded fixed-step clock for Command & Conquer: General
 - FramePacer reports the clock's interpolation alpha to existing render-side interpolators; this does not automatically interpolate translation for every drawable.
 - No changes are made to simulation object time steps, replay formats or network command serialization.
 
+## Rendering FPS configuration
+
+The rendering frame rate is intentionally independent of the fixed 30 Hz
+simulation rate. This branch now defaults to **144 rendered frames/second**
+rather than inheriting the retail 30 FPS cap from GameData.ini.
+
+Edit `Options.ini` in the game's user data directory to override the
+presentation limit:
+
+```ini
+FPSLimit = yes
+RenderFPSLimit = 240
+```
+
+`RenderFPSLimit` accepts 30 through 1000. Omit it to default to 144.
+Set `FPSLimit = no` to uncap rendering; this does **not** alter
+gameplay simulation speed. The Options menu's Unlock FPS checkbox is also
+now saved, and switching graphics LOD no longer silently re-enables
+the rendering cap. Changes to the numeric limit require a game restart.
+
+The effective output FPS may still be lower due to display VSync,
+GPU-driver limits, a monitor's refresh rate or hardware load. Verify using
+an external frame-rate counter rather than judging by unit animation alone:
+full interpolation of all drawable transforms is a separate concern.
+
 ## Validation
 
 The standalone fixed-step clock was compiled with a C++11 compiler and exercised at rendering rates of 5, 10, 20, 24, 30, 60, 120, 144 and 240 FPS over 10 simulated seconds. Each case advanced 300 simulation ticks. The repository GoogleTest suite contains matching tests for timing, catch-up, reset and frequency changes.
