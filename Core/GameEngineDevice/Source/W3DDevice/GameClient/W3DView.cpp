@@ -1463,10 +1463,13 @@ void W3DView::update()
 						// and forward vector to the current interpolated body.
 						Matrix3D visualBody;
 						cameraLockDrawable->getInterpolatedWorldTransform(visualBody);
-						const Coord3D *logicPos = cameraLockDrawable->getPosition();
-						objPos.X += visualBody.Get_X_Translation() - logicPos->x;
-						objPos.Y += visualBody.Get_Y_Translation() - logicPos->y;
-						objPos.Z += visualBody.Get_Z_Translation() - logicPos->z;
+						// The model's cached render transform may be one frame
+						// old at this point. Preserve the first-render-object
+						// center offset, but replace its old translation with
+						// the current interpolated body translation.
+						objPos.X += visualBody.Get_X_Translation() - transform.Get_X_Translation();
+						objPos.Y += visualBody.Get_Y_Translation() - transform.Get_Y_Translation();
+						objPos.Z += visualBody.Get_Z_Translation() - transform.Get_Z_Translation();
 
 						//get position of top of object, assuming world z roughly along local z.
 						objPos += boundingSphereRadius * 1.0f * zaxis;
