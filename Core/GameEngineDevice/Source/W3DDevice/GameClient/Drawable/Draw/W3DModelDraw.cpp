@@ -38,6 +38,8 @@
 
 #include "Common/crc.h"
 #include "Common/CRCDebug.h"
+#include "Common/DrawableInterpolationMath.h"
+#include "Common/FramePacer.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
@@ -1742,6 +1744,8 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	}
 	m_needRecalcBoneParticleSystems = false;
 	m_fullyObscuredByShroud = false;
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
 
 	// only validate the current time-of-day and weather conditions by default.
 	getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(),
@@ -1784,6 +1788,9 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 //-------------------------------------------------------------------------------------------------
 void W3DModelDraw::onDrawableBoundToObject()
 {
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
+
 	getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(),
 											TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT,
 											TheGlobalData->m_weather == WEATHER_SNOWY);
@@ -2417,6 +2424,45 @@ void W3DModelDraw::stopClientParticleSystems()
 	DANGER WARNING READ ME
 	DANGER WARNING READ ME
 */
+void W3DModelDraw::captureVisualSimulationState()
+{
+	// Capture only when the owning Object has completed a fixed simulation tick.
+	// No gameplay state is modified. Missing/rebound turrets start a fresh pose.
+	const Object *obj = getDrawable()->getObject();
+	const AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : nullptr;
+
+	for (Int slot = 0; slot < MAX_TURRETS; ++slot)
+	{
+		TurretRenderPose &pose = m_turretRenderPose[slot];
+		if (!ai || !m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID) ||
+			(!m_curState->m_turrets[slot].m_turretAngleBone &&
+			 !m_curState->m_turrets[slot].m_turretPitchBone))
+		{
+			pose.valid = FALSE;
+			continue;
+		}
+
+		Real angle = 0.0f;
+		Real pitch = 0.0f;
+		ai->getTurretRotAndPitch((WhichTurretType)slot, &angle, &pitch);
+
+		if (pose.valid)
+		{
+			pose.previousYaw = pose.currentYaw;
+			pose.previousPitch = pose.currentPitch;
+		}
+		else
+		{
+			pose.previousYaw = angle;
+			pose.previousPitch = pitch;
+		}
+		pose.currentYaw = angle;
+		pose.currentPitch = pitch;
+		pose.valid = TRUE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void W3DModelDraw::handleClientTurretPositioning()
 {
 	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::TURRETS_VALID))
@@ -2429,10 +2475,20 @@ void W3DModelDraw::handleClientTurretPositioning()
 		Real turretPitch = 0;
 		if (tur.m_turretAngleBone || tur.m_turretPitchBone)
 		{
-			const Object *obj = getDrawable()->getObject();
-			if (obj)
+			if (getDrawable()->isVisualInterpolationEnabled() && m_turretRenderPose[tslot].valid)
 			{
-				const AIUpdateInterface* ai = obj->getAIUpdateInterface();
+				const TurretRenderPose &pose = m_turretRenderPose[tslot];
+				const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+				turretAngle = pose.previousYaw +
+					DrawableInterpolationMath::shortestAngleDelta(pose.previousYaw, pose.currentYaw) * alpha;
+				turretPitch = pose.previousPitch +
+					DrawableInterpolationMath::shortestAngleDelta(pose.previousPitch, pose.currentPitch) * alpha;
+			}
+			else
+			{
+				// Fallback for paused games, missing samples or A/B opt-out.
+				const Object *obj = getDrawable()->getObject();
+				const AIUpdateInterface *ai = obj ? obj->getAIUpdateInterface() : nullptr;
 				if (ai)
 					ai->getTurretRotAndPitch((WhichTurretType)tslot, &turretAngle, &turretPitch);
 			}
@@ -3167,6 +3223,13 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		doHideShowSubObjs(&newState->m_hideShowVec);
 	}
 	hideAllHeadlights(m_hideHeadlights);
+
+	if (m_curState != newState)
+	{
+		// Bone identities may change with the model condition state.
+		for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+			m_turretRenderPose[turret].valid = FALSE;
+	}
 
 	const ModelConditionInfo* prevState = m_curState;	// save, to pass to adjustAnimation (could be null)
 	m_curState = newState;
@@ -4261,6 +4324,8 @@ void W3DModelDraw::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void W3DModelDraw::loadPostProcess()
 {
+	for (Int turret = 0; turret < MAX_TURRETS; ++turret)
+		m_turretRenderPose[turret].valid = FALSE;
 
 	// extend base class
 	DrawModule::loadPostProcess();
