@@ -758,6 +758,11 @@ void GameClient::draw()
 
 void GameClient::step()
 {
+	// Runs only after GameLogic::UPDATE, never once per render. This keeps
+	// interpolation snapshots tied to authoritative simulation ticks.
+	for (Drawable *draw = firstDrawable(); draw; draw = draw->getNextDrawable())
+		draw->captureSimulationTransform();
+
 	TheDisplay->step();
 }
 
