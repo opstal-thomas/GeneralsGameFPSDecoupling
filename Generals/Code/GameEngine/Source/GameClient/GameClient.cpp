@@ -551,13 +551,9 @@ void GameClient::update()
 
 	}
 
+	// An active intro has its own presentation path after simulation.
 	if (m_intro != nullptr)
-	{
-		// redraw all views, update the GUI
-		TheDisplay->UPDATE();
-		TheDisplay->DRAW();
 		return;
-	}
 
 	// update the window system itself
 	{
@@ -659,6 +655,38 @@ void GameClient::update()
 		}
 	}
 
+
+	{
+		// let display string factory handle its update
+		TheDisplayStringManager->update();
+	}
+
+	{
+		// update the shell
+		TheShell->UPDATE();
+	}
+
+	{
+		// update the in game UI
+		TheInGameUI->UPDATE();
+	}
+}
+
+// Rendering must happen after all game ticks and after the interpolation alpha
+// is updated. All input/message/UI handling stays in update() so command
+// propagation and multiplayer lockstep retain their existing ordering.
+void GameClient::presentFrame()
+{
+	if (m_intro != nullptr)
+	{
+		TheDisplay->UPDATE();
+		TheDisplay->DRAW();
+		return;
+	}
+
+	const Bool freezeTime = TheGameEngine->isTimeFrozen() || TheGameEngine->isGameHalted();
+	const Int localPlayerIndex = rts::getObservedOrLocalPlayer()->getPlayerIndex();
+
 #if defined(RTS_DEBUG)
 	// need to draw the first frame, then don't draw again until TheGlobalData->m_noDraw
 	if (TheGlobalData->m_noDraw > TheGameLogic->getFrame() && TheGameLogic->getFrame() > 0)
@@ -695,20 +723,6 @@ void GameClient::update()
 		TheDisplay->DRAW();
 	}
 
-	{
-		// let display string factory handle its update
-		TheDisplayStringManager->update();
-	}
-
-	{
-		// update the shell
-		TheShell->UPDATE();
-	}
-
-	{
-		// update the in game UI
-		TheInGameUI->UPDATE();
-	}
 }
 
 void GameClient::draw()
