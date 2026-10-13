@@ -14,6 +14,18 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, UninitializedCapabilitiesDoNotAdvertiseFeatures)
+{
+    const RenderCapabilities caps;
+    EXPECT_FALSE(caps.hardwareTransformAndLighting);
+    EXPECT_FALSE(caps.nPatches);
+    EXPECT_FALSE(caps.textureCompression);
+    EXPECT_FALSE(caps.anisotropicFiltering);
+    EXPECT_FALSE(caps.cubeTextures);
+    EXPECT_FALSE(caps.bumpEnvironmentMapping);
+    EXPECT_EQ(0u, caps.maxSimultaneousTextures);
+}
+
 TEST(RendererBackend, OnlyReadyDevicesAllowResourceUpdates)
 {
     EXPECT_FALSE(Renderer::Can_Render(Renderer::DEVICE_UNAVAILABLE));

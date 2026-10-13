@@ -27,6 +27,7 @@
 // WW3D2 header graph. All W3D types below are passed by pointer or reference.
 
 class LightEnvironmentClass;
+class CameraClass;
 class Vector3;
 
 struct RenderViewport
@@ -37,6 +38,28 @@ struct RenderViewport
     unsigned int height;
     float min_z;
     float max_z;
+};
+
+// Backend capabilities must not expose D3D8 capability structures to callers.
+// Keeping these values in WW3D terms allows other graphics APIs to report
+// equivalent capabilities without depending on DX8Caps or D3DCAPS8.
+struct RenderCapabilities
+{
+    RenderCapabilities()
+        : hardwareTransformAndLighting(false), nPatches(false),
+          textureCompression(false), anisotropicFiltering(false),
+          cubeTextures(false), bumpEnvironmentMapping(false),
+          maxSimultaneousTextures(0)
+    {
+    }
+
+    bool hardwareTransformAndLighting;
+    bool nPatches;
+    bool textureCompression;
+    bool anisotropicFiltering;
+    bool cubeTextures;
+    bool bumpEnvironmentMapping;
+    unsigned maxSimultaneousTextures;
 };
 
 // A method appears here once a caller routes through it, not in anticipation of
@@ -94,6 +117,7 @@ public:
     static int Get_Swap_Interval();
     static DeviceStatus Get_Device_Status();
     static bool Reset_Device();
+    static RenderCapabilities Get_Capabilities();
 
     static void Set_Gamma(float gamma, float bright, float contrast, bool calibrate = true, bool uselimit = true);
 
@@ -106,6 +130,19 @@ public:
     static void Set_Viewport(const RenderViewport & viewport);
     static void Set_Polygon_Mode(PolygonMode mode);
     static void Invalidate_Cached_Render_States();
+
+    // The high-level W3D scene submits geometry using these methods, rather
+    // than reaching into the DX8 mesh renderer. Preserve flush ordering:
+    // mesh batches, legacy shaders, static sorted lists, transparent sorting,
+    // then pending mesh deletion. This is a draw submission boundary.
+    static void Set_Mesh_Camera(CameraClass * camera);
+    static void Flush_Mesh_Batches();
+    static void Clear_Pending_Mesh_Deletes();
+    static void Invalidate_Mesh_Cache();
+
+    // Kept separate from Shutdown because WW3D historically releases the
+    // texture manager before shutting down the graphics device.
+    static void Release_Texture_Resources();
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

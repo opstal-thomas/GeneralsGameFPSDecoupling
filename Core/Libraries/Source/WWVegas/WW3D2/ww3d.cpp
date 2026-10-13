@@ -238,7 +238,7 @@ void WW3D::Set_NPatches_Gap_Filling_Mode(NPatchesGapFillingModeEnum mode)
 {
 	if (NPatchesGapFillingMode!=mode) {
 		NPatchesGapFillingMode=mode;
-		TheDX8MeshRenderer.Invalidate();
+		Renderer::Invalidate_Mesh_Cache();
 	}
 }
 
@@ -246,8 +246,8 @@ void WW3D::Set_NPatches_Level(unsigned level)
 {
 	if (level>8) level=8;
 	if (level<1) level=1;
-	if (NPatchesLevel==1 && level>1) TheDX8MeshRenderer.Invalidate();
-	if (NPatchesLevel>1 && level==1) TheDX8MeshRenderer.Invalidate();
+	if (NPatchesLevel==1 && level>1) Renderer::Invalidate_Mesh_Cache();
+	if (NPatchesLevel>1 && level==1) Renderer::Invalidate_Mesh_Cache();
 	NPatchesLevel = level;
 }
 
@@ -362,7 +362,7 @@ WW3DErrorType WW3D::Shutdown()
 		WW3DAssetManager::Get_Instance()->Free_Assets();
 	}
 
-	DX8TextureManagerClass::Shutdown();
+	Renderer::Release_Texture_Resources();
 
 	Renderer::Shutdown();
 
@@ -746,7 +746,7 @@ bool WW3D::Registry_Load_Render_Device( const char * sub_key, char *device, int 
 
 void WW3D::_Invalidate_Mesh_Cache()
 {
-	TheDX8MeshRenderer.Invalidate();
+	Renderer::Invalidate_Mesh_Cache();
 }
 
 void WW3D::_Invalidate_Textures()
@@ -978,7 +978,7 @@ WW3DErrorType WW3D::Render(SceneClass * scene,CameraClass * cam,bool clear,bool 
 
 	// render the scene
 
-	TheDX8MeshRenderer.Set_Camera(&rinfo.Camera);
+	Renderer::Set_Mesh_Camera(&rinfo.Camera);
 
 	scene->Render(rinfo);
 
@@ -1030,7 +1030,7 @@ WW3DErrorType WW3D::Render(
 	}
 
 	// Render the object
-	TheDX8MeshRenderer.Set_Camera(&rinfo.Camera);
+	Renderer::Set_Mesh_Camera(&rinfo.Camera);
 
 	obj.Render(rinfo);
 
@@ -1061,12 +1061,12 @@ WW3DErrorType WW3D::Render(
  *=============================================================================================*/
 void WW3D::Flush(RenderInfoClass & rinfo)
 {
-	TheDX8MeshRenderer.Flush();
+	Renderer::Flush_Mesh_Batches();
 	SHD_FLUSH;
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
 
 	SortingRendererClass::Flush();
-	TheDX8MeshRenderer.Clear_Pending_Delete_Lists();
+	Renderer::Clear_Pending_Mesh_Deletes();
 }
 
 
@@ -2091,7 +2091,7 @@ void WW3D::Enable_Sorting(bool onoff)
 	IsSortingEnabled = onoff;
 	// Have to invalidate mesh rendering system because
 	// meshes are put into different fvfs depending on their sort state
-	TheDX8MeshRenderer.Invalidate();
+	Renderer::Invalidate_Mesh_Cache();
 }
 
 void WW3D::Override_Current_Static_Sort_Lists(StaticSortListClass * sort_list)

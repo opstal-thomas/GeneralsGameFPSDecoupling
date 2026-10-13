@@ -36,6 +36,26 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Second milestone: mesh submission and resource capabilities
+
+The high-level WW3D scene now routes camera selection, mesh-batch flushing,
+mesh-cache invalidation and pending mesh cleanup through `Renderer`. This
+preserves the original flush sequence, including shader processing and sorted
+transparency, while moving backend-specific mesh handling to `DX8Backend.cpp`.
+
+A neutral `RenderCapabilities` struct provides optional GPU feature flags.
+The DX8 implementation maps those from `DX8Caps` without leaking D3D8 types
+into callers. Actual static/dynamic vertex and index buffer usage now checks
+the backend-reported transform-and-lighting / N-Patches capabilities. Texture
+manager shutdown is also routed through the backend without changing when
+it runs relative to device shutdown.
+
+This milestone does **not** change resource ownership or allocation semantics:
+D3D8 vertex/index buffers, surfaces and textures are still allocated and
+locked by legacy code. That is the next migration boundary. Keeping this
+intermediate stage lets us validate real W3D mesh submission before changing
+resource lifetime management.
+
 ### First milestone: device and raster boundary
 
 The DX8-backed `Renderer` interface now owns the following operations:
@@ -76,7 +96,8 @@ same `DX8Wrapper` calls and preserve their return codes.
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,
   terrain, water, shadows and several effects.
-- `WW3D::Render` and `WW3D::Flush` still use `TheDX8MeshRenderer`.
+- Mesh submission, flush and invalidation in WW3D now go through
+  `Renderer`, while lower-level mesh and geometry classes still use DX8 types.
 - `W3DShaderManager` owns `IDirect3DTexture8`/`IDirect3DSurface8`
   and uses the legacy fixed-function texture-stage API.
 - `RenderDeviceDescClass` exposes D3D8-specific adapter structures.

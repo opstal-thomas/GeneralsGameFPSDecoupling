@@ -43,6 +43,7 @@
 #include "dx8wrapper.h"
 #include "dx8fvf.h"
 #include "dx8caps.h"
+#include "Renderer.h"
 #include "WWLib/thread.h"
 #include "WWDebug/wwmemlog.h"
 #include <d3dx8core.h>
@@ -438,7 +439,7 @@ void DX8VertexBufferClass::Create_Vertex_Buffer(UsageType usage)
 		((usage&USAGE_NPATCHES) ? D3DUSAGE_NPATCHES : 0)|
 		((usage&USAGE_SOFTWAREPROCESSING) ? D3DUSAGE_SOFTWAREPROCESSING : 0);
 	// New Code
-	if (!DX8Wrapper::Get_Current_Caps()->Support_TnL()) {
+	if (!Renderer::Get_Capabilities().hardwareTransformAndLighting) {
 		usage_flags|=D3DUSAGE_SOFTWAREPROCESSING;
 	}
 
@@ -779,7 +780,7 @@ void DynamicVBAccessClass::Allocate_DX8_Dynamic_Buffer()
 	// Create a new vb if one doesn't exist currently
 	if (!_DynamicDX8VertexBuffer) {
 		unsigned usage=DX8VertexBufferClass::USAGE_DYNAMIC;
-		if (DX8Wrapper::Get_Current_Caps()->Support_NPatches()) {
+		if (Renderer::Get_Capabilities().nPatches) {
 			usage|=DX8VertexBufferClass::USAGE_NPATCHES;
 		}
 

@@ -23,6 +23,9 @@
 #include "WW3D2/Renderer.h"
 
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/dx8renderer.h"
+#include "WW3D2/dx8caps.h"
+#include "WW3D2/dx8texman.h"
 #include "WW3D2/formconv.h"
 #include "WWMath/vector3.h"
 #include "WW3D2/lightenvironment.h"
@@ -225,4 +228,49 @@ void Renderer::Set_Polygon_Mode(PolygonMode mode)
         DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE, D3DFILL_SOLID);
         break;
     }
+}
+
+
+RenderCapabilities Renderer::Get_Capabilities()
+{
+    RenderCapabilities out;
+    // Capability queries are valid only after the legacy device is created.
+    // A default object advertises no optional features in headless mode.
+    if (!DX8Wrapper::Is_Initted() || !DX8Wrapper::_Get_D3D_Device8())
+        return out;
+
+    const DX8Caps * caps = DX8Wrapper::Get_Current_Caps();
+    out.hardwareTransformAndLighting = caps->Support_TnL();
+    out.nPatches = caps->Support_NPatches();
+    out.textureCompression = caps->Support_DXTC();
+    out.anisotropicFiltering = caps->Support_Anisotropic_Filtering();
+    out.cubeTextures = caps->Support_Cubemaps();
+    out.bumpEnvironmentMapping = caps->Support_Bump_Envmap();
+    out.maxSimultaneousTextures = static_cast<unsigned>(caps->Get_Max_Simultaneous_Textures());
+    return out;
+}
+
+void Renderer::Set_Mesh_Camera(CameraClass * camera)
+{
+    TheDX8MeshRenderer.Set_Camera(camera);
+}
+
+void Renderer::Flush_Mesh_Batches()
+{
+    TheDX8MeshRenderer.Flush();
+}
+
+void Renderer::Clear_Pending_Mesh_Deletes()
+{
+    TheDX8MeshRenderer.Clear_Pending_Delete_Lists();
+}
+
+void Renderer::Invalidate_Mesh_Cache()
+{
+    TheDX8MeshRenderer.Invalidate();
+}
+
+void Renderer::Release_Texture_Resources()
+{
+    DX8TextureManagerClass::Shutdown();
 }
