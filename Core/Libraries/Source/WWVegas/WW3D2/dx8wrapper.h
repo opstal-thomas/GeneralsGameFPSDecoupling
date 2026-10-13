@@ -703,6 +703,9 @@ protected:
 
 	friend void DX8_Assert();
 	friend class WW3D;
+	// A backend implements WW3D's adapter/resolution operations through Renderer.
+	// Preserve their existing protected DX8Wrapper visibility to all other code.
+	friend class Renderer;
 	friend class DX8IndexBufferClass;
 	friend class DX8VertexBufferClass;
 };

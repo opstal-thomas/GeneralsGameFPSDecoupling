@@ -50,9 +50,50 @@ struct RenderViewport
 class Renderer
 {
 public:
+    // Neutral device health, with no Direct3D HRESULTs exposed to callers.
+    enum DeviceStatus
+    {
+        DEVICE_UNAVAILABLE,      // No device is initialized (e.g. lite/headless mode).
+        DEVICE_READY,
+        DEVICE_LOST,             // The window/device is temporarily unavailable.
+        DEVICE_RESET_REQUIRED,
+        DEVICE_ERROR
+    };
+
+    enum PolygonMode
+    {
+        POLYGON_POINT,
+        POLYGON_LINE,
+        POLYGON_FILL
+    };
+
+    static bool Can_Render(DeviceStatus status) { return status == DEVICE_READY; }
+    static bool Requires_Reset(DeviceStatus status) { return status == DEVICE_RESET_REQUIRED; }
+
     // Initialized in WW3D::Init and shut down in WW3D::Shutdown.
     static bool Init(void * window, bool lite);
     static void Shutdown();
+
+    // Device selection, resolution and present policy stay behind the
+    // backend boundary. The DX8 implementation preserves legacy semantics.
+    static bool Set_Render_Device(const char * name, int width, int height, int bits,
+                                  int windowed, bool resize_window);
+    static bool Set_Render_Device(int device, int width, int height, int bits, int windowed,
+                                  bool resize_window, bool reset_device, bool restore_assets);
+    static bool Set_Any_Render_Device();
+    static bool Set_Next_Render_Device();
+    static int Get_Render_Device();
+    static int Get_Render_Device_Count();
+    static const char * Get_Render_Device_Name(int device_index);
+    static bool Is_Windowed();
+    static bool Toggle_Windowed();
+    static bool Set_Device_Resolution(int width, int height, int bits, int windowed, bool resize_window);
+    static void Get_Device_Resolution(int & width, int & height, int & bits, bool & windowed);
+    static void Get_Render_Target_Resolution(int & width, int & height, int & bits, bool & windowed);
+    static void Set_Swap_Interval(long swap);
+    static int Get_Swap_Interval();
+    static DeviceStatus Get_Device_Status();
+    static bool Reset_Device();
 
     static void Set_Gamma(float gamma, float bright, float contrast, bool calibrate = true, bool uselimit = true);
 
@@ -63,6 +104,7 @@ public:
                       const Vector3 & color,
                       float dest_alpha = 0.0f, float z = 1.0f, unsigned int stencil = 0);
     static void Set_Viewport(const RenderViewport & viewport);
+    static void Set_Polygon_Mode(PolygonMode mode);
     static void Invalidate_Cached_Render_States();
 
     static void Set_Ambient(const Vector3 & color);

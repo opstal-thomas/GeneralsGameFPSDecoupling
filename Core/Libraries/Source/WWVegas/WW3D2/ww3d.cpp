@@ -395,7 +395,7 @@ WW3DErrorType WW3D::Shutdown()
  *=============================================================================================*/
 WW3DErrorType WW3D::Set_Render_Device( const char * dev_name, int width, int height, int bits, int windowed, bool resize_window )
 {
-	bool success = DX8Wrapper::Set_Render_Device(dev_name,width,height,bits,windowed,resize_window);
+	bool success = Renderer::Set_Render_Device(dev_name,width,height,bits,windowed,resize_window);
 	if (success) {
 		return WW3D_ERROR_OK;
 	} else {
@@ -418,7 +418,7 @@ WW3DErrorType WW3D::Set_Render_Device( const char * dev_name, int width, int hei
  *=============================================================================================*/
 WW3DErrorType WW3D::Set_Any_Render_Device()
 {
-	bool success = DX8Wrapper::Set_Any_Render_Device();
+	bool success = Renderer::Set_Any_Render_Device();
 	if (success) {
 		return WW3D_ERROR_OK;
 	} else {
@@ -441,7 +441,7 @@ WW3DErrorType WW3D::Set_Any_Render_Device()
  *=============================================================================================*/
 WW3DErrorType WW3D::Set_Render_Device(int dev, int width, int height, int bits, int windowed, bool resize_window, bool reset_device, bool restore_assets )
 {
-	bool success = DX8Wrapper::Set_Render_Device(dev,width,height,bits,windowed,resize_window,reset_device, restore_assets );
+	bool success = Renderer::Set_Render_Device(dev,width,height,bits,windowed,resize_window,reset_device, restore_assets );
 	if (success) {
 		return WW3D_ERROR_OK;
 	} else {
@@ -464,7 +464,7 @@ WW3DErrorType WW3D::Set_Render_Device(int dev, int width, int height, int bits, 
  *=============================================================================================*/
 WW3DErrorType WW3D::Set_Next_Render_Device()
 {
-	bool success = DX8Wrapper::Set_Next_Render_Device();
+	bool success = Renderer::Set_Next_Render_Device();
 	if (success) {
 		return WW3D_ERROR_OK;
 	} else {
@@ -503,7 +503,7 @@ void *WW3D::Get_Window()
  *=============================================================================================*/
 bool WW3D::Is_Windowed()
 {
-	return DX8Wrapper::Is_Windowed();
+	return Renderer::Is_Windowed();
 }
 
 /***********************************************************************************************
@@ -523,7 +523,7 @@ bool WW3D::Is_Windowed()
  *=============================================================================================*/
 WW3DErrorType WW3D::Toggle_Windowed ()
 {
-	bool success = DX8Wrapper::Toggle_Windowed();
+	bool success = Renderer::Toggle_Windowed();
 	if (success) {
 		return WW3D_ERROR_OK;
 	} else {
@@ -547,7 +547,7 @@ WW3DErrorType WW3D::Toggle_Windowed ()
  *=============================================================================================*/
 int WW3D::Get_Render_Device()
 {
-	return DX8Wrapper::Get_Render_Device();
+	return Renderer::Get_Render_Device();
 }
 
 
@@ -586,7 +586,7 @@ const RenderDeviceDescClass & WW3D::Get_Render_Device_Desc(int deviceidx)
  *=============================================================================================*/
 int WW3D::Get_Render_Device_Count()
 {
-	return DX8Wrapper::Get_Render_Device_Count();
+	return Renderer::Get_Render_Device_Count();
 }
 
 
@@ -605,7 +605,7 @@ int WW3D::Get_Render_Device_Count()
  *=============================================================================================*/
 const char * WW3D::Get_Render_Device_Name(int device_index)
 {
-	return DX8Wrapper::Get_Render_Device_Name(device_index);
+	return Renderer::Get_Render_Device_Name(device_index);
 }
 
 
@@ -623,7 +623,7 @@ const char * WW3D::Get_Render_Device_Name(int device_index)
  *=============================================================================================*/
 WW3DErrorType WW3D::Set_Device_Resolution(int width,int height,int bits,int windowed, bool resize_window)
 {
-	bool success = DX8Wrapper::Set_Device_Resolution(width,height,bits,windowed,resize_window);
+	bool success = Renderer::Set_Device_Resolution(width,height,bits,windowed,resize_window);
 
 	if (success) {
 		return WW3D_ERROR_OK;
@@ -648,7 +648,7 @@ WW3DErrorType WW3D::Set_Device_Resolution(int width,int height,int bits,int wind
  *=============================================================================================*/
 void WW3D::Get_Render_Target_Resolution(int & set_w,int & set_h,int & set_bits,bool & set_windowed)
 {
-	DX8Wrapper::Get_Render_Target_Resolution(set_w,set_h,set_bits,set_windowed);
+	Renderer::Get_Render_Target_Resolution(set_w,set_h,set_bits,set_windowed);
 }
 
 
@@ -667,7 +667,7 @@ void WW3D::Get_Render_Target_Resolution(int & set_w,int & set_h,int & set_bits,b
  *=============================================================================================*/
 void WW3D::Get_Device_Resolution(int & set_w,int & set_h,int & set_bits,bool & set_windowed)
 {
-	DX8Wrapper::Get_Device_Resolution(set_w,set_h,set_bits,set_windowed);
+	Renderer::Get_Device_Resolution(set_w,set_h,set_bits,set_windowed);
 }
 
 
@@ -803,25 +803,22 @@ WW3DErrorType WW3D::Begin_Render(bool clear,bool clearz,const Vector3 & color, f
 
 	WWPROFILE("WW3D::Begin_Render");
 	WWASSERT(IsInitted);
-	HRESULT hr;
 
 	SNAPSHOT_SAY(("=========================================="));
 	SNAPSHOT_SAY(("========== WW3D::Begin_Render ============"));
 	SNAPSHOT_SAY(("==========================================\n"));
 
-	if (DX8Wrapper::_Get_D3D_Device8() && (hr=DX8Wrapper::_Get_D3D_Device8()->TestCooperativeLevel()) != D3D_OK)
+	// Keep backend-specific device-loss HRESULTs and reset handling in the
+	// renderer implementation. In lite/headless mode there is no device:
+	// preserve WW3D's historical behavior of allowing an empty frame.
+	const Renderer::DeviceStatus deviceStatus = Renderer::Get_Device_Status();
+	if (deviceStatus != Renderer::DEVICE_UNAVAILABLE && !Renderer::Can_Render(deviceStatus))
 	{
-        // If the device was lost, do not render until we get it back
-        if( D3DERR_DEVICELOST == hr )
-            return WW3D_ERROR_GENERIC;	//other app has the device
-
-        // Check if the device needs to be reset
-        if( D3DERR_DEVICENOTRESET == hr )
-        {
-            WWDEBUG_SAY(("WW3D::Begin_Render is resetting the device."));
-            DX8Wrapper::Reset_Device();
-        }
-
+		if (Renderer::Requires_Reset(deviceStatus))
+		{
+			WWDEBUG_SAY(("WW3D::Begin_Render is resetting the device."));
+			Renderer::Reset_Device();
+		}
 		return WW3D_ERROR_GENERIC;
 	}
 
@@ -965,13 +962,13 @@ WW3DErrorType WW3D::Render(SceneClass * scene,CameraClass * cam,bool clear,bool 
 	// set the rendering mode
 	switch(scene->Get_Polygon_Mode()) {
 		case SceneClass::POINT:
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE,D3DFILL_POINT);
+			Renderer::Set_Polygon_Mode(Renderer::POLYGON_POINT);
 			break;
 		case SceneClass::LINE:
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE,D3DFILL_WIREFRAME);
+			Renderer::Set_Polygon_Mode(Renderer::POLYGON_LINE);
 			break;
 		case SceneClass::FILL:
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE,D3DFILL_SOLID);
+			Renderer::Set_Polygon_Mode(Renderer::POLYGON_FILL);
 			break;
 	}
 
@@ -1025,7 +1022,7 @@ WW3DErrorType WW3D::Render(
 	rinfo.Camera.Apply();
 
 	// set the rendering mode
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE,D3DFILL_SOLID);
+	Renderer::Set_Polygon_Mode(Renderer::POLYGON_FILL);
 
 	// Install the lighting environment if one is supplied
 	if (rinfo.light_environment != nullptr) {
@@ -1215,7 +1212,7 @@ void WW3D::Sync(bool step)
  *=============================================================================================*/
 void WW3D::Set_Ext_Swap_Interval(long swap)
 {
-	DX8Wrapper::Set_Swap_Interval(swap);
+	Renderer::Set_Swap_Interval(swap);
 }
 
 
@@ -1233,7 +1230,7 @@ void WW3D::Set_Ext_Swap_Interval(long swap)
  *=============================================================================================*/
 long WW3D::Get_Ext_Swap_Interval()
 {
-	return DX8Wrapper::Get_Swap_Interval();
+	return Renderer::Get_Swap_Interval();
 }
 
 

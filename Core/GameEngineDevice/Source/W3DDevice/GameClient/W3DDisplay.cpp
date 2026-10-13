@@ -1842,7 +1842,7 @@ void W3DDisplay::update()
 	WW3D::Sync(TheGameLogic->hasUpdated());
 
 	// update all views of the world - recomputes data which will affect drawing
-	if (DX8Wrapper::_Get_D3D_Device8() && (DX8Wrapper::_Get_D3D_Device8()->TestCooperativeLevel()) == D3D_OK)
+	if (Renderer::Can_Render(Renderer::Get_Device_Status()))
 	{
 		// Checking if we have the device before updating views because the heightmap crashes otherwise while
 		// trying to refresh the visible terrain geometry.
@@ -1999,7 +1999,7 @@ AGAIN:
 
 	do {
 
-		if (DX8Wrapper::_Get_D3D_Device8() && (DX8Wrapper::_Get_D3D_Device8()->TestCooperativeLevel()) == D3D_OK)
+		if (Renderer::Can_Render(Renderer::Get_Device_Status()))
 		{
 			// TheSuperHackers @info The views are updated in W3DDisplay::update, except in the repeated passes
 			// of this loop, which keep moving the camera while the time is frozen for a camera movement.

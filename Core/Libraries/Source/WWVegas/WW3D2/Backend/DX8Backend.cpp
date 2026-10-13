@@ -113,3 +113,116 @@ void Renderer::Set_Light_Environment(LightEnvironmentClass * light_env)
 {
     DX8Wrapper::Set_Light_Environment(light_env);
 }
+
+
+// The adapter and swap-chain operations previously forwarded directly from
+// WW3D to DX8Wrapper. Keep the public Renderer contract free of D3D8 types.
+bool Renderer::Set_Render_Device(const char * name, int width, int height, int bits,
+                                 int windowed, bool resize_window)
+{
+    return DX8Wrapper::Set_Render_Device(name, width, height, bits, windowed, resize_window);
+}
+
+bool Renderer::Set_Render_Device(int device, int width, int height, int bits, int windowed,
+                                 bool resize_window, bool reset_device, bool restore_assets)
+{
+    return DX8Wrapper::Set_Render_Device(device, width, height, bits, windowed,
+                                         resize_window, reset_device, restore_assets);
+}
+
+bool Renderer::Set_Any_Render_Device()
+{
+    return DX8Wrapper::Set_Any_Render_Device();
+}
+
+bool Renderer::Set_Next_Render_Device()
+{
+    return DX8Wrapper::Set_Next_Render_Device();
+}
+
+int Renderer::Get_Render_Device()
+{
+    return DX8Wrapper::Get_Render_Device();
+}
+
+int Renderer::Get_Render_Device_Count()
+{
+    return DX8Wrapper::Get_Render_Device_Count();
+}
+
+const char * Renderer::Get_Render_Device_Name(int device_index)
+{
+    return DX8Wrapper::Get_Render_Device_Name(device_index);
+}
+
+bool Renderer::Is_Windowed()
+{
+    return DX8Wrapper::Is_Windowed();
+}
+
+bool Renderer::Toggle_Windowed()
+{
+    return DX8Wrapper::Toggle_Windowed();
+}
+
+bool Renderer::Set_Device_Resolution(int width, int height, int bits, int windowed, bool resize_window)
+{
+    return DX8Wrapper::Set_Device_Resolution(width, height, bits, windowed, resize_window);
+}
+
+void Renderer::Get_Device_Resolution(int & width, int & height, int & bits, bool & windowed)
+{
+    DX8Wrapper::Get_Device_Resolution(width, height, bits, windowed);
+}
+
+void Renderer::Get_Render_Target_Resolution(int & width, int & height, int & bits, bool & windowed)
+{
+    DX8Wrapper::Get_Render_Target_Resolution(width, height, bits, windowed);
+}
+
+void Renderer::Set_Swap_Interval(long swap)
+{
+    DX8Wrapper::Set_Swap_Interval(swap);
+}
+
+int Renderer::Get_Swap_Interval()
+{
+    return DX8Wrapper::Get_Swap_Interval();
+}
+
+Renderer::DeviceStatus Renderer::Get_Device_Status()
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device == nullptr)
+        return DEVICE_UNAVAILABLE;
+
+    const HRESULT result = device->TestCooperativeLevel();
+    if (result == D3D_OK)
+        return DEVICE_READY;
+    if (result == D3DERR_DEVICELOST)
+        return DEVICE_LOST;
+    if (result == D3DERR_DEVICENOTRESET)
+        return DEVICE_RESET_REQUIRED;
+    return DEVICE_ERROR;
+}
+
+bool Renderer::Reset_Device()
+{
+    return DX8Wrapper::Reset_Device();
+}
+
+void Renderer::Set_Polygon_Mode(PolygonMode mode)
+{
+    switch (mode)
+    {
+    case POLYGON_POINT:
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE, D3DFILL_POINT);
+        break;
+    case POLYGON_LINE:
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE, D3DFILL_WIREFRAME);
+        break;
+    default:
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_FILLMODE, D3DFILL_SOLID);
+        break;
+    }
+}

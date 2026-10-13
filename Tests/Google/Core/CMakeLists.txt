@@ -5,6 +5,7 @@ set(COREI_GOOGLETEST_SRC
     GameEngine/Common/DrawableInterpolationMathTest.cpp
     GameEngine/Common/FixedSimulationClockTest.cpp
     Libraries/Compression/CompressionManagerTest.cpp
+    Libraries/WW3D2/RendererBackendTest.cpp
 )
 
 add_library(corei_googletest INTERFACE)
