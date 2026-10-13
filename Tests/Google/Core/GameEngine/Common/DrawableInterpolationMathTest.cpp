@@ -38,3 +38,27 @@ TEST(DrawableInterpolationMath, TeleportSkipsSmearingAcrossLargeDistance)
 	EXPECT_TRUE(DrawableInterpolationMath::isTeleport(61.0f, 0.0f, 0.0f));
 	EXPECT_TRUE(DrawableInterpolationMath::isTeleport(50.0f, 50.0f, 0.0f));
 }
+
+
+TEST(DrawableInterpolationMath, LargeOrientationChangesSnapButQuaternionSignDoesNot)
+{
+	EXPECT_FALSE(DrawableInterpolationMath::isRotationDiscontinuity(1.0f));
+	EXPECT_FALSE(DrawableInterpolationMath::isRotationDiscontinuity(-1.0f));
+	EXPECT_FALSE(DrawableInterpolationMath::isRotationDiscontinuity(0.5f));
+	EXPECT_TRUE(DrawableInterpolationMath::isRotationDiscontinuity(0.0f));
+	EXPECT_TRUE(DrawableInterpolationMath::isRotationDiscontinuity(-0.1f));
+}
+
+TEST(DrawableInterpolationMath, CameraBlendPreservesDurationAtDifferentRenderRates)
+{
+	const float legacyBlend = 0.1f;
+	EXPECT_NEAR(legacyBlend, DrawableInterpolationMath::presentationBlend(legacyBlend, 1.0f), 0.00001f);
+	EXPECT_NEAR(0.0513167f, DrawableInterpolationMath::presentationBlend(legacyBlend, 0.5f), 0.00001f);
+
+	// Two 60 Hz frames and one 30 Hz frame should have identical damping.
+	const float half = DrawableInterpolationMath::presentationBlend(legacyBlend, 0.5f);
+	const float composed = 1.0f - (1.0f - half) * (1.0f - half);
+	EXPECT_NEAR(legacyBlend, composed, 0.00001f);
+	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::presentationBlend(legacyBlend, 0.0f));
+	EXPECT_FLOAT_EQ(1.0f, DrawableInterpolationMath::presentationBlend(2.0f, 0.1f));
+}
