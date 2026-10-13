@@ -69,6 +69,10 @@ public:
 	static ModuleType getModuleType() { return MODULETYPE_DRAW; }
 	static Int getInterfaceMask() { return MODULEINTERFACE_DRAW; }
 
+	// Presentation-only snapshots, invoked after each fixed simulation tick.
+	// Derived render modules may record the poses of animated child bones.
+	virtual void captureVisualSimulationState() {}
+
 	virtual void doDrawModule(const Matrix3D* transformMtx) = 0;
 
 	virtual void setShadowsEnabled(Bool enable) = 0;
