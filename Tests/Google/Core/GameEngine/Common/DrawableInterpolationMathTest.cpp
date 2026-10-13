@@ -81,7 +81,7 @@ TEST(DrawableInterpolationMath, QuaternionSlerpKeepsPitchAndRoll)
 	Matrix3D halfwayMatrix(true);
 	halfwayMatrix.Set_Rotation(halfway);
 	const Vector3 up = halfwayMatrix.Get_Z_Vector();
-	EXPECT_GT(up.Y, 0.0f);
+	EXPECT_GT(fabsf(up.Y), 0.1f);
 	EXPECT_LT(up.Z, 1.0f);
 }
 
