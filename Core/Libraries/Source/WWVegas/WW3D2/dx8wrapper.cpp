@@ -76,6 +76,8 @@
 #include "missingtexture.h"
 #include "WWLib/thread.h"
 #include <d3dx8core.h>
+#include <stdio.h>
+#include <string.h>
 #include "WWMath/pot.h"
 #include "WWDebug/wwprofile.h"
 #include "WWLib/ffactory.h"
@@ -1706,8 +1708,8 @@ void DX8Wrapper::End_Scene(bool flip_frames)
 				LARGE_INTEGER presentFinished;
 				QueryPerformanceCounter(&presentFinished);
 				static DWORD reportStarted = GetTickCount();
-				static Int64 totalPresentTicks = 0;
-				static UnsignedInt presentCount = 0;
+				static LONGLONG totalPresentTicks = 0;
+				static unsigned int presentCount = 0;
 				totalPresentTicks += presentFinished.QuadPart - presentStarted.QuadPart;
 				++presentCount;
 				const DWORD reportNow = GetTickCount();
