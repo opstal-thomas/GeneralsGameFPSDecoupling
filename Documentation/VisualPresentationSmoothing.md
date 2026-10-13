@@ -40,16 +40,29 @@ formats are unchanged.
    A drawable caches its exact visual matrix to avoid applying client
    physics twice on the same frame.
 
+6. **Full 3D body rotation.** Each simulation tick captures a rigid world-space
+   quaternion for each drawable. Spherical interpolation blends aircraft
+   pitch and banking as well as terrain-aligned tilt (in both games), with
+   a snap for abrupt >150-degree rotations and long-distance teleports.
+   Invalid quaternion samples leave authoritative orientation unchanged.
+7. **Camera lock smoothing.** W3DView follows interpolated drawable poses
+   in FOLLOW, TETHER, aircraft yaw and 3D model-tracking paths. Its easing
+   coefficients now account for actual presentation frame delta, and the
+   follow acceleration is per camera rather than a shared static variable.
+
 ## Visuals still pending
 
 - WW3D skeletal animation already samples `WW3D::Get_Logic_Time_Milliseconds()`
   (including fractional render time) in `Animatable3DObjClass::Compute_Current_Frame()`.
   It has **not** been forcefully switched to a new clock: animation
   completion, transitions and looping require separate gameplay tests.
-- Body pitch/roll interpolation and slope-aware full-3D orientation still need
-  quaternion interpolation; only translation and flat-ground yaw are blended.
-- Scripted camera object-lock following and camera shake still contain
-  render-frame-dependent smoothing and should be audited separately.
+- Camera shake still deliberately advances at fixed simulation cadence:
+  its high-frequency impulses are not yet smoothed during presentation.
+- Animation-slaved cameras and some effects may read last-rendered W3D
+  bone transforms. The selective prepass covers existing bone-tracked
+  particle emitters, not every render module or effect. Expanding this
+  blindly could spawn effects offscreen and alter stateful animation
+  transitions.
 - Other effect attachment paths that read authoritative Drawable transforms,
   or use ClientUpdate modules outside the W3DModelDraw bone-tracker, may
   still step at 30 Hz. These require separate presentation-only sampling
@@ -72,6 +85,10 @@ build using the same map and units:
   duration at each tested rendering FPS.
 - Teleports, spawning, save/load, pause/resume and replay fast-forward do not
   smear positions or leave turret poses stale.
+- Test aircraft banking, altitude changes, and terrain-aligned rotations
+  for roll/pitch continuity, including abrupt 180-degree turns.
+- Test FOLLOW/TETHER camera locks, selected-unit tracking, flying units,
+  destruction and target switching at 30/60/144/240 FPS.
 - Evaluate missile launches, muzzle flashes, barrel bones, exhaust and tracks
   attached to turning/moving units for visual drift. In particular, compare
   bone-attached smoke/exhaust on rapidly rotating turrets and moving units,
