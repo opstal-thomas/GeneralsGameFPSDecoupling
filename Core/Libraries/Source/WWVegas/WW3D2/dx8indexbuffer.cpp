@@ -322,10 +322,11 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 	index_buffer = static_cast<IDirect3DIndexBuffer8 *>(
 		Renderer::Create_Index_Buffer(description));
 
-	if (index_buffer)
+	if (index_buffer) {
 		WWDEBUG_SAY(("...Index buffer creation successful"));
-
-	WWASSERT_PRINT(index_buffer, "Renderer could not create an index buffer after recovery");
+	} else {
+		WWASSERT_PRINT(index_buffer, "Renderer could not create an index buffer after recovery");
+	}
 }
 
 // ----------------------------------------------------------------------------
