@@ -2,6 +2,7 @@
 set(COREI_GOOGLETEST_SRC
     GoogleTestMain.cpp
     GameEngine/Common/AsciiStringTest.cpp
+    GameEngine/Common/DrawableInterpolationMathTest.cpp
     GameEngine/Common/FixedSimulationClockTest.cpp
     Libraries/Compression/CompressionManagerTest.cpp
 )
