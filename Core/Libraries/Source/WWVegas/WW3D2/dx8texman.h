@@ -42,6 +42,7 @@
 #include "WWLib/always.h"
 #include "texture.h"
 #include "dx8wrapper.h"
+#include "Renderer.h"
 #include "ww3dformat.h"
 #include "dx8list.h"
 #include "WWLib/multilist.h"
@@ -102,18 +103,15 @@ public:
 	virtual void Recreate() const override
 	{
 		WWASSERT(Texture->Peek_D3D_Base_Texture()==nullptr);
-		Texture->Poke_Texture
-		(
-			DX8Wrapper::_Create_DX8_Texture
-			(
-				Width,
-				Height,
-				Format,
-				Mip_level_count,
-				D3DPOOL_DEFAULT,
-				RenderTarget
-			)
-		);
+		RenderTexture2DDescription description;
+		description.width = Width;
+		description.height = Height;
+		description.pixelFormat = static_cast<unsigned>(Format);
+		description.mipLevels = static_cast<unsigned>(Mip_level_count);
+		description.memory = RENDER_TEXTURE_DEFAULT;
+		description.renderTarget = RenderTarget;
+		Texture->Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+			Renderer::Create_Texture_2D(description)));
 	}
 
 private:
@@ -139,17 +137,14 @@ public:
 	virtual void Recreate() const override
 	{
 		WWASSERT(Texture->Peek_D3D_Base_Texture()==nullptr);
-		Texture->Poke_Texture
-		(
-			DX8Wrapper::_Create_DX8_ZTexture
-			(
-				Width,
-				Height,
-				ZFormat,
-				Mip_level_count,
-				D3DPOOL_DEFAULT
-			)
-		);
+		RenderTexture2DDescription description;
+		description.width = Width;
+		description.height = Height;
+		description.pixelFormat = static_cast<unsigned>(ZFormat);
+		description.mipLevels = static_cast<unsigned>(Mip_level_count);
+		description.memory = RENDER_TEXTURE_DEFAULT;
+		Texture->Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+			Renderer::Create_Depth_Texture_2D(description)));
 	}
 
 

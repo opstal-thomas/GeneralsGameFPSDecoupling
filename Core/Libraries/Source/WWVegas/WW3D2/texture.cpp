@@ -44,6 +44,7 @@
 #include <d3d8.h>
 #include <d3dx8core.h>
 #include "dx8wrapper.h"
+#include "Renderer.h"
 #include "WWLib/TARGA.h"
 #include <WWLib/nstrdup.h>
 #include "w3d_file.h"
@@ -578,6 +579,21 @@ int TextureBaseClass::_Get_Total_Locked_Surface_Count()
 	return texture_count;
 }
 
+// Keep the legacy PoolType semantics without exposing DX8 pools above the
+// renderer backend or relying on matching enum integer values.
+static RenderTextureMemory Get_Render_Texture_Memory(TextureBaseClass::PoolType pool)
+{
+    switch (pool)
+    {
+    case TextureBaseClass::POOL_DEFAULT: return RENDER_TEXTURE_DEFAULT;
+    case TextureBaseClass::POOL_MANAGED: return RENDER_TEXTURE_MANAGED;
+    case TextureBaseClass::POOL_SYSTEMMEM: return RENDER_TEXTURE_SYSTEM;
+    default:
+        WWASSERT(0);
+        return RENDER_TEXTURE_DEFAULT;
+    }
+}
+
 /*************************************************************************
 **                             TextureClass
 *************************************************************************/
@@ -611,27 +627,15 @@ TextureClass::TextureClass
 	default : break;
 	}
 
-	D3DPOOL d3dpool=(D3DPOOL)0;
-	switch(pool)
-	{
-	case POOL_DEFAULT		: d3dpool=D3DPOOL_DEFAULT; break;
-	case POOL_MANAGED		: d3dpool=D3DPOOL_MANAGED; break;
-	case POOL_SYSTEMMEM	: d3dpool=D3DPOOL_SYSTEMMEM; break;
-	default: WWASSERT(0);
-	}
-
-	Poke_Texture
-	(
-		DX8Wrapper::_Create_DX8_Texture
-		(
-			width,
-			height,
-			format,
-			mip_level_count,
-			d3dpool,
-			rendertarget
-		)
-	);
+	RenderTexture2DDescription description;
+	description.width = width;
+	description.height = height;
+	description.pixelFormat = static_cast<unsigned>(format);
+	description.mipLevels = static_cast<unsigned>(mip_level_count);
+	description.memory = Get_Render_Texture_Memory(pool);
+	description.renderTarget = rendertarget;
+	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+		Renderer::Create_Texture_2D(description)));
 
 	if (pool==POOL_DEFAULT)
 	{
@@ -1205,26 +1209,14 @@ ZTextureClass::ZTextureClass
 :	TextureBaseClass(width,height, mip_level_count, pool),
 	DepthStencilTextureFormat(zformat)
 {
-	D3DPOOL d3dpool=(D3DPOOL)0;
-	switch (pool)
-	{
-	case POOL_DEFAULT: d3dpool=D3DPOOL_DEFAULT; break;
-	case POOL_MANAGED: d3dpool=D3DPOOL_MANAGED; break;
-	case POOL_SYSTEMMEM: d3dpool=D3DPOOL_SYSTEMMEM;	break;
-	default:	WWASSERT(0);
-	}
-
-	Poke_Texture
-	(
-		DX8Wrapper::_Create_DX8_ZTexture
-		(
-			width,
-			height,
-			zformat,
-			mip_level_count,
-			d3dpool
-		)
-	);
+	RenderTexture2DDescription description;
+	description.width = width;
+	description.height = height;
+	description.pixelFormat = static_cast<unsigned>(zformat);
+	description.mipLevels = static_cast<unsigned>(mip_level_count);
+	description.memory = Get_Render_Texture_Memory(pool);
+	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+		Renderer::Create_Depth_Texture_2D(description)));
 
 	if (pool==POOL_DEFAULT)
 	{

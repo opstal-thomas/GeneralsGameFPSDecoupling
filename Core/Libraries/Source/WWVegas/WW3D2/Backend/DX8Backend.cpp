@@ -425,3 +425,51 @@ void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVe
     DX8_THREAD_ASSERT();
     DX8CALL(SetIndices(reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer), baseVertexIndex));
 }
+
+
+static D3DPOOL Get_Legacy_Texture_Memory(RenderTextureMemory memory)
+{
+    switch (memory)
+    {
+    case RENDER_TEXTURE_DEFAULT:
+        return D3DPOOL_DEFAULT;
+    case RENDER_TEXTURE_SYSTEM:
+        return D3DPOOL_SYSTEMMEM;
+    case RENDER_TEXTURE_MANAGED:
+        return D3DPOOL_MANAGED;
+    default:
+        WWASSERT(0);
+        return D3DPOOL_DEFAULT;
+    }
+}
+
+RenderTexture2DHandle Renderer::Create_Texture_2D(const RenderTexture2DDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid())
+        return nullptr;
+
+    // Preserve DX8's format negotiation, render-target creation and
+    // out-of-video-memory recovery inside the established wrapper.
+    IDirect3DTexture8 * texture = DX8Wrapper::_Create_DX8_Texture(
+        description.width, description.height,
+        static_cast<WW3DFormat>(description.pixelFormat),
+        static_cast<MipCountType>(description.mipLevels),
+        Get_Legacy_Texture_Memory(description.memory),
+        description.renderTarget);
+    return reinterpret_cast<RenderTexture2DHandle>(texture);
+}
+
+RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid())
+        return nullptr;
+
+    IDirect3DTexture8 * texture = DX8Wrapper::_Create_DX8_ZTexture(
+        description.width, description.height,
+        static_cast<WW3DZFormat>(description.pixelFormat),
+        static_cast<MipCountType>(description.mipLevels),
+        Get_Legacy_Texture_Memory(description.memory));
+    return reinterpret_cast<RenderTexture2DHandle>(texture);
+}

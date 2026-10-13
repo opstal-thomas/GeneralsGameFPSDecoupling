@@ -39,6 +39,10 @@ struct RendererIndexBufferResource;
 using RenderVertexBufferHandle = RendererVertexBufferResource *;
 using RenderIndexBufferHandle = RendererIndexBufferResource *;
 
+// A distinct opaque identity for a backend-owned two-dimensional texture.
+struct RendererTexture2DResource;
+using RenderTexture2DHandle = RendererTexture2DResource *;
+
 struct RenderViewport
 {
     unsigned int x;
@@ -106,6 +110,34 @@ struct RenderBufferDescription
 
     bool Is_Valid() const { return byteSize > 0; }
     bool Is_Dynamic() const { return (usageFlags & RENDER_BUFFER_DYNAMIC) != 0; }
+};
+
+// The transitional texture format and mip fields carry WW3D's own numeric
+// values, never native D3D8 or DXGI identifiers. Render targets are still
+// ordinary 2D textures with the renderTarget flag set.
+enum RenderTextureMemory
+{
+    RENDER_TEXTURE_DEFAULT,
+    RENDER_TEXTURE_MANAGED,
+    RENDER_TEXTURE_SYSTEM
+};
+
+struct RenderTexture2DDescription
+{
+    RenderTexture2DDescription()
+        : width(0), height(0), pixelFormat(0), mipLevels(0),
+          memory(RENDER_TEXTURE_MANAGED), renderTarget(false)
+    {
+    }
+
+    unsigned width;
+    unsigned height;
+    unsigned pixelFormat;
+    unsigned mipLevels; // Zero means all mipmap levels in W3D.
+    RenderTextureMemory memory;
+    bool renderTarget;
+
+    bool Is_Valid() const { return width > 0 && height > 0; }
 };
 
 // A method appears here once a caller routes through it, not in anticipation of
@@ -213,6 +245,11 @@ public:
     // buffer to the backend without exposing native graphics API types.
     static void Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride);
     static void Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex);
+
+    // W3D retains ownership of existing native texture references for now.
+    // Both creation entry points support the original device-reset tracker.
+    static RenderTexture2DHandle Create_Texture_2D(const RenderTexture2DDescription & description);
+    static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

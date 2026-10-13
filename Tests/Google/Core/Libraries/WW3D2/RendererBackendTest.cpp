@@ -15,6 +15,29 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, TextureDescriptorsSupportRenderTargetsAndDepth)
+{
+    const RenderTexture2DDescription uninitialized;
+    EXPECT_FALSE(uninitialized.Is_Valid());
+    EXPECT_EQ(RENDER_TEXTURE_MANAGED, uninitialized.memory);
+    EXPECT_FALSE(uninitialized.renderTarget);
+    EXPECT_EQ(0u, uninitialized.mipLevels);
+
+    RenderTexture2DDescription target;
+    target.width = 1024;
+    target.height = 1024;
+    target.pixelFormat = 17;
+    target.mipLevels = 1;
+    target.memory = RENDER_TEXTURE_DEFAULT;
+    target.renderTarget = true;
+    EXPECT_TRUE(target.Is_Valid());
+    EXPECT_TRUE(target.renderTarget);
+    static_assert(std::is_pointer_v<RenderTexture2DHandle>);
+    static_assert(!std::is_convertible_v<RenderTexture2DHandle, RenderVertexBufferHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Texture_2D(target)),
+                                 RenderTexture2DHandle>);
+}
+
 TEST(RendererBackend, BufferHandlesAreOpaqueAndTypeSafe)
 {
     static_assert(std::is_pointer_v<RenderVertexBufferHandle>);

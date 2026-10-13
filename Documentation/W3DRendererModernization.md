@@ -36,6 +36,23 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Fifth milestone: procedural 2D textures and render-target allocation
+
+W3D procedural 2D textures, color render targets and depth textures now
+request their graphics allocations through two backend-neutral creation
+methods. The existing DX8 texture trackers use the same path when recovering
+resources after a device reset.
+
+The DX8 backend preserves the old DX8Wrapper texture initialization logic,
+including pixel-format negotiation, allocation retries and default/managed/
+system-memory behavior. This milestone does not alter texture layouts,
+mipmapping rules or W3D texture assets.
+
+Texture owners still retain their native D3D8 pointer representation after
+creation; moving texture identity, mapping, binding and destruction behind
+the renderer interface is the following step. File/surface-based textures,
+cube maps, volume textures and swap-chain backbuffers remain unchanged.
+
 ### Third milestone: vertex and index buffer allocation ownership
 
 The W3D vertex and 16-bit index buffer classes now request GPU allocations
