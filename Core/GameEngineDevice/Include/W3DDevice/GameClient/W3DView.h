@@ -271,6 +271,8 @@ private:
 	TRotateCameraInfo m_rcInfo;
 	TPitchCameraInfo m_pcInfo;
 	TZoomCameraInfo m_zcInfo;
+	Real m_cameraLockFollowFactor; ///< Per-view acceleration toward the camera lock target.
+	ObjectID m_lastCameraLockID; ///< Reset smoothing when switching followed objects.
 	TMoveAlongWaypointPathInfo m_mcwpInfo;					///< Move camera along waypoint path info.
 	Bool m_CameraArrivedAtWaypointOnPathFlag;
 
