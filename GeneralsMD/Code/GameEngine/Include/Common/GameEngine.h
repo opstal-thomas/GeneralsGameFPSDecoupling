@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include "Common/FixedSimulationClock.h"
 #include "Common/SubsystemInterface.h"
 #include "Common/GameType.h"
 
@@ -97,7 +98,7 @@ protected:
 	virtual ParticleSystemManager* createParticleSystemManager(Bool dummy) = 0;
 	virtual AudioManager *createAudioManager(Bool dummy) = 0;				///< Factory for Audio Manager
 
-	Real m_logicTimeAccumulator; ///< Frame time accumulated towards submitting a new logic frame
+	FixedSimulationClock m_simulationClock; ///< Wall-clock scheduler for whole gameplay ticks
 
 	Bool m_quitting; ///< true when we need to quit the game
 	Bool m_isActive; ///< app has OS focus.
