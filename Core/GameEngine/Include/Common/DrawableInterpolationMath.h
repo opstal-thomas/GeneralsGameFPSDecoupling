@@ -53,8 +53,7 @@ namespace DrawableInterpolationMath
 		// more than 150 degrees in one 30 Hz tick is typically a scripted snap.
 		// Cos(150 / 2) ~= 0.258819. Do not smear instant reorientation.
 		const float cosineThreshold = 0.2588190451f;
-		return quaternionDot < -cosineThreshold ? false :
-			quaternionDot < cosineThreshold && quaternionDot > -cosineThreshold;
+		return quaternionDot > -cosineThreshold && quaternionDot < cosineThreshold;
 	}
 
 	inline float presentationBlend(float perThirtyHzStep, float thirtyHzFrameRatio)
