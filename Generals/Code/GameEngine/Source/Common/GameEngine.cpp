@@ -797,6 +797,18 @@ void GameEngine::execute()
 	DWORD startTime = timeGetTime() / 1000;
 #endif
 
+	// Opt-in profiling for release builds: set GENERALS_FPS_DIAGNOSTICS=1.
+	// Tracks render-loop iterations separately from fixed simulation ticks.
+	char fpsDiagnosticSetting[8] = { 0 };
+	const Bool diagnoseFps = GetEnvironmentVariableA("GENERALS_FPS_DIAGNOSTICS", fpsDiagnosticSetting, sizeof(fpsDiagnosticSetting)) > 0 &&
+		fpsDiagnosticSetting[0] == '1';
+	DWORD fpsSampleStarted = timeGetTime();
+	DWORD updateDuration = 0;
+	DWORD pacingDuration = 0;
+	UnsignedInt renderedIterations = 0;
+	UnsignedInt simulationTicks = 0;
+	UnsignedInt previousLogicFrame = TheGameLogic->getFrame();
+
 	// pretty basic for now
 	while( !m_quitting )
 	{
@@ -809,6 +821,8 @@ void GameEngine::execute()
 		}
 
 		{
+			DWORD fpsSampleFrameStarted = 0;
+			DWORD fpsSampleFrameUpdated = 0;
 
 #if defined(RTS_DEBUG)
 			{
@@ -836,7 +850,11 @@ void GameEngine::execute()
 				try
 				{
 					// compute a frame
+					if (diagnoseFps)
+						fpsSampleFrameStarted = timeGetTime();
 					update();
+					if (diagnoseFps)
+						fpsSampleFrameUpdated = timeGetTime();
 				}
 				catch (INIException e)
 				{
@@ -862,6 +880,52 @@ void GameEngine::execute()
 			}
 
 			TheFramePacer->update();
+
+			if (diagnoseFps)
+			{
+				const DWORD now = timeGetTime();
+				updateDuration += fpsSampleFrameUpdated - fpsSampleFrameStarted;
+				pacingDuration += now - fpsSampleFrameUpdated;
+				++renderedIterations;
+
+				const UnsignedInt logicFrame = TheGameLogic->getFrame();
+				if (logicFrame >= previousLogicFrame)
+					simulationTicks += logicFrame - previousLogicFrame;
+				previousLogicFrame = logicFrame;
+
+				const DWORD elapsedMs = now - fpsSampleStarted;
+				if (elapsedMs >= 1000 && renderedIterations)
+				{
+					char line[320];
+					sprintf(line,
+						"[GeneralsFPS][Engine] Loop=%.1f/s Simulation=%.1f/s Update=%.2fms Wait=%.2fms RenderCap=%d ActiveCap=%d LimitEnabled=%d InGame=%d Network=%d\\n",
+						1000.0 * renderedIterations / elapsedMs,
+						1000.0 * simulationTicks / elapsedMs,
+						(double)updateDuration / renderedIterations,
+						(double)pacingDuration / renderedIterations,
+						TheFramePacer->getFramesPerSecondLimit(),
+						TheFramePacer->getActualFramesPerSecondLimit(),
+						TheGlobalData->m_useFpsLimit ? 1 : 0,
+						TheGameLogic->isInGame() ? 1 : 0,
+						TheNetwork != nullptr ? 1 : 0);
+					OutputDebugStringA(line);
+
+					char logPath[MAX_PATH];
+					DWORD pathLength = GetTempPathA(MAX_PATH, logPath);
+					if (pathLength > 0 && pathLength + sizeof("GeneralsFPSDiagnostics.log") < MAX_PATH)
+					{
+						strcat(logPath, "GeneralsFPSDiagnostics.log");
+						FILE *logFile = fopen(logPath, "a");
+						if (logFile) { fputs(line, logFile); fclose(logFile); }
+					}
+
+					fpsSampleStarted = now;
+					updateDuration = 0;
+					pacingDuration = 0;
+					renderedIterations = 0;
+					simulationTicks = 0;
+				}
+			}
 		}
 
 #ifdef PERF_TIMERS
