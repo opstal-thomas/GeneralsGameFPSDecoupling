@@ -2854,6 +2854,20 @@ void Drawable::draw()
 /** Compute the health bar region based on the health of the object and the
 	* zoom level of the camera */
 // ------------------------------------------------------------------------------------------------
+// Keep screen-space icons on the interpolated drawable while preserving
+// the object's authored health-box offset above the authoritative position.
+// This is visual-only; hit tests, Object state and UI data are unchanged.
+static void getPresentationHealthBoxPosition(const Drawable *draw, const Object *obj, Coord3D &position)
+{
+	obj->getHealthBoxPosition(position);
+	Coord3D visual;
+	draw->getInterpolatedRenderPosition(visual);
+	const Coord3D *world = obj->getPosition();
+	position.x += visual.x - world->x;
+	position.y += visual.y - world->y;
+	position.z += visual.z - world->z;
+}
+
 static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 {
 
@@ -2866,7 +2880,7 @@ static Bool computeHealthRegion( const Drawable *draw, IRegion2D& region )
 		return FALSE;
 
 	Coord3D p;
-	obj->getHealthBoxPosition(p);
+	getPresentationHealthBoxPosition(draw, obj, p);
 	ICoord2D screenCenter;
 	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
 		return FALSE;
@@ -3083,7 +3097,8 @@ void Drawable::drawAmmo( const IRegion2D *healthBarRegion )
 	//Int totalWidth = (boxWidth+SPACING)*numTotal;
 
 	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
+	Coord3D pos;
+	getInterpolatedRenderPosition(pos);
 	pos.x += TheGlobalData->m_ammoPipWorldOffset.x;
 	pos.y += TheGlobalData->m_ammoPipWorldOffset.y;
 	pos.z += TheGlobalData->m_ammoPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
@@ -3150,7 +3165,8 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	//Int totalWidth = (boxWidth+SPACING)*numTotal;
 
 	ICoord2D screenCenter;
-	Coord3D pos = *obj->getPosition();
+	Coord3D pos;
+	getInterpolatedRenderPosition(pos);
 	pos.x += TheGlobalData->m_containerPipWorldOffset.x;
 	pos.y += TheGlobalData->m_containerPipWorldOffset.y;
 	pos.z += TheGlobalData->m_containerPipWorldOffset.z + obj->getGeometryInfo().getMaxHeightAbovePosition();
@@ -3334,7 +3350,7 @@ void Drawable::drawUIText()
 		//draw an F, here
 		Coord3D p;
 		ICoord2D screenCenter;
-		obj->getHealthBoxPosition(p);
+		getPresentationHealthBoxPosition(this, obj, p);
 		if( ! TheTacticalView->worldToScreen( &p, &screenCenter ) )
 			return;
 
@@ -3867,7 +3883,9 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 	// get center position in drawable
 	ICoord2D screen;
 	Coord3D pos;
-	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
+	Coord3D visualPosition;
+	getInterpolatedRenderPosition(visualPosition);
+	getDrawableGeometryInfo().getCenterPosition(visualPosition, pos);
 
 	// convert drawable center position to screen coords
 	TheTacticalView->worldToScreen( &pos, &screen );
@@ -3894,7 +3912,9 @@ void Drawable::drawCaption( const IRegion2D *healthBarRegion )
 	// get center position in drawable
 	ICoord2D screen;
 	Coord3D pos;
-	getDrawableGeometryInfo().getCenterPosition(*getPosition(), pos);
+	Coord3D visualPosition;
+	getInterpolatedRenderPosition(visualPosition);
+	getDrawableGeometryInfo().getCenterPosition(visualPosition, pos);
 
 	// convert drawable center position to screen coords
 	TheTacticalView->worldToScreen( &pos, &screen );
@@ -3956,7 +3976,7 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 
 	Coord3D p;
 	ICoord2D screenCenter;
-	obj->getHealthBoxPosition(p);
+	getPresentationHealthBoxPosition(this, obj, p);
 	if( !TheTacticalView->worldToScreen( &p, &screenCenter ) )
 		return;
 

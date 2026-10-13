@@ -385,11 +385,9 @@ void W3DView::buildCameraTransform( Matrix3D *transform, const Vector3 &sourcePo
 	transform->Make_Identity();
 	transform->Look_At( sourcePos, targetPos, 0 );
 
-	//WST 11/12/2002 New camera shaker system
-	// TheSuperHackers @tweak The camera shaker is now decoupled from the render update.
-	// TheSuperHackers @todo Move Update_Camera_Shaker to the W3DView::update function.
-	CameraShakerSystem.Timestep(TheFramePacer->getLogicTimeStepMilliseconds());
-	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+	// TheSuperHackers @fix Sample camera shake once for the final view update,
+	// not when temporary camera matrices are constructed for constraints.
+	// Neither time progression nor random generation belongs in this helper.
 	transform->Rotate_X(m_shakerAngles.X);
 	transform->Rotate_Y(m_shakerAngles.Y);
 	transform->Rotate_Z(m_shakerAngles.Z);
@@ -754,6 +752,11 @@ void W3DView::updateCameraTransform()
 			targetPos.Z += repositionZ;
 		}
 	}
+
+	// Sample the global shake exactly once for this final view transform.
+	// Camera matrix building also serves constraint probes, which must not
+	// advance or resample the effect.
+	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
 
 	Matrix3D cameraTransform;
 	buildCameraTransform(&cameraTransform, sourcePos, targetPos);
@@ -1618,8 +1621,9 @@ void W3DView::update()
 	}
 
 	//Process New C3 Camera Shaker system
-	if (CameraShakerSystem.IsCameraShaking())
+	if (CameraShakerSystem.IsCameraShaking() || m_shakerAngles.Length2() > 0.0f)
 	{
+		// Rebuild once after the last shake expires to clear its rotation.
 		m_recalcCamera = true;
 	}
 

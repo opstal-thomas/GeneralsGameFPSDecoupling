@@ -51,6 +51,21 @@ formats are unchanged.
    coefficients now account for actual presentation frame delta, and the
    follow acceleration is per camera rather than a shared static variable.
 
+## Single-player timing and overlay pass
+
+- Recoil timing uses elapsed presentation time rather than one authored step
+  per visible render. Render modules are guarded from multiple state updates
+  when multiple passes or views submit the same model in one frame.
+- The W3D camera shaker now advances once per presentation in seconds, and
+  generates its camera sample only for the final camera transform. Constraint
+  computations no longer age or reroll active shake effects.
+- Health bars, veterancy, formation marks, ammo/container pips, captions and
+  construction progress follow the same interpolated positions as models.
+  The object's original geometry offsets and UI values are retained; no
+  hit testing or authoritative gameplay transforms are changed.
+- This pass targets single-player smoothing. Multiplayer still uses its
+  original lockstep gate and non-interpolated render phase.
+
 ## Visuals still pending
 
 - WW3D skeletal animation already samples `WW3D::Get_Logic_Time_Milliseconds()`
