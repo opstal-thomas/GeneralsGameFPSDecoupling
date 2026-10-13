@@ -4,13 +4,13 @@
 **  Distributed under GPL version 3 or later.
 */
 #include <gtest/gtest.h>
-#include <cmath>
+#include <limits>
 #include "Common/DrawableInterpolationMath.h"
 
 TEST(DrawableInterpolationMath, ClampsInvalidAndOutOfRangeAlpha)
 {
 	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::clampAlpha(-1.0f));
-	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::clampAlpha(NAN));
+	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::clampAlpha(std::numeric_limits<float>::quiet_NaN()));
 	EXPECT_FLOAT_EQ(0.5f, DrawableInterpolationMath::clampAlpha(0.5f));
 	EXPECT_FLOAT_EQ(1.0f, DrawableInterpolationMath::clampAlpha(2.0f));
 }
