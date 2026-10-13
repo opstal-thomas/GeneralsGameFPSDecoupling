@@ -1391,12 +1391,14 @@ void W3DView::update()
 		updateTerrain();
 	}
 
-	static Real followFactor = -1;
-	ObjectID cameraLock = getCameraLock();
-	if (cameraLock == INVALID_ID)
-	{
-		followFactor = -1;
-	}
+	// Legacy following accelerated by 0.05 per rendered frame and used
+	// static state shared by every camera. Retain the 30 Hz pacing in real
+	// time, and reset independently when a different target is locked.
+	const ObjectID cameraLock = getCameraLock();
+	const Real cameraFrameRatio = TheFramePacer ? TheFramePacer->getBaseOverUpdateFpsRatio() : 1.0f;
+	if (cameraLock == INVALID_ID || cameraLock != m_lastCameraLockID)
+		m_cameraLockFollowFactor = -1.0f;
+	m_lastCameraLockID = cameraLock;
 	if (cameraLock != INVALID_ID)
 	{
 		removeScriptedState(Scripted_MoveOnWaypointPath);
@@ -1424,16 +1426,15 @@ void W3DView::update()
 		{
 			setCameraLock(INVALID_ID);
 			setCameraLockDrawable(nullptr);
-			followFactor = -1;
+			m_cameraLockFollowFactor = -1.0f;
+			m_lastCameraLockID = INVALID_ID;
 		}
 		else
 		{
-			if (followFactor<0) {
-				followFactor = 0.05f;
-			} else {
-				followFactor += 0.05f;
-				if (followFactor>1.0f) followFactor = 1.0f;
-			}
+			if (m_cameraLockFollowFactor < 0.0f)
+				m_cameraLockFollowFactor = minf(0.05f * cameraFrameRatio, 1.0f);
+			else
+				m_cameraLockFollowFactor = minf(m_cameraLockFollowFactor + 0.05f * cameraFrameRatio, 1.0f);
 			if (getCameraLockDrawable() != nullptr)
 			{
 				Drawable* cameraLockDrawable = (Drawable *)getCameraLockDrawable();
@@ -1457,9 +1458,19 @@ void W3DView::update()
 						objPos.Y = pos.y;
 						objPos.Z = pos.z;
 
+						// Keep model-local offsets and bounding spheres from
+						// the W3D render object, but correct their world position
+						// and forward vector to the current interpolated body.
+						Matrix3D visualBody;
+						cameraLockDrawable->getInterpolatedWorldTransform(visualBody);
+						const Coord3D *logicPos = cameraLockDrawable->getPosition();
+						objPos.X += visualBody.Get_X_Translation() - logicPos->x;
+						objPos.Y += visualBody.Get_Y_Translation() - logicPos->y;
+						objPos.Z += visualBody.Get_Z_Translation() - logicPos->z;
+
 						//get position of top of object, assuming world z roughly along local z.
 						objPos += boundingSphereRadius * 1.0f * zaxis;
-						Vector3 objview = transform.Get_X_Vector();	//get view vector of object
+						Vector3 objview = visualBody.Get_X_Vector();
 						//move camera back behind object far enough not to intersect bounding sphere
 						Vector3 camtran = objPos - objview * boundingSphereRadius*4.5f;
 
@@ -1467,7 +1478,10 @@ void W3DView::update()
 
 						Vector3 tranDiff = (camtran - prevCamTran);	//vector old position to new position.
 
-						camtran = prevCamTran + tranDiff * 0.1f;	//slowly move camera to new position.
+						// Keep the old 10% / 30 Hz damping regardless of
+						// whether the current presentation is 30 or 144 FPS.
+						const Real cameraBlend = DrawableInterpolationMath::presentationBlend(0.1f, cameraFrameRatio);
+						camtran = prevCamTran + tranDiff * cameraBlend;
 
 						Matrix3D camXForm;
 						camXForm.Look_At(camtran,objPos,0);
@@ -1477,7 +1491,13 @@ void W3DView::update()
 				}
 			}
 			else
-			{	Coord3D objpos = *cameraLockObj->getPosition();
+			{
+				Coord3D objpos = *cameraLockObj->getPosition();
+				// Follow the rendered pose, not the quantized 30 Hz Object
+				// position. This remains a camera-only read.
+				Drawable *trackedDrawable = cameraLockObj->getDrawable();
+				if (trackedDrawable)
+					trackedDrawable->getInterpolatedRenderPosition(objpos);
 				Coord3D curpos = getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
 				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
@@ -1501,8 +1521,9 @@ void W3DView::update()
 							Real ratio = 1.0f - snapThreshSqr/curDistSqr;
 
 							// move halfway there.
-							curpos.x += dx*ratio*0.5f;
-							curpos.y += dy*ratio*0.5f;
+							const Real blend = DrawableInterpolationMath::presentationBlend(ratio * 0.5f, cameraFrameRatio);
+							curpos.x += dx * blend;
+							curpos.y += dy * blend;
 						}
 						else
 						{
@@ -1510,14 +1531,17 @@ void W3DView::update()
 							Real ratio = 0.01f * m_lockDist;
 							Real dx = objpos.x-curpos.x;
 							Real dy = objpos.y-curpos.y;
-							curpos.x += dx*ratio;
-							curpos.y += dy*ratio;
+							const Real blend = DrawableInterpolationMath::presentationBlend(ratio, cameraFrameRatio);
+							curpos.x += dx * blend;
+							curpos.y += dy * blend;
 						}
 					}
 					else
 					{
-						curpos.x += dx*followFactor;
-						curpos.y += dy*followFactor;
+						const Real blend = DrawableInterpolationMath::presentationBlend(
+							m_cameraLockFollowFactor, cameraFrameRatio);
+						curpos.x += dx * blend;
+						curpos.y += dy * blend;
 					}
 				}
 				if (!(TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript()) && !TheGameLogic->isGamePaused()) {
@@ -1532,6 +1556,12 @@ void W3DView::update()
 					{
 						Matrix3D camXForm;
 						Real idealZRot = cameraLockObj->getOrientation() - M_PI_2;
+						if (trackedDrawable)
+						{
+							Matrix3D pose;
+							trackedDrawable->getInterpolatedWorldTransform(pose);
+							idealZRot = pose.Get_Z_Rotation() - M_PI_2;
+						}
 
 						if (m_snapImmediate)
 						{
@@ -1544,7 +1574,8 @@ void W3DView::update()
 							normAngle(oldZRot);
 							Real diffRot = idealZRot - oldZRot;
 							normAngle(diffRot);
-							View::setAngle(m_angle + diffRot * 0.1f);
+							View::setAngle(m_angle + diffRot *
+								DrawableInterpolationMath::presentationBlend(0.1f, cameraFrameRatio));
 						}
 					}
 				}
