@@ -37,6 +37,57 @@ GPU-driver limits, a monitor's refresh rate or hardware load. Verify using
 an external frame-rate counter rather than judging by unit animation alone:
 full interpolation of all drawable transforms is a separate concern.
 
+## Diagnosing a 30 FPS gameplay ceiling
+
+The main-loop code does not intentionally switch back to a 30 FPS rendering
+limit on entering gameplay. If the measured frame rate falls to 30, distinguish
+a hidden cap from a graphics bottleneck or VSync synchronization before changing
+simulation timing again.
+
+Use the Windows test executable from this branch. In a Command Prompt opened
+in the game's installation folder:
+
+```bat
+set GENERALS_FPS_DIAGNOSTICS=1
+set GENERALS_DISABLE_VSYNC=1
+generalszh.exe
+```
+
+Substitute `generals.exe` to test the base game. The environmental overrides
+affect only that launched process. `GENERALS_DISABLE_VSYNC=1` requests an
+immediate Direct3D8 presentation interval, bypassing the fullscreen driver's
+default VSync policy for this diagnostic run. Disable it again if you want
+normal synchronization; tearing is expected during this test. GPU-driver
+forced VSync and external limiters may still apply.
+
+With `GENERALS_FPS_DIAGNOSTICS=1`, the engine appends diagnostic lines to
+`%TEMP%\\GeneralsFPSDiagnostics.log` and sends them to the Windows debug
+output. Each second, the **Engine** line reports:
+
+- `Loop`: engine updates per real-time second (presentation iteration rate).
+- `Simulation`: fixed simulation ticks per real-time second (target 30).
+- `Update`: average time spent processing the client, logic and render.
+- `Wait`: average time spent in the frame pacer.
+- `RenderCap`, `ActiveCap`, `LimitEnabled`, `InGame`, `Network`: effective settings.
+
+The **D3D** line reports actual presents per second and average blocking time
+inside Direct3D's `Present()` call.
+
+Interpretation:
+
+- **Loop about 144, Simulation about 30, Presents about 144:** rendering is
+  unlocked; 30 Hz *animations* may still look stepped.
+- **Loop about 30, Update about 33ms, Wait near 0ms:** client/gameplay render
+  work is consuming the frame, rather than the CPU FPS limiter.
+- **Loop about 30, large `AveragePresentBlock`:** examine VSync, display
+  refresh rate, the driver and GPU-bound rendering.
+- **Loop about 30, large `Wait`, ActiveCap 30:** another path is applying an
+  explicit pacing limit and should be investigated with the log.
+
+This branch also clears GameLogic's `hasUpdated` latch once per client
+presentation, preventing W3D/particles from treating a series of render-only
+iterations as multiple new simulation ticks.
+
 ## Validation
 
 The standalone fixed-step clock was compiled with a C++11 compiler and exercised at rendering rates of 5, 10, 20, 24, 30, 60, 120, 144 and 240 FPS over 10 simulated seconds. Each case advanced 300 simulation ticks. The repository GoogleTest suite contains matching tests for timing, catch-up, reset and frequency changes.
