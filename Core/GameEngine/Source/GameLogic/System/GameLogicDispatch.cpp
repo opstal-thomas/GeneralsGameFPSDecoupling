@@ -877,22 +877,17 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 	if ( msg->getArgumentCount() >= 3 )
 		rankPoints = msg->getArgument( 2 )->integer;
 
-	// Starting a new game must never overwrite the user's rendering FPS cap.
 	// The fourth MSG_NEW_GAME argument is the legacy skirmish Game Speed
-	// slider (15-60 ticks/sec, or 1000 for the old unbounded fast mode).
-	// Apply it only to the simulation clock, not to presentation.
-	// Network games continue using their negotiated lockstep frame rate.
-	TheFramePacer->enableLogicTimeScale(FALSE);
-	if (TheNetwork == nullptr && msg->getArgumentCount() >= 4)
+	// slider. It used to be coupled directly to the *render* FPS limiter.
+	// Do not let game startup override rendering preferences, and do not
+	// activate experimental simulation speed scaling until it is validated
+	// against level transitions, save games and playback. The fixed game
+	// simulation clock continues at 30 Hz (or the negotiated network rate).
+	// Preserve the message format for existing replays and multiplayer.
+	if (msg->getArgumentCount() >= 4)
 	{
-		const Int gameSpeed = msg->getArgument( 3 )->integer;
-		if ((gameSpeed >= 15 && gameSpeed <= 60) || gameSpeed == 1000)
-		{
-			TheFramePacer->setLogicTimeScaleFps(gameSpeed);
-			TheFramePacer->enableLogicTimeScale(gameSpeed != LOGICFRAMES_PER_SECOND);
-			DEBUG_LOG(("New-game simulation speed is %d ticks/s; render cap remains %d FPS",
-				gameSpeed, TheFramePacer->getFramesPerSecondLimit()));
-		}
+		DEBUG_LOG(("Ignoring legacy new-game Game Speed argument %d during fixed-tick testing",
+			msg->getArgument(3)->integer));
 	}
 
 	// prepare for new game
