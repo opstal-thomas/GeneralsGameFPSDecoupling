@@ -712,7 +712,17 @@ void GameClient::presentFrame()
 	// The W3D module only does the early work when it has attached emitters;
 	// otherwise the traditional draw path prepares the model on demand.
 	// Never do graphical preparation during headless replay validation.
-	if (!freezeTime && !TheGlobalData->m_headless)
+	// Switch off only the new pose-preparation phase for A/B regression tests,
+	// leaving the known-working body/turret interpolation enabled.
+	static Int prepassDisabled = -1;
+	if (prepassDisabled < 0)
+	{
+		char value[8] = { 0 };
+		prepassDisabled =
+			GetEnvironmentVariableA("GENERALS_DISABLE_VISUAL_POSE_PREPASS", value, sizeof(value)) > 0 &&
+			value[0] == '1' ? 1 : 0;
+	}
+	if (!freezeTime && !TheGlobalData->m_headless && !prepassDisabled)
 	{
 		for (Drawable *drawable = firstDrawable(); drawable;)
 		{
