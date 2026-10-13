@@ -896,9 +896,9 @@ void GameEngine::execute()
 				const DWORD elapsedMs = now - fpsSampleStarted;
 				if (elapsedMs >= 1000 && renderedIterations)
 				{
-					char line[320];
+					char line[512];
 					sprintf(line,
-						"[GeneralsFPS][Engine] Loop=%.1f/s Simulation=%.1f/s Update=%.2fms Wait=%.2fms RenderCap=%d ActiveCap=%d LimitEnabled=%d InGame=%d Network=%d\n",
+						"[GeneralsFPS][Engine] Loop=%.1f/s Simulation=%.1f/s Update=%.2fms Wait=%.2fms RenderCap=%d ActiveCap=%d LimitEnabled=%d InGame=%d Network=%d Paused=%d Halted=%d Frozen=%d LogicHz=%d Scaled=%d ClockDue=%d Frame=%u PauseFrame=%u\n",
 						1000.0 * renderedIterations / elapsedMs,
 						1000.0 * simulationTicks / elapsedMs,
 						(double)updateDuration / renderedIterations,
@@ -907,7 +907,15 @@ void GameEngine::execute()
 						TheFramePacer->getActualFramesPerSecondLimit(),
 						TheGlobalData->m_useFpsLimit ? 1 : 0,
 						TheGameLogic->isInGame() ? 1 : 0,
-						TheNetwork != nullptr ? 1 : 0);
+						TheNetwork != nullptr ? 1 : 0,
+						TheGameLogic->isGamePaused() ? 1 : 0,
+						isGameHalted() ? 1 : 0,
+						isTimeFrozen() ? 1 : 0,
+						TheFramePacer->getActualLogicTimeScaleFps(FramePacer::IgnoreFrozenTime | FramePacer::IgnoreHaltedGame),
+						TheFramePacer->isLogicTimeScaleEnabled() ? 1 : 0,
+						m_simulationClock.isTickDue() ? 1 : 0,
+						TheGameLogic->getFrame(),
+						TheGameLogic->getGamePauseFrame());
 					OutputDebugStringA(line);
 
 					char logPath[MAX_PATH];
