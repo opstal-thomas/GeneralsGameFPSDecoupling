@@ -5,6 +5,7 @@
 */
 #include <gtest/gtest.h>
 #include "Common/FixedSimulationClock.h"
+#include "Common/GameSpeedPolicy.h"
 
 static int runSimulation(unsigned int renderFps, unsigned int logicFps = 30)
 {
@@ -42,6 +43,29 @@ TEST(FixedSimulationClock, GameSpeedIsIndependentFromPresentationRate)
 	EXPECT_NEAR(300.0, runSimulation(144, 30), 1.0);
 	EXPECT_NEAR(600.0, runSimulation(144, 60), 1.0);
 	EXPECT_NEAR(600.0, runSimulation(240, 60), 1.0);
+}
+
+TEST(FixedSimulationClock, GameSpeedPolicyAcceptsFiniteAndUnlimited)
+{
+    EXPECT_EQ(15, GameSpeedPolicy::fromNewGameArgument(15));
+    EXPECT_EQ(30, GameSpeedPolicy::fromNewGameArgument(30));
+    EXPECT_EQ(60, GameSpeedPolicy::fromNewGameArgument(60));
+    EXPECT_EQ(1000, GameSpeedPolicy::fromNewGameArgument(61));
+    EXPECT_EQ(1000, GameSpeedPolicy::fromNewGameArgument(1000));
+    EXPECT_TRUE(GameSpeedPolicy::isUnlimited(GameSpeedPolicy::fromNewGameArgument(61)));
+    EXPECT_FALSE(GameSpeedPolicy::isUnlimited(GameSpeedPolicy::fromNewGameArgument(60)));
+    EXPECT_EQ(30, GameSpeedPolicy::fromNewGameArgument(0));
+    EXPECT_EQ(30, GameSpeedPolicy::fromNewGameArgument(999));
+    EXPECT_EQ(30, GameSpeedPolicy::fromNewGameArgument(1001));
+}
+
+TEST(FixedSimulationClock, GameSpeedAtDifferentRenderRates)
+{
+    const unsigned int renderRates[] = { 30, 60, 144, 240 };
+    const unsigned int gameSpeeds[] = { 15, 30, 45, 60 };
+    for (unsigned int i = 0; i < sizeof(renderRates) / sizeof(renderRates[0]); ++i)
+        for (unsigned int j = 0; j < sizeof(gameSpeeds) / sizeof(gameSpeeds[0]); ++j)
+            EXPECT_NEAR(10.0 * gameSpeeds[j], runSimulation(renderRates[i], gameSpeeds[j]), 1.0);
 }
 
 TEST(FixedSimulationClock, BoundedCatchUp)
