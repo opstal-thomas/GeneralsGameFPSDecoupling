@@ -83,16 +83,27 @@ slider. The old implementation passed that value to
 With a Game Speed of 30, this changed the render cap from 144 back to 30
 after a match started.
 
-The handler no longer modifies the rendering FPS limit. The previous
-attempt to route the legacy Game Speed slider (15–60, with 1000 as its old
-unbounded sentinel) into the experimental logic-frequency scheduler has
-been **temporarily rolled back** after a report of a frozen world at 144 FPS.
-Game startup now leaves the fixed simulation frequency at its normal 30 Hz.
-The skirmish slider's default and visual default-marker comparison use the
-30 Hz logic rate rather than the rendering cap. Until the alternate speed
-modes receive dedicated gameplay tests, changing that slider does **not**
-change simulation speed on this branch. Multiplayer continues using the
-network-negotiated lockstep rate.
+The Game Speed argument now controls the single-player simulation scheduler,
+never the rendering FPS limit. Finite slider positions 15–60 schedule that
+many complete fixed-duration simulation ticks per real-world second: 15 is
+0.5x, 30 is normal 1x, and 60 is 2x game speed. Each tick still represents
+the original 1/30-second in-game interval. The render FPS cap is unchanged.
+
+The rightmost slider position 61 is sent in MSG_NEW_GAME and recorded in
+replay headers as the legacy value 1000. **1000 is an unlimited-mode sentinel,
+not a literal 1000-Hz simulation frequency.** Unlimited runs one complete
+simulation tick per presentation iteration, so its speed depends on render
+FPS. Previously attempting to schedule 1000 ticks/sec caused startup stalls.
+
+New sessions reset speed to 30 by default, and valid recorded replay speeds
+are preserved. Multiplayer remains on its existing network-authorized
+lockstep path.
+
+For acceptance, start skirmishes at 15/30/45/60 and unlimited with the
+rendering cap independently set to 60/144/240. Verify LogicHz, Simulation
+and Loop in %TEMP%\\GeneralsFPSDiagnostics.log. Check consecutive matches,
+campaigns, pause/unpause, save/load and replay playback; build/CTests alone
+cannot prove in-game correctness.
 
 Release-mode diagnostics have also been extended with `Paused`, `Halted`,
 `Frozen`, `LogicHz`, `Scaled`, `ClockDue`, `Frame`, and `PauseFrame`.

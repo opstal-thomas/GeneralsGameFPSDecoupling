@@ -41,6 +41,7 @@ set(GAMEENGINE_SRC
     Include/Common/file.h
     Include/Common/FileSystem.h
     Include/Common/DrawableInterpolationMath.h
+    Include/Common/GameSpeedPolicy.h
     Include/Common/FramePacer.h
     Include/Common/FrameRateLimit.h
 #    Include/Common/FunctionLexicon.h

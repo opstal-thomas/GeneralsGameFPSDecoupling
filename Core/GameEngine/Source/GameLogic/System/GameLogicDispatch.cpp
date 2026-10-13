@@ -32,6 +32,7 @@
 
 #include "Common/CRCDebug.h"
 #include "Common/FramePacer.h"
+#include "Common/GameSpeedPolicy.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
@@ -877,17 +878,27 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 	if ( msg->getArgumentCount() >= 3 )
 		rankPoints = msg->getArgument( 2 )->integer;
 
-	// The fourth MSG_NEW_GAME argument is the legacy skirmish Game Speed
-	// slider. It used to be coupled directly to the *render* FPS limiter.
-	// Do not let game startup override rendering preferences, and do not
-	// activate experimental simulation speed scaling until it is validated
-	// against level transitions, save games and playback. The fixed game
-	// simulation clock continues at 30 Hz (or the negotiated network rate).
-	// Preserve the message format for existing replays and multiplayer.
-	if (msg->getArgumentCount() >= 4)
+	// Reset the previous game's speed. Campaigns, network sessions and
+	// replays without a recorded speed all start at the normal 30 Hz.
+	TheFramePacer->enableLogicTimeScale(FALSE);
+	TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
+
+	// The fourth MSG_NEW_GAME argument is the skirmish Game Speed slider:
+	// 15-60 ticks/sec, or the legacy 1000 sentinel for unlimited mode.
+	// Never feed this value to the renderer's FPS limiter or to a literal
+	// 1000-Hz simulation clock. Keep the replay message format unchanged.
+	const Bool offlineGame = TheNetwork == nullptr &&
+		(gameMode == GAME_SINGLE_PLAYER || gameMode == GAME_SKIRMISH || gameMode == GAME_REPLAY);
+	if (offlineGame && msg->getArgumentCount() >= 4)
 	{
-		DEBUG_LOG(("Ignoring legacy new-game Game Speed argument %d during fixed-tick testing",
-			msg->getArgument(3)->integer));
+		const Int requestedSpeed = msg->getArgument(3)->integer;
+		const Int simulationSpeed = GameSpeedPolicy::fromNewGameArgument(requestedSpeed);
+		TheFramePacer->setLogicTimeScaleFps(simulationSpeed);
+		TheFramePacer->enableLogicTimeScale(simulationSpeed != LOGICFRAMES_PER_SECOND);
+		DEBUG_LOG(("Game Speed: requested %d, simulation %d%s; render cap stays %d FPS",
+			requestedSpeed, simulationSpeed,
+			GameSpeedPolicy::isUnlimited(simulationSpeed) ? " (unlimited)" : " Hz",
+			TheFramePacer->getFramesPerSecondLimit()));
 	}
 
 	// prepare for new game

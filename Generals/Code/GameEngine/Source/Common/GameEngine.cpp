@@ -649,6 +649,10 @@ void GameEngine::reset()
 void GameEngine::resetSubsystems()
 {
 	m_simulationClock.reset();
+	// A new match cannot inherit the previous skirmish's Game Speed.
+	// MSG_NEW_GAME installs its selected speed separately.
+	TheFramePacer->enableLogicTimeScale(FALSE);
+	TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
 	TheFramePacer->setLogicFramePhase(1.0f);
 	// TheSuperHackers @fix xezon 09/06/2025 Reset GameLogic first to purge all world objects early.
 	// This avoids potentially catastrophic issues when objects and subsystems have cross dependencies.
@@ -702,7 +706,8 @@ Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 #else
 	const Bool useFastMode = TheGlobalData->m_TiVOFastMode && TheGameLogic->isInReplayGame();
 #endif
-	return useFastMode || m_simulationClock.isTickDue();
+	return useFastMode || TheFramePacer->isUnlimitedGameSpeedEnabled() ||
+		m_simulationClock.isTickDue();
 }
 
 /// -----------------------------------------------------------------------------------------------
@@ -754,16 +759,20 @@ void GameEngine::update()
 #else
 		const Bool fastMode = TheGlobalData->m_TiVOFastMode && TheGameLogic->isInReplayGame();
 #endif
-		if (isGameHalted() || logicFps <= 0 || fastMode)
+		// The slider's 'unlimited' setting is a distinct accelerated mode:
+		// perform one complete simulation tick per presentation (like replay
+		// fast-forward). Never schedule 1000 ticks per real-world second.
+		// The render cap remains independent and unchanged.
+		const Bool bypassClock = fastMode || TheFramePacer->isUnlimitedGameSpeedEnabled();
+		if (isGameHalted() || logicFps <= 0 || bypassClock)
 			m_simulationClock.reset();
 		else
 			m_simulationClock.advance(TheFramePacer->getUpdateTime(), logicFps);
 
-		// Keep the original game-speed cheat's uncapped stepping behavior.
-		const Int stepLimit = fastMode ? 1 : FixedSimulationClock::MaxCatchUpSteps;
+		const Int stepLimit = bypassClock ? 1 : FixedSimulationClock::MaxCatchUpSteps;
 		for (Int i = 0; i < stepLimit; ++i)
 		{
-			if (!fastMode && !m_simulationClock.isTickDue())
+			if (!bypassClock && !m_simulationClock.isTickDue())
 				break;
 			if (!canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
 				break;
@@ -776,12 +785,12 @@ void GameEngine::update()
 			TheGameLogic->UPDATE();
 			if (!TheFramePacer->isTimeFrozen())
 				TheGameClient->step();
-			if (!fastMode)
+			if (!bypassClock)
 				m_simulationClock.consumeTick();
 		}
 
 		// Render existing previous/current logic states at arbitrary refresh rates.
-		TheFramePacer->setLogicFramePhase(fastMode ? 1.0f : m_simulationClock.getInterpolationAlpha());
+		TheFramePacer->setLogicFramePhase(bypassClock ? 1.0f : m_simulationClock.getInterpolationAlpha());
 		TheGameClient->presentFrame();
 	}
 }

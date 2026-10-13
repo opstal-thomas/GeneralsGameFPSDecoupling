@@ -18,6 +18,7 @@
 #include "PreRTS.h"
 
 #include "Common/FramePacer.h"
+#include "Common/GameSpeedPolicy.h"
 
 #include "GameClient/View.h"
 
@@ -171,6 +172,11 @@ Bool FramePacer::isLogicTimeScaleEnabled() const
 	return m_enableLogicTimeScale;
 }
 
+Bool FramePacer::isUnlimitedGameSpeedEnabled() const
+{
+	return isLogicTimeScaleEnabled() && GameSpeedPolicy::isUnlimited(getLogicTimeScaleFps());
+}
+
 Int FramePacer::getActualLogicTimeScaleFps(LogicTimeQueryFlags flags) const
 {
 	if (m_isTimeFrozen && (flags & IgnoreFrozenTime) == 0)
@@ -190,10 +196,15 @@ Int FramePacer::getActualLogicTimeScaleFps(LogicTimeQueryFlags flags) const
 
 	if (isLogicTimeScaleEnabled())
 	{
+		// Unlimited executes one complete simulation tick per presentation,
+		// not 1000 fixed ticks per second. The effective rate for client-side
+		// animation timing is therefore the measured presentation frequency.
+		if (isUnlimitedGameSpeedEnabled())
+			return max(1, (Int)(getUpdateFps() + 0.5f));
+
 		return getLogicTimeScaleFps();
 	}
 
-	// Returns uncapped value to align with the render update as per the original game behavior.
 	return LOGICFRAMES_PER_SECOND;
 }
 
@@ -204,8 +215,16 @@ Real FramePacer::getActualLogicTimeScaleRatio(LogicTimeQueryFlags flags) const
 
 Real FramePacer::getActualLogicTimeScaleOverFpsRatio(LogicTimeQueryFlags flags) const
 {
-	// Clamps ratio to min 1, because the logic frame rate is currently capped by the render frame rate.
-	return min(8.0f, (Real)getActualLogicTimeScaleFps(flags) / getUpdateFps());
+	const Int logicFps = getActualLogicTimeScaleFps(flags);
+	if (logicFps <= 0)
+		return 0.0f;
+
+	// One fixed-duration tick is performed per presentation in unlimited
+	// mode. Do not introduce fractional jitter by rounding measured FPS.
+	if (TheNetwork == nullptr && isUnlimitedGameSpeedEnabled())
+		return 1.0f;
+
+	return min(8.0f, (Real)logicFps / getUpdateFps());
 }
 
 Real FramePacer::getLogicTimeStepSeconds(LogicTimeQueryFlags flags) const

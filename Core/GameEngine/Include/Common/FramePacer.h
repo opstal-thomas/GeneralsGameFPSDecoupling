@@ -57,11 +57,12 @@ public:
 	Bool isTimeFrozen() const;
 	Bool isGameHalted() const;
 
-	void setLogicTimeScaleFps( Int fps ); ///< Set the logic time scale fps and therefore scale the simulation time. Is capped by the max render fps and does not apply to network matches.
+	void setLogicTimeScaleFps( Int fps ); ///< Set single-player simulation ticks/sec (15-60, or the legacy unlimited sentinel). Never changes rendering FPS.
 	Int  getLogicTimeScaleFps() const; ///< Get the raw logic time scale fps value.
-	void enableLogicTimeScale( Bool enable ); ///< Enable or disable the logic time scale setup. If disabled, the simulation time scale is bound to the render frame time or network update time.
+	void enableLogicTimeScale( Bool enable ); ///< Enable/disable the single-player speed override. Disabled means the default 30 Hz simulation.
 	Bool isLogicTimeScaleEnabled() const; ///< Check whether the logic time scale setup is enabled.
-	Int  getActualLogicTimeScaleFps(LogicTimeQueryFlags flags = 0) const; ///< Get the real logic time scale fps, depending on the max render fps, network state and enabled state.
+	Bool isUnlimitedGameSpeedEnabled() const; ///< 'Unlimited' runs one fixed simulation tick per presentation; never a 1000-Hz accumulator.
+	Int  getActualLogicTimeScaleFps(LogicTimeQueryFlags flags = 0) const; ///< Effective tick rate for client timing, or the negotiated multiplayer rate.
 	Real getActualLogicTimeScaleRatio(LogicTimeQueryFlags flags = 0) const; ///< Get the real logic time scale ratio, depending on the max render fps, network state and enabled state.
 	Real getActualLogicTimeScaleOverFpsRatio(LogicTimeQueryFlags flags = 0) const; ///< Get the real logic time scale over render fps ratio, used to scale down steps in render updates to match logic updates.
 	Real getLogicTimeStepSeconds(LogicTimeQueryFlags flags = 0) const; ///< Get the logic time step in seconds
