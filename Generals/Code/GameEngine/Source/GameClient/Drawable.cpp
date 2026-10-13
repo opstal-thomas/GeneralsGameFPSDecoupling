@@ -5464,6 +5464,9 @@ void Drawable::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void Drawable::loadPostProcess()
 {
+	// Saved games persist authoritative transforms, not render interpolation
+	// history. Begin again from the loaded pose on the next logic tick.
+	m_hasRenderSamples = FALSE;
 		// if we have an object, we don't need to save/load the pos, just restore it.
 		// if we don't, we'd better save it!
 	if (m_object != nullptr)
