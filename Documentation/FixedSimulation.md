@@ -39,10 +39,24 @@ full interpolation of all drawable transforms is a separate concern.
 
 ## Diagnosing a 30 FPS gameplay ceiling
 
-The main-loop code does not intentionally switch back to a 30 FPS rendering
-limit on entering gameplay. If the measured frame rate falls to 30, distinguish
-a hidden cap from a graphics bottleneck or VSync synchronization before changing
-simulation timing again.
+An observed startup regression was traced to `GameLogic::onNewGame()` in
+`Core/GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp`. The legacy
+fourth argument of `MSG_NEW_GAME` comes from the skirmish **Game Speed**
+slider. The old implementation passed that value to
+`FramePacer::setFramesPerSecondLimit()` and also forced the limiter enabled.
+With a Game Speed of 30, this changed the render cap from 144 back to 30
+after a match started.
+
+The new handler routes valid offline skirmish Game Speed settings (15–60,
+or the legacy 1000 fast-mode sentinel) to the **simulation tick scheduler**
+rather than the renderer. The normal/default value is 30 simulation ticks
+per second. A new game without an explicit speed starts at the default
+simulation rate. Multiplayer continues to use its network-negotiated
+lockstep rate. The 1000-tick legacy fast mode is bounded by the clock's
+eight-step-per-render catch-up limit and can run slower under load.
+
+If rendering is still stuck at 30 after this fix, use the diagnostic
+below to distinguish another cap from CPU/GPU workload or VSync.
 
 Use the Windows test executable from this branch. In a Command Prompt opened
 in the game's installation folder:
@@ -92,7 +106,7 @@ iterations as multiple new simulation ticks.
 
 The standalone fixed-step clock was compiled with a C++11 compiler and exercised at rendering rates of 5, 10, 20, 24, 30, 60, 120, 144 and 240 FPS over 10 simulated seconds. Each case advanced 300 simulation ticks. The repository GoogleTest suite contains matching tests for timing, catch-up, reset and frequency changes.
 
-**Not yet verified**: Windows build of the integrated code, in-game gameplay, offline/replay CRC equivalence, visual interpolation, animations, multiplayer compatibility and save-load behavior. CI may not run automatically for a workflow introduced only on a feature branch; inspect Actions and run the Windows build/tests explicitly if required.
+**Verification status**: The previous branch revision compiled and passed the configured Windows tests in GitHub Actions. The latest game-start FPS fix must also pass its own Actions build and an in-game retest. Offline/replay CRC equivalence, visual interpolation, animations, multiplayer compatibility, non-default Game Speed, and save-load behavior still require direct gameplay testing.
 
 ## Risks and remaining scope
 
