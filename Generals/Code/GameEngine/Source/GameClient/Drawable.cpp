@@ -2635,6 +2635,43 @@ void Drawable::captureSimulationTransform()
 //-------------------------------------------------------------------------------------------------
 /** default draw is to just call the database defined draw */
 //-------------------------------------------------------------------------------------------------
+// Presentation-only interpolation is shared by models, turrets and camera.
+// The A/B override disables all three without changing simulation state.
+Bool Drawable::isVisualInterpolationEnabled() const
+{
+	if (!getObject() || !m_hasRenderSamples || !TheFramePacer || !TheGameLogic ||
+		TheFramePacer->isTimeFrozen() || TheFramePacer->isGameHalted() ||
+		TheGameLogic->isGamePaused())
+		return FALSE;
+
+	static Int disabled = -1;
+	if (disabled < 0)
+	{
+		char value[8] = { 0 };
+		disabled = GetEnvironmentVariableA("GENERALS_DISABLE_DRAWABLE_INTERPOLATION", value, sizeof(value)) > 0 &&
+			value[0] == '1' ? 1 : 0;
+	}
+	return disabled == 0;
+}
+
+// Visual-only position; never pass this value into simulation or collision.
+void Drawable::getInterpolatedRenderPosition(Coord3D &outPosition) const
+{
+	const Matrix3D *transform = getTransformMatrix();
+	outPosition.x = transform->Get_X_Translation();
+	outPosition.y = transform->Get_Y_Translation();
+	outPosition.z = transform->Get_Z_Translation();
+
+	if (!isVisualInterpolationEnabled())
+		return;
+
+	const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+	outPosition.x = DrawableInterpolationMath::lerp(m_previousRenderPosition.x, m_currentRenderPosition.x, alpha);
+	outPosition.y = DrawableInterpolationMath::lerp(m_previousRenderPosition.y, m_currentRenderPosition.y, alpha);
+	outPosition.z = DrawableInterpolationMath::lerp(m_previousRenderPosition.z, m_currentRenderPosition.z, alpha);
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::draw()
 {
 	if ( getObject() && getObject()->isEffectivelyDead() )
@@ -2673,38 +2710,23 @@ void Drawable::draw()
 	// authoritative Object transform. Visual presentation intentionally lags
 	// a fixed tick to allow smooth rendering between 30 Hz game updates.
 	Matrix3D transformMtx = *getTransformMatrix();
-	if (getObject() && m_hasRenderSamples && TheFramePacer && TheGameLogic &&
-		!TheFramePacer->isTimeFrozen() && !TheFramePacer->isGameHalted() &&
-		!TheGameLogic->isGamePaused())
+	if (isVisualInterpolationEnabled())
 	{
-		// Escape hatch for regression comparison: set this to 1 before launch.
-		static Int s_interpolationDisabled = -1;
-		if (s_interpolationDisabled < 0)
+		const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+		// Keep terrain-aligned orientation authoritative until full 3D rotation
+		// interpolation can preserve slopes and banking.
+		if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
 		{
-			char value[8] = { 0 };
-			s_interpolationDisabled =
-				GetEnvironmentVariableA("GENERALS_DISABLE_DRAWABLE_INTERPOLATION", value, sizeof(value)) > 0 &&
-				value[0] == '1' ? 1 : 0;
+			const Real angularDelta = DrawableInterpolationMath::shortestAngleDelta(
+				m_previousRenderYaw, m_currentRenderYaw);
+			transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
 		}
 
-		if (!s_interpolationDisabled)
-		{
-			const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
-			// Rotation occurs in local space. Keep terrain-aligned orientation
-			// authoritative until slope-aware quaternion interpolation is added.
-			if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
-			{
-				const Real angularDelta =
-					DrawableInterpolationMath::shortestAngleDelta(m_previousRenderYaw, m_currentRenderYaw);
-				transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
-			}
-			transformMtx.Set_X_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.x, m_currentRenderPosition.x, alpha));
-			transformMtx.Set_Y_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.y, m_currentRenderPosition.y, alpha));
-			transformMtx.Set_Z_Translation(DrawableInterpolationMath::lerp(
-				m_previousRenderPosition.z, m_currentRenderPosition.z, alpha));
-		}
+		Coord3D visualPosition;
+		getInterpolatedRenderPosition(visualPosition);
+		transformMtx.Set_X_Translation(visualPosition.x);
+		transformMtx.Set_Y_Translation(visualPosition.y);
+		transformMtx.Set_Z_Translation(visualPosition.z);
 	}
 	if (!isInstanceIdentity())
 	{
