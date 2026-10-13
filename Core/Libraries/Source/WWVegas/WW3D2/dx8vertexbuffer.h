@@ -42,6 +42,7 @@
 #include "WWLib/always.h"
 #include "WWDebug/wwdebug.h"
 #include "dx8fvf.h"
+#include "Renderer.h"
 
 const unsigned dynamic_fvf_type=D3DFVF_XYZ|D3DFVF_NORMAL|D3DFVF_TEX2|D3DFVF_DIFFUSE;
 
@@ -214,7 +215,11 @@ public:
 	DX8VertexBufferClass(const Vector3* vertices, const Vector4* diffuse, const Vector2* tex_coords, unsigned short VertexCount,UsageType usage=USAGE_DEFAULT);
 	DX8VertexBufferClass(const Vector3* vertices, const Vector2* tex_coords, unsigned short VertexCount,UsageType usage=USAGE_DEFAULT);
 
-	IDirect3DVertexBuffer8* Get_DX8_Vertex_Buffer() { return VertexBuffer; }
+	RenderVertexBufferHandle Get_Render_Vertex_Buffer() const { return VertexBuffer; }
+	// Transitional DX8 accessor for call sites not yet migrated to Renderer.
+	IDirect3DVertexBuffer8* Get_DX8_Vertex_Buffer() const {
+		return reinterpret_cast<IDirect3DVertexBuffer8*>(VertexBuffer);
+	}
 
 	void Copy(const Vector3* loc, unsigned first_vertex, unsigned count);
 	void Copy(const Vector3* loc, const Vector2* uv, unsigned first_vertex, unsigned count);
@@ -224,7 +229,7 @@ public:
 	void Copy(const Vector3* loc, const Vector2* uv, const Vector4* diffuse, unsigned first_vertex, unsigned count);
 
 protected:
-	IDirect3DVertexBuffer8*		VertexBuffer;
+	RenderVertexBufferHandle		VertexBuffer;
 
 	void Create_Vertex_Buffer(UsageType usage);
 };

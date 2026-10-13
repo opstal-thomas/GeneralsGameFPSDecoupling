@@ -293,7 +293,7 @@ static DWORD Get_Legacy_Buffer_Usage(const RenderBufferDescription & description
     return flags;
 }
 
-void * Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
+RenderVertexBufferHandle Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
 {
     DX8_THREAD_ASSERT();
     if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8())
@@ -312,10 +312,10 @@ void * Renderer::Create_Vertex_Buffer(const RenderBufferDescription & descriptio
         WWDEBUG_SAY(("Renderer::Create_Vertex_Buffer failed (HRESULT: 0x%08X)", (unsigned)result));
         return nullptr;
     }
-    return buffer;
+    return reinterpret_cast<RenderVertexBufferHandle>(buffer);
 }
 
-void * Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
+RenderIndexBufferHandle Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
 {
     DX8_THREAD_ASSERT();
     if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8())
@@ -334,21 +334,21 @@ void * Renderer::Create_Index_Buffer(const RenderBufferDescription & description
         WWDEBUG_SAY(("Renderer::Create_Index_Buffer failed (HRESULT: 0x%08X)", (unsigned)result));
         return nullptr;
     }
-    return buffer;
+    return reinterpret_cast<RenderIndexBufferHandle>(buffer);
 }
 
-void Renderer::Release_Vertex_Buffer(void * buffer)
+void Renderer::Release_Vertex_Buffer(RenderVertexBufferHandle buffer)
 {
     DX8_THREAD_ASSERT();
     if (buffer)
-        static_cast<IDirect3DVertexBuffer8 *>(buffer)->Release();
+        reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer)->Release();
 }
 
-void Renderer::Release_Index_Buffer(void * buffer)
+void Renderer::Release_Index_Buffer(RenderIndexBufferHandle buffer)
 {
     DX8_THREAD_ASSERT();
     if (buffer)
-        static_cast<IDirect3DIndexBuffer8 *>(buffer)->Release();
+        reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer)->Release();
 }
 
 void Renderer::Discard_Managed_Resources()
@@ -373,42 +373,55 @@ static DWORD Translate_Buffer_Map_Flags(unsigned flags)
     return result;
 }
 
-void * Renderer::Map_Vertex_Buffer(void * buffer, unsigned offsetBytes,
+void * Renderer::Map_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned offsetBytes,
                                    unsigned sizeBytes, unsigned mapFlags)
 {
     DX8_THREAD_ASSERT();
     if (!buffer)
         return nullptr;
     unsigned char * mapped = nullptr;
-    const HRESULT result = static_cast<IDirect3DVertexBuffer8 *>(buffer)->Lock(
+    const HRESULT result = reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer)->Lock(
         offsetBytes, sizeBytes, &mapped, Translate_Buffer_Map_Flags(mapFlags));
     DX8_ErrorCode(result);
     return SUCCEEDED(result) ? mapped : nullptr;
 }
 
-void * Renderer::Map_Index_Buffer(void * buffer, unsigned offsetBytes,
+void * Renderer::Map_Index_Buffer(RenderIndexBufferHandle buffer, unsigned offsetBytes,
                                   unsigned sizeBytes, unsigned mapFlags)
 {
     DX8_THREAD_ASSERT();
     if (!buffer)
         return nullptr;
     unsigned char * mapped = nullptr;
-    const HRESULT result = static_cast<IDirect3DIndexBuffer8 *>(buffer)->Lock(
+    const HRESULT result = reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer)->Lock(
         offsetBytes, sizeBytes, &mapped, Translate_Buffer_Map_Flags(mapFlags));
     DX8_ErrorCode(result);
     return SUCCEEDED(result) ? mapped : nullptr;
 }
 
-void Renderer::Unmap_Vertex_Buffer(void * buffer)
+void Renderer::Unmap_Vertex_Buffer(RenderVertexBufferHandle buffer)
 {
     DX8_THREAD_ASSERT();
     if (buffer)
-        DX8_ErrorCode(static_cast<IDirect3DVertexBuffer8 *>(buffer)->Unlock());
+        DX8_ErrorCode(reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer)->Unlock());
 }
 
-void Renderer::Unmap_Index_Buffer(void * buffer)
+void Renderer::Unmap_Index_Buffer(RenderIndexBufferHandle buffer)
 {
     DX8_THREAD_ASSERT();
     if (buffer)
-        DX8_ErrorCode(static_cast<IDirect3DIndexBuffer8 *>(buffer)->Unlock());
+        DX8_ErrorCode(reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer)->Unlock());
+}
+
+
+void Renderer::Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride)
+{
+    DX8_THREAD_ASSERT();
+    DX8CALL(SetStreamSource(stream, reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer), stride));
+}
+
+void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex)
+{
+    DX8_THREAD_ASSERT();
+    DX8CALL(SetIndices(reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer), baseVertexIndex));
 }

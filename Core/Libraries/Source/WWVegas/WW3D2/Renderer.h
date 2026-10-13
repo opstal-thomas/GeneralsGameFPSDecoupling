@@ -30,6 +30,15 @@ class LightEnvironmentClass;
 class CameraClass;
 class Vector3;
 
+// Strongly typed, incomplete GPU resource handles. The backend owns the
+// actual object and its lifetime. A vertex handle cannot be passed to an
+// index-buffer operation by mistake. The DX8 adapter uses COM resources,
+// while a future renderer may use a completely different representation.
+struct RendererVertexBufferResource;
+struct RendererIndexBufferResource;
+using RenderVertexBufferHandle = RendererVertexBufferResource *;
+using RenderIndexBufferHandle = RendererIndexBufferResource *;
+
 struct RenderViewport
 {
     unsigned int x;
@@ -181,27 +190,29 @@ public:
     // texture manager before shutting down the graphics device.
     static void Release_Texture_Resources();
 
-    // Legacy bridge: resource allocation and final COM release are owned by
-    // the backend, while DX8VertexBufferClass/DX8IndexBufferClass still store
-    // native pointers for the unmigrated DX8 draw and lock paths. No native
-    // types appear in the Renderer interface or the allocation descriptor.
-    // The resource handle is the native DX8 pointer until all draw binding
-    // paths are migrated to backend-neutral handles.
-    static void * Create_Vertex_Buffer(const RenderBufferDescription & description);
-    static void * Create_Index_Buffer(const RenderBufferDescription & description);
-    static void Release_Vertex_Buffer(void * buffer);
-    static void Release_Index_Buffer(void * buffer);
+    // Resource creation/ownership are backend-private. DX8 stores the COM
+    // address in the opaque handle during the transition; higher layers do
+    // not depend on COM identity or the backend's allocation strategy.
+    static RenderVertexBufferHandle Create_Vertex_Buffer(const RenderBufferDescription & description);
+    static RenderIndexBufferHandle Create_Index_Buffer(const RenderBufferDescription & description);
+    static void Release_Vertex_Buffer(RenderVertexBufferHandle buffer);
+    static void Release_Index_Buffer(RenderIndexBufferHandle buffer);
     static void Discard_Managed_Resources();
 
-    // Mapping is expressed in byte offsets/sizes. Zero byte count means
-    // map the remaining buffer (preserves DX8 full-buffer lock semantics).
-    // Map returns null on failure; Unmap completes the associated write.
-    static void * Map_Vertex_Buffer(void * buffer, unsigned offsetBytes, unsigned sizeBytes,
-                                    unsigned mapFlags = RENDER_MAP_NONE);
-    static void * Map_Index_Buffer(void * buffer, unsigned offsetBytes, unsigned sizeBytes,
-                                   unsigned mapFlags = RENDER_MAP_NONE);
-    static void Unmap_Vertex_Buffer(void * buffer);
-    static void Unmap_Index_Buffer(void * buffer);
+    // Mapping uses byte offsets and sizes. Zero size means the remaining
+    // buffer, matching legacy DX8 full-buffer lock behavior.
+    static void * Map_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned offsetBytes,
+                                    unsigned sizeBytes, unsigned mapFlags = RENDER_MAP_NONE);
+    static void * Map_Index_Buffer(RenderIndexBufferHandle buffer, unsigned offsetBytes,
+                                   unsigned sizeBytes, unsigned mapFlags = RENDER_MAP_NONE);
+    static void Unmap_Vertex_Buffer(RenderVertexBufferHandle buffer);
+    static void Unmap_Index_Buffer(RenderIndexBufferHandle buffer);
+
+    // Actual graphics device binding is distinct from WW3D's delayed
+    // state-cache selection. These calls submit a previously selected GPU
+    // buffer to the backend without exposing native graphics API types.
+    static void Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride);
+    static void Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

@@ -8,11 +8,29 @@
 ** (at your option) any later version.
 */
 #include <gtest/gtest.h>
+#include <type_traits>
 
 // Backend-neutral contracts must compile without including d3d8.h.
 // These tests do not require a window or GPU; in-game validation separately
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
+
+TEST(RendererBackend, BufferHandlesAreOpaqueAndTypeSafe)
+{
+    static_assert(std::is_pointer_v<RenderVertexBufferHandle>);
+    static_assert(std::is_pointer_v<RenderIndexBufferHandle>);
+    static_assert(!std::is_convertible_v<RenderVertexBufferHandle, RenderIndexBufferHandle>);
+    static_assert(!std::is_convertible_v<RenderIndexBufferHandle, RenderVertexBufferHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Vertex_Buffer(RenderBufferDescription{})),
+                                 RenderVertexBufferHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Index_Buffer(RenderBufferDescription{})),
+                                 RenderIndexBufferHandle>);
+
+    RenderVertexBufferHandle vertexBuffer = nullptr;
+    RenderIndexBufferHandle indexBuffer = nullptr;
+    EXPECT_EQ(nullptr, vertexBuffer);
+    EXPECT_EQ(nullptr, indexBuffer);
+}
 
 TEST(RendererBackend, MappingFlagsAreIndependentOfNativeD3DEnums)
 {

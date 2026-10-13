@@ -41,6 +41,7 @@
 #include "WWLib/always.h"
 #include "WWDebug/wwdebug.h"
 #include "WWMath/sphere.h"
+#include "Renderer.h"
 
 class DX8Wrapper;
 class SortingRendererClass;
@@ -173,10 +174,14 @@ public:
 	void Copy(unsigned int* indices,unsigned start_index,unsigned index_count);
 	void Copy(unsigned short* indices,unsigned start_index,unsigned index_count);
 
-	IDirect3DIndexBuffer8* Get_DX8_Index_Buffer()	{ return index_buffer; }
+	RenderIndexBufferHandle Get_Render_Index_Buffer() const { return index_buffer; }
+	// Transitional DX8 accessor for call sites not yet migrated to Renderer.
+	IDirect3DIndexBuffer8* Get_DX8_Index_Buffer() const {
+		return reinterpret_cast<IDirect3DIndexBuffer8*>(index_buffer);
+	}
 
 private:
-	IDirect3DIndexBuffer8*	index_buffer;		// actual dx8 index buffer
+	RenderIndexBufferHandle	index_buffer;		// opaque backend allocation
 };
 
 

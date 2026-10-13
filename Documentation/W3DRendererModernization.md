@@ -58,10 +58,22 @@ read-only modes independently of D3D8 flag values; the DX8 backend
 translates them. Full-buffer, ranged append and dynamic ring-buffer
 mapping retain their existing offsets, sizes and flags.
 
-The buffers still expose native DX8 pointers to the **unmigrated draw
-binding code**. This is a deliberate compatibility bridge, not the final
-resource API. Replacing native pointers with typed opaque handles, and
-migrating buffer bind/draw calls, comes next. Texture/surface allocation and
+The vertex and index buffer resource classes now hold distinct opaque,
+strongly typed handles rather than native D3D8 resource pointers.
+Creation, release, map/unmap and device binding all use those handles.
+DX8 COM pointers are recovered only inside the DX8 backend. The legacy
+DX8-named accessors are temporarily preserved for any unmigrated callers.
+
+The existing DX8Wrapper state cache still retains vertex/index buffer
+references, dynamic ring offsets, deferred state changes and draw-order
+semantics. Its actual SetStreamSource/SetIndices submissions are now
+performed by Renderer::Bind_Vertex_Buffer and Bind_Index_Buffer.
+
+This is an intentional intermediate design: the handles are opaque to
+callers, but the DX8 implementation encodes native resource addresses.
+They are not yet backend-independent lifetime-managed object identities.
+Migration of texture/surface resources and the DX8Wrapper state cache
+comes next. Texture/surface allocation and
 resource-reset ownership are also not migrated yet.
 
 There are no new resource file formats, shader binaries or DLL dependencies.

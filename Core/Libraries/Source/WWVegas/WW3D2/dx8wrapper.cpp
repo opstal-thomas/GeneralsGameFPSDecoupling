@@ -51,6 +51,7 @@
 #endif
 
 #include "dx8wrapper.h"
+#include "Renderer.h"
 #include "dx8webbrowser.h"
 #include "dx8fvf.h"
 #include "dx8vertexbuffer.h"
@@ -671,8 +672,8 @@ void DX8Wrapper::Release_Device()
 			DX8CALL(SetTexture(a,nullptr));
 		}
 
-		DX8CALL(SetStreamSource(0, nullptr, 0));	//release reference count on last rendered vertex buffer
-		DX8CALL(SetIndices(nullptr,0));	//release reference count on last rendered index buffer
+		Renderer::Bind_Vertex_Buffer(nullptr, 0, 0);	//release reference count on last rendered vertex buffer
+		Renderer::Bind_Index_Buffer(nullptr, 0);	//release reference count on last rendered index buffer
 
 
 		/*
@@ -2011,10 +2012,10 @@ void DX8Wrapper::Draw_Sorting_IB_VB(
 		}
 	}
 
-	DX8CALL(SetStreamSource(
+	Renderer::Bind_Vertex_Buffer(
+		static_cast<DX8VertexBufferClass*>(dyn_vb_access.VertexBuffer)->Get_Render_Vertex_Buffer(),
 		0,
-		static_cast<DX8VertexBufferClass*>(dyn_vb_access.VertexBuffer)->Get_DX8_Vertex_Buffer(),
-		dyn_vb_access.FVF_Info().Get_FVF_Size()));
+		dyn_vb_access.FVF_Info().Get_FVF_Size());
 	// If using FVF format VB, set the FVF as vertex shader (may not be needed here KM)
 	unsigned fvf=dyn_vb_access.FVF_Info().Get_FVF();
 	if (fvf!=0) {
@@ -2047,9 +2048,9 @@ void DX8Wrapper::Draw_Sorting_IB_VB(
 		}
 	}
 
-	DX8CALL(SetIndices(
-		static_cast<DX8IndexBufferClass*>(dyn_ib_access.IndexBuffer)->Get_DX8_Index_Buffer(),
-		dyn_vb_access.VertexBufferOffset));
+	Renderer::Bind_Index_Buffer(
+		static_cast<DX8IndexBufferClass*>(dyn_ib_access.IndexBuffer)->Get_Render_Index_Buffer(),
+		dyn_vb_access.VertexBufferOffset);
 	DX8_RECORD_INDEX_BUFFER_CHANGE();
 
 	DX8_RECORD_DRAW_CALLS();
@@ -2352,10 +2353,10 @@ void DX8Wrapper::Apply_Render_State_Changes()
 					//->Type()) {
 				case BUFFER_TYPE_DX8:
 				case BUFFER_TYPE_DYNAMIC_DX8:
-					DX8CALL(SetStreamSource(
+					Renderer::Bind_Vertex_Buffer(
+						static_cast<DX8VertexBufferClass*>(render_state.vertex_buffers[i])->Get_Render_Vertex_Buffer(),
 						i,
-						static_cast<DX8VertexBufferClass*>(render_state.vertex_buffers[i])->Get_DX8_Vertex_Buffer(),
-						render_state.vertex_buffers[i]->FVF_Info().Get_FVF_Size()));
+						render_state.vertex_buffers[i]->FVF_Info().Get_FVF_Size());
 					DX8_RECORD_VERTEX_BUFFER_CHANGE();
 					{
 						// If the VB format is FVF, set the FVF as a vertex shader
@@ -2372,7 +2373,7 @@ void DX8Wrapper::Apply_Render_State_Changes()
 					WWASSERT(0);
 				}
 			} else {
-				DX8CALL(SetStreamSource(i,nullptr,0));
+				Renderer::Bind_Vertex_Buffer(nullptr, i, 0);
 				DX8_RECORD_VERTEX_BUFFER_CHANGE();
 			}
 		}
@@ -2384,9 +2385,9 @@ void DX8Wrapper::Apply_Render_State_Changes()
 				//->Type()) {
 			case BUFFER_TYPE_DX8:
 			case BUFFER_TYPE_DYNAMIC_DX8:
-				DX8CALL(SetIndices(
-					static_cast<DX8IndexBufferClass*>(render_state.index_buffer)->Get_DX8_Index_Buffer(),
-					render_state.index_base_offset+render_state.vba_offset));
+				Renderer::Bind_Index_Buffer(
+					static_cast<DX8IndexBufferClass*>(render_state.index_buffer)->Get_Render_Index_Buffer(),
+					render_state.index_base_offset+render_state.vba_offset);
 				DX8_RECORD_INDEX_BUFFER_CHANGE();
 				break;
 			case BUFFER_TYPE_SORTING:
@@ -2397,9 +2398,7 @@ void DX8Wrapper::Apply_Render_State_Changes()
 			}
 		}
 		else {
-			DX8CALL(SetIndices(
-				nullptr,
-				0));
+			Renderer::Bind_Index_Buffer(nullptr, 0);
 			DX8_RECORD_INDEX_BUFFER_CHANGE();
 		}
 	}
