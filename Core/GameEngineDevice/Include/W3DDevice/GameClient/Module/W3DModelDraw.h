@@ -352,6 +352,8 @@ public:
 
 	/// the draw method
 	virtual void captureVisualSimulationState() override;
+	virtual Bool needsVisualPosePreparation() const override;
+	virtual void prepareVisualPose(const Matrix3D* transformMtx) override;
 	virtual void doDrawModule(const Matrix3D* transformMtx) override;
 	virtual void setShadowsEnabled(Bool enable) override;
 	virtual void releaseShadows() override;	///< frees all shadow resources used by this module - used by Options screen.
@@ -439,6 +441,7 @@ protected:
 	void setModelState(const ModelConditionInfo* newState);
 	const ModelConditionInfo* findBestInfo(const ModelConditionFlags& c) const;
 	void handleClientTurretPositioning();
+	void updateVisualPoseState(const Matrix3D* transformMtx);
 	void handleClientRecoil();
 	void recalcBonesForClientParticleSystems();
 	void stopClientParticleSystems();
@@ -506,6 +509,7 @@ private:
 	Int														m_hexColor;
 	Int														m_whichAnimInCurState;						///< the index of the currently playing anim in cur state (if any)
 	WeaponRecoilInfoVec						m_weaponRecoilInfoVec[WEAPONSLOT_COUNT];
+	UnsignedInt m_lastPreparedPresentationFrame; ///< Presentation-only; never serialized.
 	Bool													m_needRecalcBoneParticleSystems;
 	Bool													m_fullyObscuredByShroud;
 	Bool													m_shadowEnabled;	///< cached state of shadow.  Used to determine if shadows should be enabled via options screen.
