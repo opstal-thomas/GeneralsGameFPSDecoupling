@@ -6,13 +6,13 @@
 #include <gtest/gtest.h>
 #include "Common/FixedSimulationClock.h"
 
-static int runSimulation(unsigned int renderFps)
+static int runSimulation(unsigned int renderFps, unsigned int logicFps = 30)
 {
 	FixedSimulationClock clock;
 	int ticks = 0;
 	for (unsigned int i = 0; i < renderFps * 10; ++i)
 	{
-		clock.advance(1.0 / renderFps, 30);
+		clock.advance(1.0 / renderFps, logicFps);
 		int steps = 0;
 		while (clock.isTickDue() && steps < FixedSimulationClock::MaxCatchUpSteps)
 		{
@@ -32,6 +32,16 @@ TEST(FixedSimulationClock, GameplayAtMultipleRenderRates)
 	const unsigned int rates[] = { 5, 10, 20, 24, 30, 60, 120, 144, 240 };
 	for (unsigned int i = 0; i < sizeof(rates) / sizeof(rates[0]); ++i)
 		EXPECT_NEAR(300.0, runSimulation(rates[i]), 1.0);
+}
+
+TEST(FixedSimulationClock, GameSpeedIsIndependentFromPresentationRate)
+{
+	// The skirmish Game Speed slider selects a simulation frequency.
+	// Rendering must continue at its independently selected frequency.
+	EXPECT_NEAR(150.0, runSimulation(144, 15), 1.0);
+	EXPECT_NEAR(300.0, runSimulation(144, 30), 1.0);
+	EXPECT_NEAR(600.0, runSimulation(144, 60), 1.0);
+	EXPECT_NEAR(600.0, runSimulation(240, 60), 1.0);
 }
 
 TEST(FixedSimulationClock, BoundedCatchUp)
