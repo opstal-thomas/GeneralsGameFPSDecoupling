@@ -36,6 +36,7 @@
 #include "Common/Geometry.h"
 #include "GameClient/Color.h"
 #include "WWMath/matrix3d.h"
+#include "WWMath/quat.h"
 #include "GameClient/DrawableInfo.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
@@ -413,6 +414,7 @@ public:
 
 	Bool isVisualInterpolationEnabled() const; ///< Render-only visual interpolation state, honoring pause and testing overrides.
 	void getInterpolatedRenderPosition(Coord3D &outPosition) const; ///< Camera and presentation effects only.
+	void getInterpolatedWorldTransform(Matrix3D &outTransform) const; ///< World-space pose only, without instance/client physics.
 	void prepareVisualPose(); ///< Prepare attachment bone transforms before particle simulation.
 	void captureSimulationTransform(); ///< Snapshot authoritative pose after a logic tick (presentation-only).
 	void draw();													///< render the drawable to the given view
@@ -729,8 +731,9 @@ private:
 
 	Coord3D m_previousRenderPosition; ///< Previous authoritative pose for interpolation.
 	Coord3D m_currentRenderPosition;  ///< Current authoritative pose for interpolation.
-	Real m_previousRenderYaw;
-	Real m_currentRenderYaw;
+	Quaternion m_previousRenderRotation; ///< World-space prior orientation including pitch/roll.
+	Quaternion m_currentRenderRotation; ///< World-space current orientation including pitch/roll.
+	Bool m_hasRenderRotationSamples;
 	Bool m_hasRenderSamples;        ///< Transient; not part of save games or CRCs.
 	UnsignedInt m_preparedVisualPoseFrame; ///< Render iteration for m_preparedVisualTransform.
 	Matrix3D m_preparedVisualTransform;    ///< Cached to avoid applying client physics twice per frame.
