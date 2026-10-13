@@ -33,8 +33,9 @@ formats are unchanged.
    and animated bone transforms *before* emission instead of one render
    submission too late. Models without attached emitters retain the
    traditional on-demand update path, avoiding an expensive prepass for
-   every visible/offscreen unit. Newly spawned effects are still created
-   on the normal draw path rather than eagerly across the entire scene.
+   every visible/offscreen unit. New bone-tracked systems may be created
+   during early preparation **only if the model was already visible**;
+   previously unseen/offscreen units remain on the ordinary lazy draw path.
    Prepared models are not advanced again in the same presentation frame,
    preventing duplicate animation, recoil or visual-state stepping.
    A drawable caches its exact visual matrix to avoid applying client
