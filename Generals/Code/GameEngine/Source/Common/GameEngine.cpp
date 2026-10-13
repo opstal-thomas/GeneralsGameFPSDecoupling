@@ -249,7 +249,7 @@ static void updateWindowTitle()
 GameEngine::GameEngine()
 {
 	// initialize to non garbage values
-	m_logicTimeAccumulator = 0.0f;
+	m_simulationClock.reset();
 	m_quitting = FALSE;
 	m_isActive = FALSE;
 
@@ -642,6 +642,8 @@ void GameEngine::reset()
 /// -----------------------------------------------------------------------------------------------
 void GameEngine::resetSubsystems()
 {
+	m_simulationClock.reset();
+	TheFramePacer->setLogicFramePhase(1.0f);
 	// TheSuperHackers @fix xezon 09/06/2025 Reset GameLogic first to purge all world objects early.
 	// This avoids potentially catastrophic issues when objects and subsystems have cross dependencies.
 	TheGameLogic->reset();
@@ -687,41 +689,16 @@ Bool GameEngine::canUpdateNetworkGameLogic()
 /// -----------------------------------------------------------------------------------------------
 Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 {
-	const Int logicTimeScaleFps = TheFramePacer->getActualLogicTimeScaleFps(logicTimeQueryFlags);
-
-	if (logicTimeScaleFps <= 0)
-	{
+	const Int logicFps = TheFramePacer->getActualLogicTimeScaleFps(logicTimeQueryFlags);
+	if (logicFps <= 0)
 		return false;
-	}
-
-	const Int maxRenderFps = TheFramePacer->getActualFramesPerSecondLimit();
 
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	const Bool useFastMode = TheGlobalData->m_TiVOFastMode;
-#else	//always allow this cheat key if we're in a replay game.
+#else
 	const Bool useFastMode = TheGlobalData->m_TiVOFastMode && TheGameLogic->isInReplayGame();
 #endif
-
-	if (useFastMode || logicTimeScaleFps >= maxRenderFps)
-	{
-		// Logic time scale is uncapped or larger equal Render FPS. Update straight away.
-		return true;
-	}
-	else
-	{
-		// TheSuperHackers @tweak xezon 06/08/2025
-		// The logic time step is now decoupled from the render update.
-		const Real targetFrameTime = 1.0f / logicTimeScaleFps;
-		m_logicTimeAccumulator += min(TheFramePacer->getUpdateTime(), targetFrameTime);
-
-		if (m_logicTimeAccumulator >= targetFrameTime)
-		{
-			m_logicTimeAccumulator -= targetFrameTime;
-			return true;
-		}
-	}
-
-	return false;
+	return useFastMode || m_simulationClock.isTickDue();
 }
 
 /// -----------------------------------------------------------------------------------------------
@@ -735,33 +712,65 @@ void GameEngine::update()
 	USE_PERF_TIMER(GameEngine_update)
 	{
 		{
-			// VERIFY CRC needs to be in this code block.  Please to not pull TheGameLogic->update() inside this block.
 			VERIFY_CRC
-
 			TheRadar->UPDATE();
-
-			/// @todo Move audio init, update, etc, into GameClient update
-
 			TheAudio->UPDATE();
 			TheGameClient->UPDATE();
 			TheMessageStream->propagateMessages();
-
 			if (TheNetwork != nullptr)
-			{
 				TheNetwork->UPDATE();
-			}
 		}
 
-		// TheSuperHackers @info Ignores frozen time because the script engine needs updating in the logic update regardless.
-		if (canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
+		// Multiplayer uses its own frame-data and pacing gate. Never consume
+		// extra lockstep frames here or reuse network commands across ticks.
+		if (TheNetwork != nullptr)
 		{
-			TheGameLogic->UPDATE();
-
-			if (!TheFramePacer->isTimeFrozen())
+			m_simulationClock.reset();
+			if (canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
 			{
-				TheGameClient->step();
+				TheGameLogic->UPDATE();
+				if (!TheFramePacer->isTimeFrozen())
+					TheGameClient->step();
 			}
+			TheFramePacer->setLogicFramePhase(1.0f);
+			return;
 		}
+
+		const Int logicFps = TheFramePacer->getActualLogicTimeScaleFps(
+			FramePacer::IgnoreFrozenTime | FramePacer::IgnoreHaltedGame);
+#if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
+		const Bool fastMode = TheGlobalData->m_TiVOFastMode;
+#else
+		const Bool fastMode = TheGlobalData->m_TiVOFastMode && TheGameLogic->isInReplayGame();
+#endif
+		if (isGameHalted() || logicFps <= 0 || fastMode)
+			m_simulationClock.reset();
+		else
+			m_simulationClock.advance(TheFramePacer->getUpdateTime(), logicFps);
+
+		// Keep the original game-speed cheat's uncapped stepping behavior.
+		const Int stepLimit = fastMode ? 1 : FixedSimulationClock::MaxCatchUpSteps;
+		for (Int i = 0; i < stepLimit; ++i)
+		{
+			if (!fastMode && !m_simulationClock.isTickDue())
+				break;
+			if (!canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
+				break;
+
+			// A scheduled pause must become observable before another tick.
+			if (TheGameLogic->getGamePauseFrame() != 0 &&
+				TheGameLogic->getGamePauseFrame() == TheGameLogic->getFrame())
+				break;
+
+			TheGameLogic->UPDATE();
+			if (!TheFramePacer->isTimeFrozen())
+				TheGameClient->step();
+			if (!fastMode)
+				m_simulationClock.consumeTick();
+		}
+
+		// Render existing previous/current logic states at arbitrary refresh rates.
+		TheFramePacer->setLogicFramePhase(fastMode ? 1.0f : m_simulationClock.getInterpolationAlpha());
 	}
 }
 
