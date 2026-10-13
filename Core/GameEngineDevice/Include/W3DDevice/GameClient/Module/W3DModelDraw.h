@@ -351,6 +351,7 @@ public:
 	virtual void preloadAssets( TimeOfDay timeOfDay ) override;
 
 	/// the draw method
+	virtual void captureVisualSimulationState() override;
 	virtual void doDrawModule(const Matrix3D* transformMtx) override;
 	virtual void setShadowsEnabled(Bool enable) override;
 	virtual void releaseShadows() override;	///< frees all shadow resources used by this module - used by Options screen.
@@ -488,6 +489,16 @@ private:
 	typedef std::vector<ParticleSysTrackerType>	ParticleSystemIDVec;
 	//typedef std::vector<ParticleSystemID>	ParticleSystemIDVec;
 
+
+	struct TurretRenderPose
+	{
+		Real previousYaw;
+		Real previousPitch;
+		Real currentYaw;
+		Real currentPitch;
+		Bool valid;
+	};
+	TurretRenderPose m_turretRenderPose[MAX_TURRETS]; ///< Non-serialized, read only by presentation.
 
 	const ModelConditionInfo*			m_curState;
 	const ModelConditionInfo*			m_nextState;
