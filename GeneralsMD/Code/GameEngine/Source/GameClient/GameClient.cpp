@@ -577,16 +577,6 @@ void GameClient::update()
 	}
 
 
-  if (TheInGameUI->isCameraTrackingDrawable())
-  {
-    Drawable *draw = TheInGameUI->getFirstSelectedDrawable();
-    if ( draw )
-    {
-      TheTacticalView->userLookAt( draw->getPosition() );
-    }
-    else
-      TheInGameUI->setCameraTrackingDrawable( FALSE );
-  }
 
 	// An active intro has its own presentation path after simulation.
 	if (m_intro != nullptr)
@@ -719,6 +709,23 @@ void GameClient::presentFrame()
 		TheDisplay->UPDATE();
 		TheDisplay->DRAW();
 		return;
+	}
+
+	// Camera tracking must use the same sampled pose as the model. It also
+	// belongs after fixed ticks and before W3DView::update(), not in input.
+	if (TheInGameUI->isCameraTrackingDrawable())
+	{
+		Drawable *selected = TheInGameUI->getFirstSelectedDrawable();
+		if (selected)
+		{
+			Coord3D visualPosition;
+			selected->getInterpolatedRenderPosition(visualPosition);
+			TheTacticalView->userLookAt(&visualPosition);
+		}
+		else
+		{
+			TheInGameUI->setCameraTrackingDrawable(FALSE);
+		}
 	}
 
 	const Bool freezeTime = TheGameEngine->isTimeFrozen() || TheGameEngine->isGameHalted();
