@@ -413,6 +413,7 @@ public:
 
 	Bool isVisualInterpolationEnabled() const; ///< Render-only visual interpolation state, honoring pause and testing overrides.
 	void getInterpolatedRenderPosition(Coord3D &outPosition) const; ///< Camera and presentation effects only.
+	void prepareVisualPose(); ///< Prepare attachment bone transforms before particle simulation.
 	void captureSimulationTransform(); ///< Snapshot authoritative pose after a logic tick (presentation-only).
 	void draw();													///< render the drawable to the given view
 	void updateDrawable(Real timeScale);														///< update the drawable
@@ -666,6 +667,8 @@ protected:
 
 private:
 
+	void buildVisualTransform(Matrix3D &transformMtx);
+
 	const Locomotor* getLocomotor() const;
 
 	// note, these are lazily allocated!
@@ -729,6 +732,8 @@ private:
 	Real m_previousRenderYaw;
 	Real m_currentRenderYaw;
 	Bool m_hasRenderSamples;        ///< Transient; not part of save games or CRCs.
+	UnsignedInt m_preparedVisualPoseFrame; ///< Render iteration for m_preparedVisualTransform.
+	Matrix3D m_preparedVisualTransform;    ///< Cached to avoid applying client physics twice per frame.
 
 	Matrix3D m_instance;				///< The instance matrix that holds the initial/default position & orientation
 	Real m_instanceScale;				///< the uniform scale factor applied to the instance matrix before it is sent to W3D.
