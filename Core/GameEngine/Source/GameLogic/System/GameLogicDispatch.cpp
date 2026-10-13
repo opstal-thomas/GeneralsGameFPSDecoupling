@@ -879,12 +879,16 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 
 	if ( msg->getArgumentCount() >= 4 )
 	{
-		Int maxFPS = msg->getArgument( 3 )->integer;
-		if (maxFPS < 1 || maxFPS > 1000)
-			maxFPS = TheGlobalData->m_framesPerSecondLimit;
-		DEBUG_LOG(("Setting max FPS limit to %d FPS", maxFPS));
-		TheFramePacer->setFramesPerSecondLimit(maxFPS);
-		TheWritableGlobalData->m_useFpsLimit = true;
+		// Legacy skirmish Game Speed used to control simulation speed by
+		// changing the render FPS limit. With fixed-step simulation these
+		// clocks must remain separate: a new game must not overwrite the
+		// player's rendering FPS preference or re-enable its limiter.
+		//
+		// The fourth argument remains part of MSG_NEW_GAME for compatibility.
+		// Custom skirmish speeds need a separate, explicitly defined logic
+		// rate policy; until then gameplay uses the fixed simulation rate.
+		DEBUG_LOG(("Ignoring legacy new-game FPS argument %d; rendering and simulation are decoupled",
+			msg->getArgument( 3 )->integer));
 	}
 
 	// prepare for new game
