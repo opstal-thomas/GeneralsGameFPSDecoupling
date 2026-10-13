@@ -357,3 +357,58 @@ void Renderer::Discard_Managed_Resources()
     if (DX8Wrapper::_Get_D3D_Device8())
         DX8Wrapper::_Get_D3D_Device8()->ResourceManagerDiscardBytes(0);
 }
+
+
+static DWORD Translate_Buffer_Map_Flags(unsigned flags)
+{
+    DWORD result = 0;
+    if (flags & RENDER_MAP_DISCARD)
+        result |= D3DLOCK_DISCARD;
+    if (flags & RENDER_MAP_NO_OVERWRITE)
+        result |= D3DLOCK_NOOVERWRITE;
+    if (flags & RENDER_MAP_NO_SYSTEM_LOCK)
+        result |= D3DLOCK_NOSYSLOCK;
+    if (flags & RENDER_MAP_READ_ONLY)
+        result |= D3DLOCK_READONLY;
+    return result;
+}
+
+void * Renderer::Map_Vertex_Buffer(void * buffer, unsigned offsetBytes,
+                                   unsigned sizeBytes, unsigned mapFlags)
+{
+    DX8_THREAD_ASSERT();
+    if (!buffer)
+        return nullptr;
+    unsigned char * mapped = nullptr;
+    const HRESULT result = static_cast<IDirect3DVertexBuffer8 *>(buffer)->Lock(
+        offsetBytes, sizeBytes, &mapped, Translate_Buffer_Map_Flags(mapFlags));
+    DX8_ErrorCode(result);
+    return SUCCEEDED(result) ? mapped : nullptr;
+}
+
+void * Renderer::Map_Index_Buffer(void * buffer, unsigned offsetBytes,
+                                  unsigned sizeBytes, unsigned mapFlags)
+{
+    DX8_THREAD_ASSERT();
+    if (!buffer)
+        return nullptr;
+    unsigned char * mapped = nullptr;
+    const HRESULT result = static_cast<IDirect3DIndexBuffer8 *>(buffer)->Lock(
+        offsetBytes, sizeBytes, &mapped, Translate_Buffer_Map_Flags(mapFlags));
+    DX8_ErrorCode(result);
+    return SUCCEEDED(result) ? mapped : nullptr;
+}
+
+void Renderer::Unmap_Vertex_Buffer(void * buffer)
+{
+    DX8_THREAD_ASSERT();
+    if (buffer)
+        DX8_ErrorCode(static_cast<IDirect3DVertexBuffer8 *>(buffer)->Unlock());
+}
+
+void Renderer::Unmap_Index_Buffer(void * buffer)
+{
+    DX8_THREAD_ASSERT();
+    if (buffer)
+        DX8_ErrorCode(static_cast<IDirect3DIndexBuffer8 *>(buffer)->Unlock());
+}

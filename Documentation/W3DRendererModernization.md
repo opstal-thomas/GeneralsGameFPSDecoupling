@@ -51,10 +51,17 @@ managed DX8 resources, and retries; index allocation invalidates the
 textures/mesh cache and retries without the managed-pool discard. An
 unsuccessful second attempt still raises a fatal assertion.
 
-The buffers continue to expose native DX8 pointers to the **unmigrated
-mapping and draw binding code**. This is a deliberate compatibility bridge,
-not the final resource API. Replacing it with opaque resource handles and
-backend-neutral mapping/binding comes next. Texture/surface allocation and
+Buffer mapping now also goes through `Renderer::Map_Vertex_Buffer` and
+`Renderer::Map_Index_Buffer`, with corresponding unmap operations.
+The abstraction expresses discard, no-overwrite, no-system-lock and
+read-only modes independently of D3D8 flag values; the DX8 backend
+translates them. Full-buffer, ranged append and dynamic ring-buffer
+mapping retain their existing offsets, sizes and flags.
+
+The buffers still expose native DX8 pointers to the **unmigrated draw
+binding code**. This is a deliberate compatibility bridge, not the final
+resource API. Replacing native pointers with typed opaque handles, and
+migrating buffer bind/draw calls, comes next. Texture/surface allocation and
 resource-reset ownership are also not migrated yet.
 
 There are no new resource file formats, shader binaries or DLL dependencies.

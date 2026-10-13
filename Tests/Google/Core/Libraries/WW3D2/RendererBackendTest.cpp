@@ -14,6 +14,16 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, MappingFlagsAreIndependentOfNativeD3DEnums)
+{
+    EXPECT_EQ(0u, static_cast<unsigned>(RENDER_MAP_NONE));
+    EXPECT_NE(RENDER_MAP_DISCARD, RENDER_MAP_NO_OVERWRITE);
+    EXPECT_NE(RENDER_MAP_NO_SYSTEM_LOCK, RENDER_MAP_READ_ONLY);
+    const unsigned dynamicMap = RENDER_MAP_NO_SYSTEM_LOCK | RENDER_MAP_DISCARD;
+    EXPECT_TRUE((dynamicMap & RENDER_MAP_DISCARD) != 0);
+    EXPECT_FALSE((dynamicMap & RENDER_MAP_NO_OVERWRITE) != 0);
+}
+
 TEST(RendererBackend, ResourceDescriptionsUseBackendNeutralFlags)
 {
     RenderBufferDescription vertexBuffer;

@@ -75,6 +75,15 @@ enum RenderBufferUsageFlags
     RENDER_BUFFER_NPATCHES = 1 << 2
 };
 
+enum RenderBufferMapFlags
+{
+    RENDER_MAP_NONE = 0,
+    RENDER_MAP_DISCARD = 1 << 0,
+    RENDER_MAP_NO_OVERWRITE = 1 << 1,
+    RENDER_MAP_NO_SYSTEM_LOCK = 1 << 2,
+    RENDER_MAP_READ_ONLY = 1 << 3
+};
+
 struct RenderBufferDescription
 {
     RenderBufferDescription()
@@ -176,12 +185,23 @@ public:
     // the backend, while DX8VertexBufferClass/DX8IndexBufferClass still store
     // native pointers for the unmigrated DX8 draw and lock paths. No native
     // types appear in the Renderer interface or the allocation descriptor.
-    // The next step is moving buffer mapping and binding to opaque handles.
+    // The resource handle is the native DX8 pointer until all draw binding
+    // paths are migrated to backend-neutral handles.
     static void * Create_Vertex_Buffer(const RenderBufferDescription & description);
     static void * Create_Index_Buffer(const RenderBufferDescription & description);
     static void Release_Vertex_Buffer(void * buffer);
     static void Release_Index_Buffer(void * buffer);
     static void Discard_Managed_Resources();
+
+    // Mapping is expressed in byte offsets/sizes. Zero byte count means
+    // map the remaining buffer (preserves DX8 full-buffer lock semantics).
+    // Map returns null on failure; Unmap completes the associated write.
+    static void * Map_Vertex_Buffer(void * buffer, unsigned offsetBytes, unsigned sizeBytes,
+                                    unsigned mapFlags = RENDER_MAP_NONE);
+    static void * Map_Index_Buffer(void * buffer, unsigned offsetBytes, unsigned sizeBytes,
+                                   unsigned mapFlags = RENDER_MAP_NONE);
+    static void Unmap_Vertex_Buffer(void * buffer);
+    static void Unmap_Index_Buffer(void * buffer);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);
