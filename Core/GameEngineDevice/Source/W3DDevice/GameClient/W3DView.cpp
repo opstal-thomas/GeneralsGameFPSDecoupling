@@ -3272,7 +3272,9 @@ static Real makeQuadraticS(Real t)
 // ------------------------------------------------------------------------------------------------
 void W3DView::rotateCameraOneFrame()
 {
-	m_rcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_rcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_rcInfo.curFrame >= m_rcInfo.numFrames + m_rcInfo.numHoldFrames) {
 			removeScriptedState(Scripted_Rotate);
@@ -3343,7 +3345,9 @@ void W3DView::rotateCameraOneFrame()
 // ------------------------------------------------------------------------------------------------
 void W3DView::zoomCameraOneFrame()
 {
-	m_zcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_zcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_zcInfo.curFrame >= m_zcInfo.numFrames) {
 			removeScriptedState(Scripted_Zoom);
@@ -3369,7 +3373,9 @@ void W3DView::zoomCameraOneFrame()
 // ------------------------------------------------------------------------------------------------
 void W3DView::pitchCameraOneFrame()
 {
-	m_pcInfo.curFrame++;
+	// Scripted transitions were authored in 30 Hz frames. Advance by actual
+	// render elapsed time so zoom, pitch and rotation are smooth at 144+ FPS.
+	m_pcInfo.curFrame += TheFramePacer->getBaseOverUpdateFpsRatio();
 	if (TheGlobalData->m_disableCameraMovement) {
 		if (m_pcInfo.curFrame >= m_pcInfo.numFrames) {
 			removeScriptedState(Scripted_Pitch);
