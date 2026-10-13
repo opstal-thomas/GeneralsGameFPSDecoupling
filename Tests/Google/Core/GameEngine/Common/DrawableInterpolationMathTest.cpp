@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include "Common/DrawableInterpolationMath.h"
+#include "WWMath/quat.h"
 
 TEST(DrawableInterpolationMath, ClampsInvalidAndOutOfRangeAlpha)
 {
@@ -61,4 +62,45 @@ TEST(DrawableInterpolationMath, CameraBlendPreservesDurationAtDifferentRenderRat
 	EXPECT_NEAR(legacyBlend, composed, 0.00001f);
 	EXPECT_FLOAT_EQ(0.0f, DrawableInterpolationMath::presentationBlend(legacyBlend, 0.0f));
 	EXPECT_FLOAT_EQ(1.0f, DrawableInterpolationMath::presentationBlend(2.0f, 0.1f));
+}
+
+
+TEST(DrawableInterpolationMath, QuaternionSlerpKeepsPitchAndRoll)
+{
+	Matrix3D before(true);
+	Matrix3D after(true);
+	after.Rotate_X(1.0f);
+	after.Rotate_Y(0.5f);
+
+	const Quaternion a = Build_Quaternion(before);
+	const Quaternion b = Build_Quaternion(after);
+	Quaternion halfway;
+	Slerp(halfway, a, b, 0.5f);
+
+	EXPECT_NEAR(1.0f, halfway.Length2(), 0.001f);
+	Matrix3D halfwayMatrix(true);
+	halfwayMatrix.Set_Rotation(halfway);
+	const Vector3 up = halfwayMatrix.Get_Z_Vector();
+	EXPECT_GT(up.Y, 0.0f);
+	EXPECT_LT(up.Z, 1.0f);
+}
+
+TEST(DrawableInterpolationMath, QuaternionSlerpUsesShortestYawAcrossWrap)
+{
+	const float pi = 3.14159265358979323846f;
+	Matrix3D before(true);
+	Matrix3D after(true);
+	before.Rotate_Z(pi - 0.02f);
+	after.Rotate_Z(-pi + 0.02f);
+
+	const Quaternion a = Build_Quaternion(before);
+	const Quaternion b = Build_Quaternion(after);
+	Quaternion halfway;
+	Slerp(halfway, a, b, 0.5f);
+
+	Matrix3D interpolated(true);
+	interpolated.Set_Rotation(halfway);
+	const Vector3 forward = interpolated.Get_X_Vector();
+	EXPECT_LT(forward.X, -0.99f);
+	EXPECT_NEAR(0.0f, forward.Y, 0.03f);
 }
