@@ -5,6 +5,7 @@ on:
     branches:
       - feature/fixed-simulation-30hz
       - feature/visual-presentation-smoothing
+      - feature/game-speed-simulation
   workflow_dispatch:
 
 permissions:
