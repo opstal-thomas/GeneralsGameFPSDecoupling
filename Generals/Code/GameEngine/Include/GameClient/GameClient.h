@@ -90,6 +90,7 @@ public:
 	virtual void update() override;																				///< Updates the GUI, display, audio, etc
 	virtual void draw() override;
 	void presentFrame(); ///< Render presentation after simulation; called once per engine iteration.
+	UnsignedInt getPresentationFrameID() const { return m_presentationFrameID; } ///< Client-only render iteration sequence.
 	virtual void reset() override;																					///< reset system
 
 	virtual void setFrame( UnsignedInt frame ) { m_frame = frame; }			///< Set the GameClient's internal frame number
@@ -179,6 +180,7 @@ protected:
 private:
 
 	Intro* m_intro;
+	UnsignedInt m_presentationFrameID; ///< Not serialized: increments once per presentation pass.
 	UnsignedInt m_renderedObjectCount;													///< Keeps track of the number of rendered objects -- resets each frame.
 
 	//---------------------------------------------------------------------------
