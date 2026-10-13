@@ -114,6 +114,7 @@ public:
 	Bool getUseHeatEffects();
 	Bool getDynamicLODEnabled();
 	Bool getFPSLimitEnabled();
+	Int getRenderFPSLimit() const; ///< Render FPS cap; independent of the 30 Hz simulation rate.
 	Bool getBuildingOcclusionEnabled();
 	Int getParticleCap();
 
