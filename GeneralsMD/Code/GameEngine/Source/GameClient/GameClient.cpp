@@ -105,6 +105,7 @@ GameClient::GameClient()
 	m_textBearingDrawableList.clear();
 
 	m_frame = 0;
+	m_presentationFrameID = 0;
 
 	m_drawableList = nullptr;
 
@@ -453,6 +454,7 @@ void GameClient::init()
 /** Reset the game client for a new game */
 void GameClient::reset()
 {
+	m_presentationFrameID = 0;
 	Drawable *draw, *nextDraw;
 //	m_drawableHash.clear();
 //	m_drawableHash.resize(DRAWABLE_HASH_SIZE);
@@ -704,6 +706,7 @@ void GameClient::update()
 // propagation and multiplayer lockstep retain their existing ordering.
 void GameClient::presentFrame()
 {
+	++m_presentationFrameID;
 	if (m_intro != nullptr)
 	{
 		TheDisplay->UPDATE();
@@ -747,6 +750,20 @@ void GameClient::presentFrame()
 	// update display
 	{
 		TheDisplay->UPDATE();
+	}
+
+	// Prepare attachment-owner poses before the particle manager advances.
+	// The W3D module only does the early work when it has attached emitters;
+	// otherwise the traditional draw path prepares the model on demand.
+	// Never do graphical preparation during headless replay validation.
+	if (!freezeTime && !TheGlobalData->m_headless)
+	{
+		for (Drawable *drawable = firstDrawable(); drawable;)
+		{
+			Drawable *next = drawable->getNextDrawable();
+			drawable->prepareVisualPose();
+			drawable = next;
+		}
 	}
 
 	// update all particle systems
