@@ -47,17 +47,21 @@ slider. The old implementation passed that value to
 With a Game Speed of 30, this changed the render cap from 144 back to 30
 after a match started.
 
-The new handler routes valid offline skirmish Game Speed settings (15–60,
-or the legacy 1000 fast-mode sentinel) to the **simulation tick scheduler**
-rather than the renderer. The normal/default value is 30 simulation ticks
-per second. The skirmish slider's default and default-marker comparison now
-use this 30 Hz **logic** rate rather than `GlobalData::m_framesPerSecondLimit`
-(the *render* cap); otherwise a 144 FPS render setting incorrectly selects
-unbounded simulation on a fresh preferences file. A new game without an
-explicit speed starts at the default simulation rate. Multiplayer continues
-to use its network-negotiated lockstep rate. The 1000-tick legacy fast mode is
-bounded by the clock's eight-step-per-render catch-up limit and can run slower
-under load.
+The handler no longer modifies the rendering FPS limit. The previous
+attempt to route the legacy Game Speed slider (15–60, with 1000 as its old
+unbounded sentinel) into the experimental logic-frequency scheduler has
+been **temporarily rolled back** after a report of a frozen world at 144 FPS.
+Game startup now leaves the fixed simulation frequency at its normal 30 Hz.
+The skirmish slider's default and visual default-marker comparison use the
+30 Hz logic rate rather than the rendering cap. Until the alternate speed
+modes receive dedicated gameplay tests, changing that slider does **not**
+change simulation speed on this branch. Multiplayer continues using the
+network-negotiated lockstep rate.
+
+Release-mode diagnostics have also been extended with `Paused`, `Halted`,
+`Frozen`, `LogicHz`, `Scaled`, `ClockDue`, `Frame`, and `PauseFrame`.
+When diagnosing startup, distinguish a non-advancing simulation clock from
+a halted/paused game and from scripted frozen time.
 
 If rendering is still stuck at 30 after this fix, use the diagnostic
 below to distinguish another cap from CPU/GPU workload or VSync.
