@@ -9,6 +9,8 @@
 */
 #pragma once
 
+#include <math.h>
+
 // Presentation-only interpolation helpers. Never use these values to update
 // authoritative simulation transforms, collision or the lockstep state.
 namespace DrawableInterpolationMath
@@ -43,5 +45,28 @@ namespace DrawableInterpolationMath
 		// Keep instant repositioning from being smeared between logic frames.
 		const float teleportThreshold = 60.0f;
 		return (dx * dx + dy * dy + dz * dz) > teleportThreshold * teleportThreshold;
+	}
+
+	inline bool isRotationDiscontinuity(float quaternionDot)
+	{
+		// Quaternion representations q and -q are equivalent. A change of
+		// more than 150 degrees in one 30 Hz tick is typically a scripted snap.
+		// Cos(150 / 2) ~= 0.258819. Do not smear instant reorientation.
+		const float cosineThreshold = 0.2588190451f;
+		return quaternionDot < -cosineThreshold ? false :
+			quaternionDot < cosineThreshold && quaternionDot > -cosineThreshold;
+	}
+
+	inline float presentationBlend(float perThirtyHzStep, float thirtyHzFrameRatio)
+	{
+		// Convert a legacy blend (e.g. 10% per 30 Hz render) into an
+		// exponential blend for the actual frame duration. Unlike direct
+		// multiplication this remains stable across large and small deltas.
+		const float blend = clampAlpha(perThirtyHzStep);
+		if (!(thirtyHzFrameRatio > 0.0f) || blend <= 0.0f)
+			return 0.0f;
+		if (blend >= 1.0f)
+			return 1.0f;
+		return 1.0f - powf(1.0f - blend, thirtyHzFrameRatio);
 	}
 }
