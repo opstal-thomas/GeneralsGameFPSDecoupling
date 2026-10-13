@@ -403,7 +403,6 @@ void GameLODManager::init()
 		TheWritableGlobalData->m_enableBehindBuildingMarkers = optionPref.getBuildingOcclusionEnabled();
 		TheWritableGlobalData->m_maxParticleCount = optionPref.getParticleCap();
 		TheWritableGlobalData->m_enableDynamicLOD = optionPref.getDynamicLODEnabled();
-		TheWritableGlobalData->m_useFpsLimit = optionPref.getFPSLimitEnabled();
 		TheWritableGlobalData->m_useLightMap = optionPref.getLightmapEnabled();
 		TheWritableGlobalData->m_useCloudMap = optionPref.getCloudShadowsEnabled();
 		TheWritableGlobalData->m_showSoftWaterEdge = optionPref.getSmoothWaterEnabled();
@@ -413,6 +412,9 @@ void GameLODManager::init()
 	}
 
 	setStaticLODLevel(userSetDetail);
+
+	// Render pacing is a user preference, not a graphics quality preset.
+	TheWritableGlobalData->m_useFpsLimit = optionPref.getFPSLimitEnabled();
 }
 
 void GameLODManager::refreshCustomStaticLODLevel()
@@ -632,7 +634,6 @@ void GameLODManager::applyStaticLODLevel(StaticGameLODLevel level)
 		TheWritableGlobalData->m_useTreeSway=lodInfo->m_useTreeSway;
 		TheWritableGlobalData->m_useDrawModuleLOD=!lodInfo->m_useBuildupScaffolds;
 		TheWritableGlobalData->m_enableDynamicLOD = lodInfo->m_enableDynamicLOD;
-		TheWritableGlobalData->m_useFpsLimit = lodInfo->m_useFpsLimit;
 		TheWritableGlobalData->m_useTrees = requestedTrees;
 
 		if (!m_memPassed || isReallyLowMHz()) {

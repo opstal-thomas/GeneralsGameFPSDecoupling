@@ -666,12 +666,25 @@ Bool OptionPreferences::getFPSLimitEnabled()
 {
 	OptionPreferences::const_iterator it = find("FPSLimit");
 	if (it == end())
-		return TheGlobalData->m_useFpsLimit;
+		return TRUE; // Limit rendering to 144 FPS by default, not the legacy 30 FPS.
 
 	if (stricmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
+}
+
+Int OptionPreferences::getRenderFPSLimit() const
+{
+	// Read from Options.ini, not GameData.ini, so a legacy simulation/render
+	// cap of 30 does not constrain the new presentation loop.
+	const Int defaultRenderFPS = 144;
+	OptionPreferences::const_iterator it = find("RenderFPSLimit");
+	if (it == end())
+		return defaultRenderFPS;
+
+	const Int fps = atoi(it->second.str());
+	return fps >= 30 && fps <= 1000 ? fps : defaultRenderFPS;
 }
 
 Bool OptionPreferences::get3DShadowsEnabled()

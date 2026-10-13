@@ -1,0 +1,29 @@
+name: Fixed Simulation Validation
+
+on:
+  push:
+    branches:
+      - feature/fixed-simulation-30hz
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixed-simulation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.game }} win32
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [Generals, GeneralsMD]
+    uses: ./.github/workflows/reusable-build-toolchain.yml
+    with:
+      game: ${{ matrix.game }}
+      preset: win32
+      tools: false
+      extras: false
+      tests: true

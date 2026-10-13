@@ -76,6 +76,8 @@
 #include "missingtexture.h"
 #include "WWLib/thread.h"
 #include <d3dx8core.h>
+#include <stdio.h>
+#include <string.h>
 #include "WWMath/pot.h"
 #include "WWDebug/wwprofile.h"
 #include "WWLib/ffactory.h"
@@ -992,6 +994,12 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	_PresentParameters.Flags=0;											// We're not going to lock the backbuffer
 
 	_PresentParameters.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+	// Diagnostic override: skip waiting for VSync to distinguish a real
+	// render bottleneck from half-refresh-rate presentation (e.g. 30 on 60 Hz).
+	// Launch with GENERALS_DISABLE_VSYNC=1 to enable this for testing.
+	char disableVSync[8] = { 0 };
+	if (GetEnvironmentVariableA("GENERALS_DISABLE_VSYNC", disableVSync, sizeof(disableVSync)) > 0 && disableVSync[0] == '1')
+		_PresentParameters.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	_PresentParameters.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
 
 	/*
@@ -1683,7 +1691,54 @@ void DX8Wrapper::End_Scene(bool flip_frames)
 		HRESULT hr;
 		{
 			WWPROFILE("DX8Device::Present()");
+			static int s_diagnoseFps = -1;
+			if (s_diagnoseFps < 0)
+			{
+				char option[8] = { 0 };
+				s_diagnoseFps = GetEnvironmentVariableA("GENERALS_FPS_DIAGNOSTICS", option, sizeof(option)) > 0 && option[0] == '1' ? 1 : 0;
+			}
+			LARGE_INTEGER presentStarted;
+			if (s_diagnoseFps)
+				QueryPerformanceCounter(&presentStarted);
+
 			hr=_Get_D3D_Device8()->Present(nullptr, nullptr, nullptr, nullptr);
+
+			if (s_diagnoseFps)
+			{
+				LARGE_INTEGER presentFinished;
+				QueryPerformanceCounter(&presentFinished);
+				static DWORD reportStarted = GetTickCount();
+				static LONGLONG totalPresentTicks = 0;
+				static unsigned int presentCount = 0;
+				totalPresentTicks += presentFinished.QuadPart - presentStarted.QuadPart;
+				++presentCount;
+				const DWORD reportNow = GetTickCount();
+				const DWORD elapsedMs = reportNow - reportStarted;
+				if (elapsedMs >= 1000 && presentCount)
+				{
+					LARGE_INTEGER frequency;
+					QueryPerformanceFrequency(&frequency);
+					const double averagePresentMs = 1000.0 * totalPresentTicks / (frequency.QuadPart * presentCount);
+					char line[256];
+					sprintf(line, "[GeneralsFPS][D3D] Presents=%.1f/s AveragePresentBlock=%.2fms Windowed=%d SwapInterval=%u\n",
+						1000.0 * presentCount / elapsedMs, averagePresentMs, IsWindowed ? 1 : 0,
+						(unsigned)_PresentParameters.FullScreen_PresentationInterval);
+					OutputDebugStringA(line);
+
+					char logPath[MAX_PATH];
+					DWORD pathLength = GetTempPathA(MAX_PATH, logPath);
+					if (pathLength > 0 && pathLength + sizeof("GeneralsFPSDiagnostics.log") < MAX_PATH)
+					{
+						strcat(logPath, "GeneralsFPSDiagnostics.log");
+						FILE *logFile = fopen(logPath, "a");
+						if (logFile) { fputs(line, logFile); fclose(logFile); }
+					}
+
+					reportStarted = reportNow;
+					totalPresentTicks = 0;
+					presentCount = 0;
+				}
+			}
 		}
 
 		DX8_RECORD_DX8_CALLS();

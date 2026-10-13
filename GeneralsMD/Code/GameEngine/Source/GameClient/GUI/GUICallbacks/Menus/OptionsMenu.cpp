@@ -442,10 +442,6 @@ static void saveOptions()
 		TheWritableGlobalData->m_useHeatEffects = GadgetCheckBoxIsChecked( checkHeatEffects );
 		(*pref)["HeatEffects"] = TheGlobalData->m_useHeatEffects ? "yes" : "no";
 
-		// Never write this out
-		//TheWritableGlobalData->m_useFpsLimit = !GadgetCheckBoxIsChecked( checkUnlockFps );
-		//(*pref)["FPSLimit"] = TheGlobalData->m_useFpsLimit ? "yes" : "no";
-
 		TheWritableGlobalData->m_enableBehindBuildingMarkers = GadgetCheckBoxIsChecked( checkBuildingOcclusion );
 		(*pref)["BuildingOcclusion"] = TheWritableGlobalData->m_enableBehindBuildingMarkers ? "yes" : "no";
 
@@ -464,6 +460,14 @@ static void saveOptions()
 
 				TheWritableGlobalData->m_maxParticleCount = val;
 		}
+	}
+
+	// Render frame pacing is independent of LOD and may be changed without
+	// modifying any gameplay settings.
+	if (checkUnlockFps != nullptr)
+	{
+		TheWritableGlobalData->m_useFpsLimit = !GadgetCheckBoxIsChecked(checkUnlockFps);
+		(*pref)["FPSLimit"] = TheWritableGlobalData->m_useFpsLimit ? "yes" : "no";
 	}
 
 	//-------------------------------------------------------------------------------------------------

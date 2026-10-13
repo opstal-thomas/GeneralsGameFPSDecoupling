@@ -877,14 +877,17 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 	if ( msg->getArgumentCount() >= 3 )
 		rankPoints = msg->getArgument( 2 )->integer;
 
-	if ( msg->getArgumentCount() >= 4 )
+	// The fourth MSG_NEW_GAME argument is the legacy skirmish Game Speed
+	// slider. It used to be coupled directly to the *render* FPS limiter.
+	// Do not let game startup override rendering preferences, and do not
+	// activate experimental simulation speed scaling until it is validated
+	// against level transitions, save games and playback. The fixed game
+	// simulation clock continues at 30 Hz (or the negotiated network rate).
+	// Preserve the message format for existing replays and multiplayer.
+	if (msg->getArgumentCount() >= 4)
 	{
-		Int maxFPS = msg->getArgument( 3 )->integer;
-		if (maxFPS < 1 || maxFPS > 1000)
-			maxFPS = TheGlobalData->m_framesPerSecondLimit;
-		DEBUG_LOG(("Setting max FPS limit to %d FPS", maxFPS));
-		TheFramePacer->setFramesPerSecondLimit(maxFPS);
-		TheWritableGlobalData->m_useFpsLimit = true;
+		DEBUG_LOG(("Ignoring legacy new-game Game Speed argument %d during fixed-tick testing",
+			msg->getArgument(3)->integer));
 	}
 
 	// prepare for new game
