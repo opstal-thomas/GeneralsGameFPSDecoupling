@@ -36,6 +36,7 @@
 #include "Common/BuildAssistant.h"
 #include "Common/ClientUpdateModule.h"
 #include "Common/DrawModule.h"
+#include "Common/DrawableInterpolationMath.h"
 #include "Common/FramePacer.h"
 #include "Common/GameAudio.h"
 #include "Common/GameLOD.h"
@@ -392,6 +393,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 
 	m_locoInfo = nullptr;
 	m_physicsXform = nullptr;
+	m_hasRenderSamples = FALSE;
 
 	// sanity
 	if( TheGameClient == nullptr || thingTemplate == nullptr )
@@ -2583,6 +2585,54 @@ void Drawable::setStealthLook(StealthLookType look)
 
 
 //-------------------------------------------------------------------------------------------------
+/** Store the authoritative pose only after a complete simulation step.
+ * These samples are never applied to Object, Thing, collision or save data.
+ * New/rebound objects and teleports snap directly to their latest pose.
+ */
+//-------------------------------------------------------------------------------------------------
+void Drawable::captureSimulationTransform()
+{
+	if (!getObject())
+	{
+		m_hasRenderSamples = FALSE;
+		return;
+	}
+
+	const Matrix3D *pose = getTransformMatrix();
+	const Vector3 translation = pose->Get_Translation();
+
+	Coord3D position;
+	position.x = translation.X;
+	position.y = translation.Y;
+	position.z = translation.Z;
+	const Real yaw = pose->Get_Z_Rotation();
+
+	if (!m_hasRenderSamples)
+	{
+		m_previousRenderPosition = position;
+		m_currentRenderPosition = position;
+		m_previousRenderYaw = yaw;
+		m_currentRenderYaw = yaw;
+		m_hasRenderSamples = TRUE;
+		return;
+	}
+
+	m_previousRenderPosition = m_currentRenderPosition;
+	m_previousRenderYaw = m_currentRenderYaw;
+	m_currentRenderPosition = position;
+	m_currentRenderYaw = yaw;
+
+	const Real dx = m_currentRenderPosition.x - m_previousRenderPosition.x;
+	const Real dy = m_currentRenderPosition.y - m_previousRenderPosition.y;
+	const Real dz = m_currentRenderPosition.z - m_previousRenderPosition.z;
+	if (DrawableInterpolationMath::isTeleport(dx, dy, dz))
+	{
+		m_previousRenderPosition = m_currentRenderPosition;
+		m_previousRenderYaw = m_currentRenderYaw;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** default draw is to just call the database defined draw */
 //-------------------------------------------------------------------------------------------------
 void Drawable::draw()
@@ -2619,8 +2669,43 @@ void Drawable::draw()
 	validatePos();
 #endif
 
-	// call the database defined draw action method
+	// Draw from a past/current simulation snapshot without touching the
+	// authoritative Object transform. Visual presentation intentionally lags
+	// a fixed tick to allow smooth rendering between 30 Hz game updates.
 	Matrix3D transformMtx = *getTransformMatrix();
+	if (getObject() && m_hasRenderSamples && TheFramePacer && TheGameLogic &&
+		!TheFramePacer->isTimeFrozen() && !TheFramePacer->isGameHalted() &&
+		!TheGameLogic->isGamePaused())
+	{
+		// Escape hatch for regression comparison: set this to 1 before launch.
+		static Int s_interpolationDisabled = -1;
+		if (s_interpolationDisabled < 0)
+		{
+			char value[8] = { 0 };
+			s_interpolationDisabled =
+				GetEnvironmentVariableA("GENERALS_DISABLE_DRAWABLE_INTERPOLATION", value, sizeof(value)) > 0 &&
+				value[0] == '1' ? 1 : 0;
+		}
+
+		if (!s_interpolationDisabled)
+		{
+			const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+			// Rotation occurs in local space. Keep terrain-aligned orientation
+			// authoritative until slope-aware quaternion interpolation is added.
+			if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
+			{
+				const Real angularDelta =
+					DrawableInterpolationMath::shortestAngleDelta(m_previousRenderYaw, m_currentRenderYaw);
+				transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
+			}
+			transformMtx.Set_X_Translation(DrawableInterpolationMath::lerp(
+				m_previousRenderPosition.x, m_currentRenderPosition.x, alpha));
+			transformMtx.Set_Y_Translation(DrawableInterpolationMath::lerp(
+				m_previousRenderPosition.y, m_currentRenderPosition.y, alpha));
+			transformMtx.Set_Z_Translation(DrawableInterpolationMath::lerp(
+				m_previousRenderPosition.z, m_currentRenderPosition.z, alpha));
+		}
+	}
 	if (!isInstanceIdentity())
 	{
 #ifdef ALLOW_TEMPORARIES
@@ -4088,6 +4173,8 @@ DrawableID Drawable::getID() const
 void Drawable::friend_bindToObject( Object *obj ) ///< bind this drawable to an object ID
 {
 	m_object = obj;
+	// An object rebind, including load/ghost transitions, invalidates the old pose.
+	m_hasRenderSamples = FALSE;
 	if (getObject())
 	{
 		if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)
