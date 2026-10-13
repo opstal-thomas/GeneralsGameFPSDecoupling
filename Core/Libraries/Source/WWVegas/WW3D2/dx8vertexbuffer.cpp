@@ -405,7 +405,7 @@ DX8VertexBufferClass::~DX8VertexBufferClass()
 	_DX8VertexBufferCount--;
 	WWDEBUG_SAY(("Current vertex buffer count: %d",_DX8VertexBufferCount));
 #endif
-	VertexBuffer->Release();
+	Renderer::Release_Vertex_Buffer(VertexBuffer);
 }
 
 // ----------------------------------------------------------------------------
@@ -433,62 +433,34 @@ void DX8VertexBufferClass::Create_Vertex_Buffer(UsageType usage)
 	WWDEBUG_SAY(("Current vertex buffer count: %d",_DX8VertexBufferCount));
 #endif
 
-	unsigned usage_flags=
-		D3DUSAGE_WRITEONLY|
-		((usage&USAGE_DYNAMIC) ? D3DUSAGE_DYNAMIC : 0)|
-		((usage&USAGE_NPATCHES) ? D3DUSAGE_NPATCHES : 0)|
-		((usage&USAGE_SOFTWAREPROCESSING) ? D3DUSAGE_SOFTWAREPROCESSING : 0);
-	// New Code
-	if (!Renderer::Get_Capabilities().hardwareTransformAndLighting) {
-		usage_flags|=D3DUSAGE_SOFTWAREPROCESSING;
-	}
+	RenderBufferDescription description;
+	description.byteSize = FVF_Info().Get_FVF_Size() * VertexCount;
+	description.legacyVertexFormat = FVF_Info().Get_FVF();
+	description.usageFlags =
+		((usage & USAGE_DYNAMIC) ? RENDER_BUFFER_DYNAMIC : 0) |
+		((usage & USAGE_NPATCHES) ? RENDER_BUFFER_NPATCHES : 0) |
+		((usage & USAGE_SOFTWAREPROCESSING) ? RENDER_BUFFER_SOFTWARE_VERTEX_PROCESSING : 0);
 
-	HRESULT ret=DX8Wrapper::_Get_D3D_Device8()->CreateVertexBuffer(
-		FVF_Info().Get_FVF_Size()*VertexCount,
-		usage_flags,
-		FVF_Info().Get_FVF(),
-		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
-		&VertexBuffer);
-	if (SUCCEEDED(ret)) {
+	VertexBuffer = static_cast<IDirect3DVertexBuffer8 *>(
+		Renderer::Create_Vertex_Buffer(description));
+	if (VertexBuffer)
 		return;
-	}
 
 	WWDEBUG_SAY(("Vertex buffer creation failed, trying to release assets..."));
 
-	// Vertex buffer creation failed, so try releasing least used textures and flushing the mesh cache.
-
-	// Free all textures that haven't been used in the last 5 seconds
+	// Preserve legacy recovery: release cold textures, invalidate cached
+	// mesh geometry and discard the DX8 managed pool before retrying.
 	TextureClass::Invalidate_Old_Unused_Textures(5000);
-
-	// Invalidate the mesh cache
 	WW3D::_Invalidate_Mesh_Cache();
+	Renderer::Discard_Managed_Resources();
 
-	//@todo: Find some way to invalidate the textures too
-	ret = DX8Wrapper::_Get_D3D_Device8()->ResourceManagerDiscardBytes(0);
+	VertexBuffer = static_cast<IDirect3DVertexBuffer8 *>(
+		Renderer::Create_Vertex_Buffer(description));
 
-	// Try again...
-	ret=DX8Wrapper::_Get_D3D_Device8()->CreateVertexBuffer(
-		FVF_Info().Get_FVF_Size()*VertexCount,
-		usage_flags,
-		FVF_Info().Get_FVF(),
-		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
-		&VertexBuffer);
-
-	if (SUCCEEDED(ret)) {
+	if (VertexBuffer)
 		WWDEBUG_SAY(("...Vertex buffer creation successful"));
-	}
 
-	// If it still fails it is fatal
-	DX8_ErrorCode(ret);
-
-	/* Old Code
-	DX8CALL(CreateVertexBuffer(
-		FVF_Info().Get_FVF_Size()*VertexCount,
-		usage_flags,
-		FVF_Info().Get_FVF(),
-		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
-		&VertexBuffer));
-	*/
+	WWASSERT_PRINT(VertexBuffer, "Renderer could not create a vertex buffer after recovery");
 }
 
 // ----------------------------------------------------------------------------

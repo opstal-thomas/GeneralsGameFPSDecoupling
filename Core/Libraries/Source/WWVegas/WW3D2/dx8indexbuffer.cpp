@@ -289,57 +289,39 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 {
 	DX8_THREAD_ASSERT();
 	WWASSERT(index_count);
-	unsigned usage_flags=
-		D3DUSAGE_WRITEONLY|
-		((usage&USAGE_DYNAMIC) ? D3DUSAGE_DYNAMIC : 0)|
-		((usage&USAGE_NPATCHES) ? D3DUSAGE_NPATCHES : 0)|
-		((usage&USAGE_SOFTWAREPROCESSING) ? D3DUSAGE_SOFTWAREPROCESSING : 0);
-	if (!Renderer::Get_Capabilities().hardwareTransformAndLighting) {
-		usage_flags|=D3DUSAGE_SOFTWAREPROCESSING;
-	}
+	RenderBufferDescription description;
+	description.byteSize = sizeof(unsigned short) * index_count;
+	description.usageFlags =
+		((usage & USAGE_DYNAMIC) ? RENDER_BUFFER_DYNAMIC : 0) |
+		((usage & USAGE_NPATCHES) ? RENDER_BUFFER_NPATCHES : 0) |
+		((usage & USAGE_SOFTWAREPROCESSING) ? RENDER_BUFFER_SOFTWARE_VERTEX_PROCESSING : 0);
 
-	HRESULT ret=DX8Wrapper::_Get_D3D_Device8()->CreateIndexBuffer(
-		sizeof(WORD)*index_count,
-		usage_flags,
-		D3DFMT_INDEX16,
-		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
-		&index_buffer);
-
-	if (SUCCEEDED(ret)) {
+	index_buffer = static_cast<IDirect3DIndexBuffer8 *>(
+		Renderer::Create_Index_Buffer(description));
+	if (index_buffer)
 		return;
-	}
 
 	WWDEBUG_SAY(("Index buffer creation failed, trying to release assets..."));
 
-	// Index buffer creation failed, so try releasing least used textures and flushing the mesh cache.
-
-	// Free all textures that haven't been used in the last 5 seconds
+	// Keep the original retry path. Index buffers never discarded DX8's
+	// managed resources, unlike vertex buffers.
 	TextureClass::Invalidate_Old_Unused_Textures(5000);
-
-	// Invalidate the mesh cache
 	WW3D::_Invalidate_Mesh_Cache();
 
-	// Try again...
-	ret=DX8Wrapper::_Get_D3D_Device8()->CreateIndexBuffer(
-		sizeof(WORD)*index_count,
-		usage_flags,
-		D3DFMT_INDEX16,
-		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
-		&index_buffer);
+	index_buffer = static_cast<IDirect3DIndexBuffer8 *>(
+		Renderer::Create_Index_Buffer(description));
 
-	if (SUCCEEDED(ret)) {
+	if (index_buffer)
 		WWDEBUG_SAY(("...Index buffer creation successful"));
-	}
 
-	// If it still fails it is fatal
-	DX8_ErrorCode(ret);
+	WWASSERT_PRINT(index_buffer, "Renderer could not create an index buffer after recovery");
 }
 
 // ----------------------------------------------------------------------------
 
 DX8IndexBufferClass::~DX8IndexBufferClass()
 {
-	index_buffer->Release();
+	Renderer::Release_Index_Buffer(index_buffer);
 }
 
 // ----------------------------------------------------------------------------

@@ -30,6 +30,7 @@
 #include "WWMath/vector3.h"
 #include "WW3D2/lightenvironment.h"
 #include "WWDebug/wwdebug.h"
+#include "WWLib/thread.h"
 
 static bool Initialized = false;
 static bool Lite = false;
@@ -273,4 +274,86 @@ void Renderer::Invalidate_Mesh_Cache()
 void Renderer::Release_Texture_Resources()
 {
     DX8TextureManagerClass::Shutdown();
+}
+
+
+// Transitional DX8 resource implementation. Keep native COM allocation,
+// pool selection and usage bits in the backend. The caller still uses the
+// native DX8 pointer for legacy drawing until binding and mapping migrate.
+static DWORD Get_Legacy_Buffer_Usage(const RenderBufferDescription & description)
+{
+    DWORD flags = D3DUSAGE_WRITEONLY;
+    if (description.usageFlags & RENDER_BUFFER_DYNAMIC)
+        flags |= D3DUSAGE_DYNAMIC;
+    if (description.usageFlags & RENDER_BUFFER_NPATCHES)
+        flags |= D3DUSAGE_NPATCHES;
+    if ((description.usageFlags & RENDER_BUFFER_SOFTWARE_VERTEX_PROCESSING) ||
+        !Renderer::Get_Capabilities().hardwareTransformAndLighting)
+        flags |= D3DUSAGE_SOFTWAREPROCESSING;
+    return flags;
+}
+
+void * Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8())
+        return nullptr;
+
+    IDirect3DVertexBuffer8 * buffer = nullptr;
+    const HRESULT result = DX8Wrapper::_Get_D3D_Device8()->CreateVertexBuffer(
+        description.byteSize,
+        Get_Legacy_Buffer_Usage(description),
+        description.legacyVertexFormat,
+        description.Is_Dynamic() ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
+        &buffer);
+
+    if (FAILED(result))
+    {
+        WWDEBUG_SAY(("Renderer::Create_Vertex_Buffer failed (HRESULT: 0x%08X)", (unsigned)result));
+        return nullptr;
+    }
+    return buffer;
+}
+
+void * Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8())
+        return nullptr;
+
+    IDirect3DIndexBuffer8 * buffer = nullptr;
+    const HRESULT result = DX8Wrapper::_Get_D3D_Device8()->CreateIndexBuffer(
+        description.byteSize,
+        Get_Legacy_Buffer_Usage(description),
+        D3DFMT_INDEX16,
+        description.Is_Dynamic() ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
+        &buffer);
+
+    if (FAILED(result))
+    {
+        WWDEBUG_SAY(("Renderer::Create_Index_Buffer failed (HRESULT: 0x%08X)", (unsigned)result));
+        return nullptr;
+    }
+    return buffer;
+}
+
+void Renderer::Release_Vertex_Buffer(void * buffer)
+{
+    DX8_THREAD_ASSERT();
+    if (buffer)
+        static_cast<IDirect3DVertexBuffer8 *>(buffer)->Release();
+}
+
+void Renderer::Release_Index_Buffer(void * buffer)
+{
+    DX8_THREAD_ASSERT();
+    if (buffer)
+        static_cast<IDirect3DIndexBuffer8 *>(buffer)->Release();
+}
+
+void Renderer::Discard_Managed_Resources()
+{
+    DX8_THREAD_ASSERT();
+    if (DX8Wrapper::_Get_D3D_Device8())
+        DX8Wrapper::_Get_D3D_Device8()->ResourceManagerDiscardBytes(0);
 }

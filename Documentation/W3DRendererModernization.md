@@ -36,6 +36,29 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Third milestone: vertex and index buffer allocation ownership
+
+The W3D vertex and 16-bit index buffer classes now request GPU allocations
+through `Renderer::Create_Vertex_Buffer` and
+`Renderer::Create_Index_Buffer`, and release them through corresponding
+backend methods. The DX8 backend owns its D3DUSAGE, D3DPOOL and D3DFMT
+translation. The public description carries a byte count, the existing W3D
+vertex format code and backend-neutral usage flags.
+
+The resource allocator retains the previous recovery behavior: failed
+vertex allocation invalidates old textures and the mesh cache, discards
+managed DX8 resources, and retries; index allocation invalidates the
+textures/mesh cache and retries without the managed-pool discard. An
+unsuccessful second attempt still raises a fatal assertion.
+
+The buffers continue to expose native DX8 pointers to the **unmigrated
+mapping and draw binding code**. This is a deliberate compatibility bridge,
+not the final resource API. Replacing it with opaque resource handles and
+backend-neutral mapping/binding comes next. Texture/surface allocation and
+resource-reset ownership are also not migrated yet.
+
+There are no new resource file formats, shader binaries or DLL dependencies.
+
 ### Second milestone: mesh submission and resource capabilities
 
 The high-level WW3D scene now routes camera selection, mesh-batch flushing,

@@ -14,6 +14,29 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, ResourceDescriptionsUseBackendNeutralFlags)
+{
+    RenderBufferDescription vertexBuffer;
+    EXPECT_FALSE(vertexBuffer.Is_Valid());
+    EXPECT_FALSE(vertexBuffer.Is_Dynamic());
+
+    vertexBuffer.byteSize = 4096;
+    vertexBuffer.legacyVertexFormat = 0x112;
+    vertexBuffer.usageFlags =
+        RENDER_BUFFER_DYNAMIC | RENDER_BUFFER_NPATCHES;
+    EXPECT_TRUE(vertexBuffer.Is_Valid());
+    EXPECT_TRUE(vertexBuffer.Is_Dynamic());
+    EXPECT_EQ(4096u, vertexBuffer.byteSize);
+    EXPECT_EQ(0x112u, vertexBuffer.legacyVertexFormat);
+    EXPECT_TRUE((vertexBuffer.usageFlags & RENDER_BUFFER_NPATCHES) != 0);
+
+    RenderBufferDescription indices;
+    indices.byteSize = 128 * sizeof(unsigned short);
+    EXPECT_TRUE(indices.Is_Valid());
+    EXPECT_EQ(0u, indices.legacyVertexFormat);
+    EXPECT_FALSE(indices.Is_Dynamic());
+}
+
 TEST(RendererBackend, UninitializedCapabilitiesDoNotAdvertiseFeatures)
 {
     const RenderCapabilities caps;

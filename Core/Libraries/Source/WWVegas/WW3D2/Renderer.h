@@ -62,6 +62,34 @@ struct RenderCapabilities
     unsigned maxSimultaneousTextures;
 };
 
+// Transitional descriptions for legacy W3D geometry allocations. They
+// contain neither Direct3D interfaces nor native D3D usage/pool enums.
+// A modern backend will translate the original W3D vertex layout to a
+// programmable input layout. The DX8 adapter interprets legacyVertexFormat
+// as the original FVF bitmask until buffer binding is migrated.
+enum RenderBufferUsageFlags
+{
+    RENDER_BUFFER_STATIC = 0,
+    RENDER_BUFFER_DYNAMIC = 1 << 0,
+    RENDER_BUFFER_SOFTWARE_VERTEX_PROCESSING = 1 << 1,
+    RENDER_BUFFER_NPATCHES = 1 << 2
+};
+
+struct RenderBufferDescription
+{
+    RenderBufferDescription()
+        : byteSize(0), legacyVertexFormat(0), usageFlags(RENDER_BUFFER_STATIC)
+    {
+    }
+
+    unsigned byteSize;
+    unsigned legacyVertexFormat; // 0 for 16-bit index buffers.
+    unsigned usageFlags;
+
+    bool Is_Valid() const { return byteSize > 0; }
+    bool Is_Dynamic() const { return (usageFlags & RENDER_BUFFER_DYNAMIC) != 0; }
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -143,6 +171,17 @@ public:
     // Kept separate from Shutdown because WW3D historically releases the
     // texture manager before shutting down the graphics device.
     static void Release_Texture_Resources();
+
+    // Legacy bridge: resource allocation and final COM release are owned by
+    // the backend, while DX8VertexBufferClass/DX8IndexBufferClass still store
+    // native pointers for the unmigrated DX8 draw and lock paths. No native
+    // types appear in the Renderer interface or the allocation descriptor.
+    // The next step is moving buffer mapping and binding to opaque handles.
+    static void * Create_Vertex_Buffer(const RenderBufferDescription & description);
+    static void * Create_Index_Buffer(const RenderBufferDescription & description);
+    static void Release_Vertex_Buffer(void * buffer);
+    static void Release_Index_Buffer(void * buffer);
+    static void Discard_Managed_Resources();
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);
