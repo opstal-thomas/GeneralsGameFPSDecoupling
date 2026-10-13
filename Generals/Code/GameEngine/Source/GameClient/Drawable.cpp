@@ -394,6 +394,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 	m_locoInfo = nullptr;
 	m_physicsXform = nullptr;
 	m_hasRenderSamples = FALSE;
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 
 	// sanity
 	if( TheGameClient == nullptr || thingTemplate == nullptr )
@@ -2677,6 +2678,81 @@ void Drawable::getInterpolatedRenderPosition(Coord3D &outPosition) const
 }
 
 //-------------------------------------------------------------------------------------------------
+void Drawable::buildVisualTransform(Matrix3D &transformMtx)
+{
+	// Draw from a past/current simulation snapshot without touching the
+	// authoritative Object transform. Visual presentation intentionally lags
+	// a fixed tick to allow smooth rendering between 30 Hz game updates.
+	transformMtx = *getTransformMatrix();
+	if (isVisualInterpolationEnabled())
+	{
+		const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
+		// Keep terrain-aligned orientation authoritative until full 3D rotation
+		// interpolation can preserve slopes and banking.
+		if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
+		{
+			const Real angularDelta = DrawableInterpolationMath::shortestAngleDelta(
+				m_previousRenderYaw, m_currentRenderYaw);
+			transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
+		}
+
+		Coord3D visualPosition;
+		getInterpolatedRenderPosition(visualPosition);
+		transformMtx.Set_X_Translation(visualPosition.x);
+		transformMtx.Set_Y_Translation(visualPosition.y);
+		transformMtx.Set_Z_Translation(visualPosition.z);
+	}
+	if (!isInstanceIdentity())
+	{
+#ifdef ALLOW_TEMPORARIES
+		transformMtx = transformMtx * (*getInstanceMatrix());
+#else
+		transformMtx.postMul(*getInstanceMatrix());
+#endif
+	}
+
+	if (TheGlobalData->m_showClientPhysics && getObject() && !getObject()->isDisabledByType( DISABLED_HELD ))
+	{
+		applyPhysicsXform(&transformMtx);
+	}
+
+}
+
+//-------------------------------------------------------------------------------------------------
+// Perform early pose preparation only for render modules with live attachment
+// owners; other modules still prepare on demand when their drawable is drawn.
+void Drawable::prepareVisualPose()
+{
+	if (!TheGameClient || m_hidden || m_hiddenByStealth || getFullyObscuredByShroud())
+		return;
+
+	DrawModule **modules = getDrawModules();
+	Bool needsPreparation = FALSE;
+	for (DrawModule **dm = modules; *dm; ++dm)
+	{
+		if ((*dm)->needsVisualPosePreparation())
+		{
+			needsPreparation = TRUE;
+			break;
+		}
+	}
+	if (!needsPreparation)
+		return;
+
+	const UnsignedInt presentationFrame = TheGameClient->getPresentationFrameID();
+	if (m_preparedVisualPoseFrame == presentationFrame)
+		return;
+
+	buildVisualTransform(m_preparedVisualTransform);
+	m_preparedVisualPoseFrame = presentationFrame;
+	for (DrawModule **dm = modules; *dm; ++dm)
+	{
+		if ((*dm)->needsVisualPosePreparation())
+			(*dm)->prepareVisualPose(&m_preparedVisualTransform);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::draw()
 {
 	if ( getObject() && getObject()->isEffectivelyDead() )
@@ -2711,41 +2787,13 @@ void Drawable::draw()
 	validatePos();
 #endif
 
-	// Draw from a past/current simulation snapshot without touching the
-	// authoritative Object transform. Visual presentation intentionally lags
-	// a fixed tick to allow smooth rendering between 30 Hz game updates.
-	Matrix3D transformMtx = *getTransformMatrix();
-	if (isVisualInterpolationEnabled())
-	{
-		const Real alpha = DrawableInterpolationMath::clampAlpha(TheFramePacer->getLogicFramePhase());
-		// Keep terrain-aligned orientation authoritative until full 3D rotation
-		// interpolation can preserve slopes and banking.
-		if (!isKindOf(KINDOF_STICK_TO_TERRAIN_SLOPE))
-		{
-			const Real angularDelta = DrawableInterpolationMath::shortestAngleDelta(
-				m_previousRenderYaw, m_currentRenderYaw);
-			transformMtx.Rotate_Z(-(1.0f - alpha) * angularDelta);
-		}
-
-		Coord3D visualPosition;
-		getInterpolatedRenderPosition(visualPosition);
-		transformMtx.Set_X_Translation(visualPosition.x);
-		transformMtx.Set_Y_Translation(visualPosition.y);
-		transformMtx.Set_Z_Translation(visualPosition.z);
-	}
-	if (!isInstanceIdentity())
-	{
-#ifdef ALLOW_TEMPORARIES
-		transformMtx = transformMtx * (*getInstanceMatrix());
-#else
-		transformMtx.postMul(*getInstanceMatrix());
-#endif
-	}
-
-	if (TheGlobalData->m_showClientPhysics && getObject() && !getObject()->isDisabledByType( DISABLED_HELD ))
-	{
-		applyPhysicsXform(&transformMtx);
-	}
+	// Reuse the exact matrix that supplied this frame's bone attachments.
+	// In particular, client physics must not be integrated a second time.
+	Matrix3D transformMtx;
+	if (TheGameClient && m_preparedVisualPoseFrame == TheGameClient->getPresentationFrameID())
+		transformMtx = m_preparedVisualTransform;
+	else
+		buildVisualTransform(transformMtx);
 
 	for (DrawModule** dm = getDrawModules(); *dm; ++dm)
 	{
@@ -4200,6 +4248,7 @@ DrawableID Drawable::getID() const
 void Drawable::friend_bindToObject( Object *obj ) ///< bind this drawable to an object ID
 {
 	m_object = obj;
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 	// An object rebind, including load/ghost transitions, invalidates the old pose.
 	m_hasRenderSamples = FALSE;
 	if (getObject())
@@ -5491,6 +5540,7 @@ void Drawable::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void Drawable::loadPostProcess()
 {
+	m_preparedVisualPoseFrame = (UnsignedInt)-1;
 	// Saved games persist authoritative transforms, not render interpolation
 	// history. Begin again from the loaded pose on the next logic tick.
 	m_hasRenderSamples = FALSE;
