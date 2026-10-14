@@ -77,9 +77,36 @@ unsigned Renderer::Get_Render_Thread_ID()
     return DX8Wrapper::_Get_Main_Thread_ID();
 }
 
+bool Renderer::Has_Active_Device()
+{
+    return DX8Wrapper::_Get_D3D_Device8() != nullptr;
+}
+
 void Renderer::Set_Gamma(float gamma, float bright, float contrast, bool calibrate, bool uselimit)
 {
     DX8Wrapper::Set_Gamma(gamma, bright, contrast, calibrate, uselimit);
+}
+
+void Renderer::Set_Hardware_Cursor_Visible(bool visible)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->ShowCursor(visible ? TRUE : FALSE);
+}
+
+bool Renderer::Set_Hardware_Cursor_Image(unsigned hotspotX, unsigned hotspotY,
+                                         RenderSurfaceHandle surface)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    return device && device->SetCursorProperties(hotspotX, hotspotY,
+        reinterpret_cast<IDirect3DSurface8 *>(surface)) == S_OK;
+}
+
+void Renderer::Set_Hardware_Cursor_Position(int x, int y)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->SetCursorPosition(x, y, D3DCURSOR_IMMEDIATE_UPDATE);
 }
 
 void Renderer::Begin_Scene()

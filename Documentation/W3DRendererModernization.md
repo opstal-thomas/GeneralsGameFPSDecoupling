@@ -513,7 +513,7 @@ particles also request transparent-black texture borders using semantic
 address and packed-border-color state, matching the old DX8 behavior.
 
 The actual DX8 vertex/index buffer allocations and memory ownership are
-unchanged. Height-map rendering, water, mouse and display
+unchanged. Height-map rendering, water and display
 overlays remain to be audited and migrated before the renderer cutover.
 
 ### Smudge hardware probe and backbuffer decoupling
@@ -536,6 +536,17 @@ The DX8 backend preserves the exact legacy POINTS vertex-buffer usage/FVF,
 eight sprite-state writes, and indexed or point-list draw commands.
 The DX8 snow index buffer and shared dynamic VB allocation are still legacy
 types; those can be migrated separately without changing the effect.
+
+### Cursor presentation decoupling
+
+The hardware/animated cursor now requests active-device status, visibility,
+surface/hotspot selection and immediate position updates through `Renderer`.
+The DX8 backend uses the same native ShowCursor, SetCursorProperties and
+SetCursorPosition calls, preserving the existing mouse update thread and
+frame-by-frame flicker workaround. Cursor textures continue to use the W3D
+texture/surface reference-counting model. This is backend presentation
+preparation only: a future DX12 backend may prefer operating-system cursors
+or a compositor rather than exposing D3D8 cursor surfaces.
 
 ### Known remaining Direct3D 8 dependencies
 

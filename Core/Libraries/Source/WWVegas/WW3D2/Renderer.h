@@ -579,6 +579,8 @@ public:
     // DX8Wrapper to resource and asynchronous-loading callers.
     static bool Is_Initialized();
     static unsigned Get_Render_Thread_ID();
+    // The device may be absent in lite/reset modes even after initialization.
+    static bool Has_Active_Device();
 
     // Device selection, resolution and present policy stay behind the
     // backend boundary. The DX8 implementation preserves legacy semantics.
@@ -609,6 +611,14 @@ public:
     static unsigned Get_Back_Buffer_Format();
 
     static void Set_Gamma(float gamma, float bright, float contrast, bool calibrate = true, bool uselimit = true);
+
+    // Cursor image, hotspot and immediate position updates are device/window
+    // presentation operations, not gameplay rendering. The supplied surface
+    // remains caller-owned and may be released after the backend call.
+    static void Set_Hardware_Cursor_Visible(bool visible);
+    static bool Set_Hardware_Cursor_Image(unsigned hotspotX, unsigned hotspotY,
+                                          RenderSurfaceHandle surface);
+    static void Set_Hardware_Cursor_Position(int x, int y);
 
     static void Begin_Scene();
     static void End_Scene(bool flip_frame = true);

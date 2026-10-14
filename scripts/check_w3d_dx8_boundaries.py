@@ -20,6 +20,7 @@ FULLY_ROUTED = [
     WW3D / "streakRender.cpp",
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DScorch.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSnow.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainBackground.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"),
@@ -70,6 +71,12 @@ def main() -> int:
     errors = []
     for path in FULLY_ROUTED:
         errors.extend(check(path, [r"\bDX8Wrapper::"]))
+    errors.extend(check(Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp"), [
+        r"\bLPDIRECT3DDEVICE8\b",
+        r"\bIDirect3DDevice8\b",
+        r"\bD3DCURSOR_IMMEDIATE_UPDATE\b",
+        r"\bPeek_D3D_Surface\s*\(",
+    ]))
     errors.extend(check(WW3D / "surfaceclass.h", [
         r"\bIDirect3DSurface8\s*\*\s*D3DSurface\b",
     ]))
