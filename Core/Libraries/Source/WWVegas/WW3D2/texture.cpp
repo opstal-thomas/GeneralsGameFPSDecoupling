@@ -85,7 +85,7 @@ TextureBaseClass::TextureBaseClass
 	bool reducible
 )
 :	MipLevelCount(mip_level_count),
-	D3DTexture(nullptr),
+	RenderTexture(nullptr),
 	Initialized(false),
    Name(""),
 	FullPath(""),
@@ -120,10 +120,10 @@ TextureBaseClass::~TextureBaseClass()
 	delete ThumbnailLoadTask;
 	ThumbnailLoadTask=nullptr;
 
-	if (D3DTexture)
+	if (RenderTexture)
 	{
-		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-		D3DTexture = nullptr;
+		Renderer::Release_Texture(RenderTexture);
+		RenderTexture = nullptr;
 	}
 
 	DX8TextureManagerClass::Remove(this);
@@ -202,10 +202,10 @@ void TextureBaseClass::Invalidate()
 		return;
 	}
 
-	if (D3DTexture)
+	if (RenderTexture)
 	{
-		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-		D3DTexture = nullptr;
+		Renderer::Release_Texture(RenderTexture);
+		RenderTexture = nullptr;
 	}
 
 	Initialized=false;
@@ -237,10 +237,10 @@ void TextureBaseClass::Invalidate()
 		return;
 	}
 
-	if (D3DTexture)
+	if (RenderTexture)
 	{
-		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-		D3DTexture = nullptr;
+		Renderer::Release_Texture(RenderTexture);
+		RenderTexture = nullptr;
 	}
 
 	Initialized=false;
@@ -252,10 +252,15 @@ void TextureBaseClass::Invalidate()
 //! Returns a pointer to the d3d texture
 /*!
 */
-IDirect3DBaseTexture8 * TextureBaseClass::Peek_D3D_Base_Texture() const
+RenderTextureHandle TextureBaseClass::Peek_Render_Texture() const
 {
 	LastAccessed=WW3D::Get_Sync_Time();
-	return D3DTexture;
+	return RenderTexture;
+}
+
+IDirect3DBaseTexture8 * TextureBaseClass::Peek_D3D_Base_Texture() const
+{
+	return reinterpret_cast<IDirect3DBaseTexture8 *>(Peek_Render_Texture());
 }
 
 //**********************************************************************************************
@@ -264,17 +269,18 @@ IDirect3DBaseTexture8 * TextureBaseClass::Peek_D3D_Base_Texture() const
 */
 void TextureBaseClass::Set_D3D_Base_Texture(IDirect3DBaseTexture8* tex)
 {
-	// (gth) Generals does stuff directly with the D3DTexture pointer so lets
-	// reset the access timer whenever someon messes with this pointer.
-	LastAccessed=WW3D::Get_Sync_Time();
+	Set_Render_Texture(reinterpret_cast<RenderTextureHandle>(tex));
+}
 
-	if (D3DTexture != nullptr) {
-		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-	}
-	D3DTexture = tex;
-	if (D3DTexture != nullptr) {
-		Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-	}
+void TextureBaseClass::Set_Render_Texture(RenderTextureHandle texture)
+{
+	// Match the previous release/retain ordering and refresh the access time.
+	LastAccessed=WW3D::Get_Sync_Time();
+	if (RenderTexture)
+		Renderer::Release_Texture(RenderTexture);
+	RenderTexture = texture;
+	if (RenderTexture)
+		Renderer::Retain_Texture(RenderTexture);
 }
 
 
@@ -285,8 +291,8 @@ void TextureBaseClass::Set_D3D_Base_Texture(IDirect3DBaseTexture8* tex)
 void TextureBaseClass::Load_Locked_Surface()
 {
 	WWPROFILE(("TextureClass::Load_Locked_Surface()"));
-	if (D3DTexture) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
-	D3DTexture=nullptr;
+	if (RenderTexture) Renderer::Release_Texture(RenderTexture);
+	RenderTexture=nullptr;
 	TextureLoader::Request_Thumbnail(this);
 	Initialized=false;
 }
@@ -301,7 +307,7 @@ bool TextureBaseClass::Is_Missing_Texture()
 	bool flag = false;
 	IDirect3DBaseTexture8 *missing_texture = MissingTexture::_Get_Missing_Texture();
 
-	if (D3DTexture == missing_texture)
+	if (RenderTexture == reinterpret_cast<RenderTextureHandle>(missing_texture))
 		flag = true;
 
 	if (missing_texture)
@@ -331,13 +337,13 @@ void TextureBaseClass::Set_Texture_Name(const char * name)
 */
 unsigned int TextureBaseClass::Get_Priority()
 {
-	if (!D3DTexture)
+	if (!RenderTexture)
 	{
-		WWASSERT_PRINT(0, "Get_Priority: D3DTexture is null!");
+		WWASSERT_PRINT(0, "Get_Priority: RenderTexture is null!");
 		return 0;
 	}
 
-	return Renderer::Get_Texture_Priority(reinterpret_cast<RenderTextureHandle>(D3DTexture));
+	return Renderer::Get_Texture_Priority(RenderTexture);
 }
 
 
@@ -347,13 +353,13 @@ unsigned int TextureBaseClass::Get_Priority()
 */
 unsigned int TextureBaseClass::Set_Priority(unsigned int priority)
 {
-	if (!D3DTexture)
+	if (!RenderTexture)
 	{
-		WWASSERT_PRINT(0, "Set_Priority: D3DTexture is null!");
+		WWASSERT_PRINT(0, "Set_Priority: RenderTexture is null!");
 		return 0;
 	}
 
-	return Renderer::Set_Texture_Priority(reinterpret_cast<RenderTextureHandle>(D3DTexture), priority);
+	return Renderer::Set_Texture_Priority(RenderTexture, priority);
 }
 
 
@@ -634,7 +640,7 @@ TextureClass::TextureClass
 	description.mipLevels = static_cast<unsigned>(mip_level_count);
 	description.memory = Get_Render_Texture_Memory(pool);
 	description.renderTarget = rendertarget;
-	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(
 		Renderer::Create_Texture_2D(description)));
 
 	if (pool==POOL_DEFAULT)
@@ -727,7 +733,7 @@ TextureClass::TextureClass
 	if (!WW3D::Is_Texturing_Enabled())
 	{
 		Initialized=true;
-		Poke_Texture(nullptr);
+		Poke_Render_Texture(nullptr);
 	}
 
 	// Find original size from the thumbnail (but don't create thumbnail texture yet!)
@@ -784,7 +790,7 @@ TextureClass::TextureClass
 	default: break;
 	}
 
-	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(
         Renderer::Create_Texture_From_Surface(
             surface->Peek_Render_Surface(), static_cast<unsigned>(mip_level_count))));
 	LastAccessed=WW3D::Get_Sync_Time();
@@ -889,7 +895,7 @@ void TextureClass::Apply_New_Surface
 
 	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
-	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
@@ -1206,7 +1212,7 @@ ZTextureClass::ZTextureClass
 	description.pixelFormat = static_cast<unsigned>(zformat);
 	description.mipLevels = static_cast<unsigned>(mip_level_count);
 	description.memory = Get_Render_Texture_Memory(pool);
-	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(
 		Renderer::Create_Depth_Texture_2D(description)));
 
 	if (pool==POOL_DEFAULT)
@@ -1254,7 +1260,7 @@ void ZTextureClass::Apply_New_Surface
 
 	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
-	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
@@ -1341,7 +1347,7 @@ CubeTextureClass::CubeTextureClass
 	description.mipLevels = static_cast<unsigned>(mip_level_count);
 	description.memory = Get_Render_Texture_Memory(pool);
 	description.renderTarget = rendertarget;
-	Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(
 		Renderer::Create_Texture_Cube(description)));
 
 	if (pool==POOL_DEFAULT)
@@ -1432,7 +1438,7 @@ CubeTextureClass::CubeTextureClass
 	if (!WW3D::Is_Texturing_Enabled())
 	{
 		Initialized=true;
-		Poke_Texture(nullptr);
+		Poke_Render_Texture(nullptr);
 	}
 
 	// Find original size from the thumbnail (but don't create thumbnail texture yet!)
@@ -1554,7 +1560,7 @@ void CubeTextureClass::Apply_New_Surface
 
 	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
-	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
@@ -1614,7 +1620,7 @@ VolumeTextureClass::VolumeTextureClass
 	description.pixelFormat = static_cast<unsigned>(format);
 	description.mipLevels = static_cast<unsigned>(mip_level_count);
 	description.memory = Get_Render_Texture_Memory(pool);
-	Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(
 		Renderer::Create_Texture_Volume(description)));
 
 	if (pool==POOL_DEFAULT)
@@ -1707,7 +1713,7 @@ VolumeTextureClass::VolumeTextureClass
 	if (!WW3D::Is_Texturing_Enabled())
 	{
 		Initialized=true;
-		Poke_Texture(nullptr);
+		Poke_Render_Texture(nullptr);
 	}
 
 	// Find original size from the thumbnail (but don't create thumbnail texture yet!)
@@ -1832,7 +1838,7 @@ void VolumeTextureClass::Apply_New_Surface
 
 	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
-	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
+	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;

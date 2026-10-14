@@ -91,6 +91,9 @@ def main() -> int:
     errors.extend(check(WW3D / "surfaceclass.h", [
         r"\bIDirect3DSurface8\s*\*\s*D3DSurface\b",
     ]))
+    errors.extend(check(WW3D / "texture.h", [
+        r"\bIDirect3DBaseTexture8\s*\*\s*D3DTexture\b",
+    ]))
     errors.extend(check(WW3D / "texture.cpp", [
         r"\bPeek_D3D_Texture\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",
         r"\bD3DTexture\s*->\s*(?:GetPriority|SetPriority)\s*\(",

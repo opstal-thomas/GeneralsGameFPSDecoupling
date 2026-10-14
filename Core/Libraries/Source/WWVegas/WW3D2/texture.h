@@ -162,9 +162,8 @@ public:
 
 	// Transitional backend-neutral binding handle. The legacy native pointer
 	// remains available for unmigrated texture loading and surface APIs.
-	RenderTextureHandle Peek_Render_Texture() const {
-		return reinterpret_cast<RenderTextureHandle>(Peek_D3D_Base_Texture());
-	}
+	RenderTextureHandle Peek_Render_Texture() const;
+	void Set_Render_Texture(RenderTextureHandle texture);
 
 	PoolType Get_Pool() const { return Pool; }
 
@@ -210,7 +209,12 @@ public:
 protected:
 
 	void Load_Locked_Surface();
-	void Poke_Texture(IDirect3DBaseTexture8* tex) { D3DTexture = tex; }
+	// Adopt an already-owned renderer texture, without retaining another ref.
+	void Poke_Render_Texture(RenderTextureHandle texture) { RenderTexture = texture; }
+	// Compatibility for still-native DX8 reset/texture-loader callers.
+	void Poke_Texture(IDirect3DBaseTexture8* tex) {
+		Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(tex));
+	}
 
 	bool Initialized;
 
@@ -236,8 +240,8 @@ protected:
 
 private:
 
-	// Direct3D texture object
-	IDirect3DBaseTexture8 *D3DTexture;
+	// One backend-owned reference, opaque to the W3D texture base.
+	RenderTextureHandle RenderTexture;
 
 	// Name
 	StringClass Name;

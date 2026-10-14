@@ -453,6 +453,17 @@ file header's legacy on-disk structures are preserved exactly; FourCC parsing
 and the texture loader's legacy COM-return interfaces are separate remaining
 migration tasks. The boundary check guards both game variants.
 
+### Opaque texture storage and legacy compatibility
+
+The base W3D texture class now stores an opaque `RenderTextureHandle`
+rather than a native D3D8 COM pointer. Reference release/retain and access
+timestamps preserve the original behavior across invalidation, destruction
+and texture replacement. Newly allocated 2D, depth, cube and volume textures
+are adopted via opaque handles without converting them back to native
+D3D8 pointers. Legacy native getter/setter and reset/loader adoption methods
+remain as compatibility shims until their external callers are migrated.
+Legacy texture-load tasks still have native interfaces.
+
 ### Opaque surface storage and mip resource accounting
 
 `SurfaceClass` now stores an opaque retained `RenderSurfaceHandle` rather
