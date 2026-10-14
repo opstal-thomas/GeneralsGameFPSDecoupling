@@ -48,6 +48,7 @@
 #include "WWLib/wwstring.h"
 #include "WWMath/vector3.h"
 #include "texturefilter.h"
+#include "Renderer.h"
 
 struct IDirect3DBaseTexture8;
 struct IDirect3DTexture8;
@@ -158,6 +159,12 @@ public:
 	// texture accessors (dx8)
 	IDirect3DBaseTexture8 *Peek_D3D_Base_Texture() const;
 	void Set_D3D_Base_Texture(IDirect3DBaseTexture8* tex);
+
+	// Transitional backend-neutral binding handle. The legacy native pointer
+	// remains available for unmigrated texture loading and surface APIs.
+	RenderTextureHandle Peek_Render_Texture() const {
+		return reinterpret_cast<RenderTextureHandle>(Peek_D3D_Base_Texture());
+	}
 
 	PoolType Get_Pool() const { return Pool; }
 

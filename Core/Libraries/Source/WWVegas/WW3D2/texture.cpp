@@ -122,7 +122,7 @@ TextureBaseClass::~TextureBaseClass()
 
 	if (D3DTexture)
 	{
-		D3DTexture->Release();
+		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 		D3DTexture = nullptr;
 	}
 
@@ -204,7 +204,7 @@ void TextureBaseClass::Invalidate()
 
 	if (D3DTexture)
 	{
-		D3DTexture->Release();
+		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 		D3DTexture = nullptr;
 	}
 
@@ -239,7 +239,7 @@ void TextureBaseClass::Invalidate()
 
 	if (D3DTexture)
 	{
-		D3DTexture->Release();
+		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 		D3DTexture = nullptr;
 	}
 
@@ -269,11 +269,11 @@ void TextureBaseClass::Set_D3D_Base_Texture(IDirect3DBaseTexture8* tex)
 	LastAccessed=WW3D::Get_Sync_Time();
 
 	if (D3DTexture != nullptr) {
-		D3DTexture->Release();
+		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 	}
 	D3DTexture = tex;
 	if (D3DTexture != nullptr) {
-		D3DTexture->AddRef();
+		Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 	}
 }
 
@@ -285,7 +285,7 @@ void TextureBaseClass::Set_D3D_Base_Texture(IDirect3DBaseTexture8* tex)
 void TextureBaseClass::Load_Locked_Surface()
 {
 	WWPROFILE(("TextureClass::Load_Locked_Surface()"));
-	if (D3DTexture) D3DTexture->Release();
+	if (D3DTexture) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 	D3DTexture=nullptr;
 	TextureLoader::Request_Thumbnail(this);
 	Initialized=false;
@@ -389,7 +389,7 @@ unsigned TextureBaseClass::Get_Reduction() const
 void TextureBaseClass::Apply_Null(unsigned int stage)
 {
 	// This function sets the render states for a "null" texture
-	DX8Wrapper::Set_DX8_Texture(stage, nullptr);
+	Renderer::Bind_Texture(stage, nullptr);
 }
 
 // ----------------------------------------------------------------------------
@@ -961,11 +961,11 @@ void TextureClass::Apply(unsigned int stage)
 	// Set texture itself
 	if (WW3D::Is_Texturing_Enabled())
 	{
-		DX8Wrapper::Set_DX8_Texture(stage, Peek_D3D_Base_Texture());
+		Renderer::Bind_Texture(stage, Peek_Render_Texture());
 	}
 	else
 	{
-		DX8Wrapper::Set_DX8_Texture(stage, nullptr);
+		Renderer::Bind_Texture(stage, nullptr);
 	}
 
 	Filter.Apply(stage);
@@ -1245,7 +1245,7 @@ ZTextureClass::ZTextureClass
 */
 void ZTextureClass::Apply(unsigned int stage)
 {
-	DX8Wrapper::Set_DX8_Texture(stage, Peek_D3D_Base_Texture());
+	Renderer::Bind_Texture(stage, Peek_Render_Texture());
 }
 
 //**********************************************************************************************

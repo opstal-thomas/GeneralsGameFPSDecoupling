@@ -15,6 +15,28 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, TextureBindingHandleAcceptsAllTextureTypes)
+{
+    // A common texture binding handle must remain distinct from both
+    // render-target creation and geometry resource handles.
+    static_assert(std::is_pointer_v<RenderTextureHandle>);
+    static_assert(!std::is_convertible_v<RenderTexture2DHandle, RenderTextureHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureHandle, RenderTexture2DHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureHandle, RenderVertexBufferHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureHandle, RenderIndexBufferHandle>);
+    static_assert(std::is_same_v<decltype(&Renderer::Bind_Texture),
+        void (*)(unsigned, RenderTextureHandle)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Retain_Texture),
+        void (*)(RenderTextureHandle)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Release_Texture),
+        void (*)(RenderTextureHandle)>);
+
+    // Reference operations with null must never require an initialized
+    // graphics device. The real texture stage requires a graphics device.
+    Renderer::Retain_Texture(nullptr);
+    Renderer::Release_Texture(nullptr);
+}
+
 TEST(RendererBackend, TextureDescriptorsSupportRenderTargetsAndDepth)
 {
     const RenderTexture2DDescription uninitialized;

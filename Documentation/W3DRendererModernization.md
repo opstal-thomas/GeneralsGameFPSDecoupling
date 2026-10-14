@@ -36,6 +36,30 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Sixth milestone: texture stage binding and base-resource references
+
+TextureBaseClass and its standard 2D/depth texture bindings now select
+resources using a generic `RenderTextureHandle` through
+`Renderer::Bind_Texture`. This binding handle is distinct from the
+`RenderTexture2DHandle` used for allocation, because the stage accepts
+cube, volume, ordinary 2D and depth textures. The DX8 backend forwards
+these stage bindings through `DX8Wrapper::Set_DX8_Texture`, retaining its
+existing texture cache, AddRef/Release logic, stage range handling and
+render-state accounting. The existing texturing-disabled branch still
+binds null, and texture filtering is applied in the same order.
+
+Central TextureBaseClass destruction, invalidation, and texture-reference
+replacement now call backend `Release_Texture` and `Retain_Texture`.
+Those refcount methods are deliberately not tied to the render thread
+because texture loading can also happen asynchronously. Other direct COM
+references in texture loaders, D3D surface operations, shader managers,
+and derived texture classes remain intact for now.
+
+This is a deliberate compatibility stage; the texture owners still
+contain native DX8 pointers, and some specialized resource paths continue
+to reach DX8Wrapper. No texture assets, resource formats, or frame/render
+ordering are changed.
+
 ### Fifth milestone: procedural 2D textures and render-target allocation
 
 W3D procedural 2D textures, color render targets and depth textures now

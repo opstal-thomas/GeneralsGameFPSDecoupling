@@ -473,3 +473,26 @@ RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDes
         Get_Legacy_Texture_Memory(description.memory));
     return reinterpret_cast<RenderTexture2DHandle>(texture);
 }
+
+
+// Texture binding is the one point where W3D texture stage selection is
+// translated into DX8 device state. This forwards through the existing
+// DX8Wrapper state cache, preserving AddRef/Release and change suppression.
+void Renderer::Bind_Texture(unsigned stage, RenderTextureHandle texture)
+{
+    DX8Wrapper::Set_DX8_Texture(stage, reinterpret_cast<IDirect3DBaseTexture8 *>(texture));
+}
+
+void Renderer::Retain_Texture(RenderTextureHandle texture)
+{
+    // Texture loading and invalidation can occur outside the render thread.
+    // Only reference count manipulation is permitted here.
+    if (texture)
+        reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->AddRef();
+}
+
+void Renderer::Release_Texture(RenderTextureHandle texture)
+{
+    if (texture)
+        reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->Release();
+}

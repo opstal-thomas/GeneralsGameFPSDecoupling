@@ -43,6 +43,12 @@ using RenderIndexBufferHandle = RendererIndexBufferResource *;
 struct RendererTexture2DResource;
 using RenderTexture2DHandle = RendererTexture2DResource *;
 
+// All existing W3D texture kinds (2D, cube, volume and depth) may be bound
+// through the same stage. Distinct from the 2D creation handle so that
+// callers cannot accidentally use an arbitrary texture as a 2D render target.
+struct RendererTextureResource;
+using RenderTextureHandle = RendererTextureResource *;
+
 struct RenderViewport
 {
     unsigned int x;
@@ -250,6 +256,17 @@ public:
     // Both creation entry points support the original device-reset tracker.
     static RenderTexture2DHandle Create_Texture_2D(const RenderTexture2DDescription & description);
     static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
+
+    // Texture stage binding retains the original DX8 reference cache,
+    // texture-stage invalidation and AddRef/Release semantics. The abstract
+    // handle supports all W3D texture kinds, including cube and volume maps.
+    static void Bind_Texture(unsigned stage, RenderTextureHandle texture);
+
+    // Explicit COM reference operations remain backend-specific. These
+    // methods are also called by texture loader threads and must not assume
+    // that the caller is the render thread. Null handles are valid no-ops.
+    static void Retain_Texture(RenderTextureHandle texture);
+    static void Release_Texture(RenderTextureHandle texture);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);
