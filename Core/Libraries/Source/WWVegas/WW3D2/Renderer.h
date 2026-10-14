@@ -30,6 +30,7 @@ class LightEnvironmentClass;
 class CameraClass;
 class DynamicVBAccessClass;
 class DynamicIBAccessClass;
+class IndexBufferClass;
 class Vector3;
 class Vector4;
 class Matrix3D;
@@ -648,6 +649,9 @@ public:
     static void Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access);
     static void Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
                                            unsigned short baseVertexIndex);
+    // Persistent W3D index buffers are distinct from ring-buffer accessors.
+    static void Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
+                                          unsigned short baseVertexIndex);
 
     // W3D retains ownership of existing native texture references for now.
     // Both creation entry points support the original device-reset tracker.

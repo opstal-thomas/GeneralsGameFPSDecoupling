@@ -532,6 +532,12 @@ void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
     DX8Wrapper::Set_Index_Buffer(access, baseVertexIndex);
 }
 
+void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
+                                        unsigned short baseVertexIndex)
+{
+    DX8Wrapper::Set_Index_Buffer(buffer, baseVertexIndex);
+}
+
 
 static D3DPOOL Get_Legacy_Texture_Memory(RenderTextureMemory memory)
 {
