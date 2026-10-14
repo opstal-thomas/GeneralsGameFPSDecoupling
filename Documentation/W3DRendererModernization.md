@@ -36,6 +36,25 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Tenth milestone: depth, blending, raster and alpha state
+
+The two game-specific ShaderClass implementations (Generals and Zero Hour)
+now forward their common fixed-function pixel blending and alpha-test
+state through a backend-neutral RenderBlendState. The native backend maps
+blend factors and compare functions to D3D8. This retains the original
+blend/alpha state update order and existing shader-dirty bit behavior,
+including the color-write-disable emulation and legacy alpha threshold.
+
+Depth compare/write, culling orientation (including the global inverted
+backface mode) and final alpha-test enable also use neutral Renderer
+calls. Unlike texture combiners, these states can be represented directly
+by modern raster/depth/blend pipeline descriptions.
+
+Special cases remain in the legacy shader implementation: device-dependent
+texture combiners, multiple stages, fog, specular and N-Patches. Zero Hour
+also has vendor-specific Voodoo3 paths. Those must remain intact until a
+modern material/shader implementation can reproduce them visually.
+
 ### Ninth milestone: backend-neutral sampler state
 
 W3D's TextureFilterClass now resolves its min/mag/mip filters and U/V address

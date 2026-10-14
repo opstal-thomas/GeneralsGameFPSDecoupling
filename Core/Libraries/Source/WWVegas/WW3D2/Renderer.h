@@ -240,6 +240,62 @@ struct RenderSamplerDescription
     RenderSamplerAddress addressV;
 };
 
+// The original W3D shaders encode depth, cull and alpha blending into
+// bitfields. These states describe their graphics meaning, not the legacy
+// DX8 values. A modern backend can translate them into immutable PSO keys.
+enum RenderBlendFactor
+{
+    RENDER_BLEND_ZERO,
+    RENDER_BLEND_ONE,
+    RENDER_BLEND_SRC_COLOR,
+    RENDER_BLEND_INV_SRC_COLOR,
+    RENDER_BLEND_SRC_ALPHA,
+    RENDER_BLEND_INV_SRC_ALPHA,
+    RENDER_BLEND_DEST_COLOR
+};
+
+enum RenderCompareFunc
+{
+    RENDER_COMPARE_NEVER,
+    RENDER_COMPARE_LESS,
+    RENDER_COMPARE_EQUAL,
+    RENDER_COMPARE_LESS_EQUAL,
+    RENDER_COMPARE_GREATER,
+    RENDER_COMPARE_NOT_EQUAL,
+    RENDER_COMPARE_GREATER_EQUAL,
+    RENDER_COMPARE_ALWAYS
+};
+
+enum RenderCullMode
+{
+    RENDER_CULL_NONE,
+    RENDER_CULL_CW,
+    RENDER_CULL_CCW
+};
+
+struct RenderBlendState
+{
+    RenderBlendState()
+        : source(RENDER_BLEND_ONE), destination(RENDER_BLEND_ZERO),
+          blendEnabled(false), alphaTestEnabled(false),
+          alphaReference(0x60), alphaCompare(RENDER_COMPARE_GREATER_EQUAL),
+          colorWriteEnabled(true)
+    {
+    }
+
+    RenderBlendFactor source;
+    RenderBlendFactor destination;
+    bool blendEnabled;
+    bool alphaTestEnabled;
+    unsigned alphaReference;
+    RenderCompareFunc alphaCompare;
+    // The DX8 compatibility path emulates disabled color writes using
+    // ZERO/ONE blending. DX12 can use a native render-target write mask.
+    bool colorWriteEnabled;
+
+    bool Is_Opaque() const { return !blendEnabled && !alphaTestEnabled; }
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -377,6 +433,15 @@ public:
     // backend-specific texture stage state, preserving DX8 state caching.
     static void Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler);
     static void Set_Texture_Max_Anisotropy(unsigned stage, unsigned level);
+
+    // W3D material/shader state. Keep the historic SetRenderState ordering
+    // and dirty-field update behavior inside the DX8 backend. Fixed-function
+    // texture combiners, fog and patch factors are not migrated yet.
+    static void Apply_Blend_State(const RenderBlendState & state);
+    static void Set_Depth_Compare(RenderCompareFunc compare);
+    static void Set_Depth_Write(bool enabled);
+    static void Set_Cull_Mode(RenderCullMode cullMode);
+    static void Set_Alpha_Test_Enabled(bool enabled);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

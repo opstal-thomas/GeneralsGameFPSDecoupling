@@ -44,12 +44,13 @@
 #include "w3d_file.h"
 #include "WWDebug/wwdebug.h"
 #include "dx8wrapper.h"
+#include "WW3D2/Renderer.h"
 #include "dx8caps.h"
 
 
 bool ShaderClass::ShaderDirty=true;
 unsigned long ShaderClass::CurrentShader=0;
-unsigned long _PolygonCullMode = D3DCULL_CW;
+RenderCullMode _PolygonCullMode = RENDER_CULL_CW;
 
 
 /*
@@ -361,36 +362,24 @@ void ShaderClass::Report_Unable_To_Fog (const char *source)
 #endif
 }
 
-class Blend
+// ShaderClass blend values remain W3D-specific. Translate them once to
+// backend-neutral blend factors before applying the cached render state.
+const RenderBlendFactor srcBlendLUT[ShaderClass::SRCBLEND_MAX] =
 {
-public:
-
-	Blend(D3DBLEND f, bool ab)
-	{
-		func = f;
-		useAlpha = ab;
-	}
-
-	D3DBLEND	func;
-	bool		useAlpha;
+    RENDER_BLEND_ZERO,
+    RENDER_BLEND_ONE,
+    RENDER_BLEND_SRC_ALPHA,
+    RENDER_BLEND_DEST_COLOR
 };
 
-const Blend srcBlendLUT[ShaderClass::SRCBLEND_MAX] =
+const RenderBlendFactor dstBlendLUT[ShaderClass::DSTBLEND_MAX] =
 {
-	Blend(D3DBLEND_ZERO, false),
-	Blend(D3DBLEND_ONE, false),
-	Blend(D3DBLEND_SRCALPHA, true),
- 	Blend(D3DBLEND_DESTCOLOR, true)
-};
-
-const Blend dstBlendLUT[ShaderClass::DSTBLEND_MAX] =
-{
-	Blend(D3DBLEND_ZERO, false),
-	Blend(D3DBLEND_ONE, false),
- 	Blend(D3DBLEND_SRCCOLOR, false),
- 	Blend(D3DBLEND_INVSRCCOLOR, false),
- 	Blend(D3DBLEND_SRCALPHA, true),
- 	Blend(D3DBLEND_INVSRCALPHA, true)
+    RENDER_BLEND_ZERO,
+    RENDER_BLEND_ONE,
+    RENDER_BLEND_SRC_COLOR,
+    RENDER_BLEND_INV_SRC_COLOR,
+    RENDER_BLEND_SRC_ALPHA,
+    RENDER_BLEND_INV_SRC_ALPHA
 };
 
 
@@ -435,53 +424,43 @@ void ShaderClass::Apply()
 		if(Get_Color_Mask() != ShaderClass::COLOR_WRITE_ENABLE)
 			planeMask = 0;
 
-		D3DBLEND	sf;
-		D3DBLEND	df;
-		bool	blendAlpha = false;
+		RenderBlendFactor sf;
+		RenderBlendFactor df;
 
 		if(!planeMask)
 		{
-			sf = D3DBLEND_ZERO;
-			df = D3DBLEND_ONE;
+			// DX8 emulates disabled color writes with ZERO/ONE blending.
+			sf = RENDER_BLEND_ZERO;
+			df = RENDER_BLEND_ONE;
 		}
 		else
 		{
-			sf = srcBlendLUT[ int(Get_Src_Blend_Func()) ].func;
-			df = dstBlendLUT[ int(Get_Dst_Blend_Func()) ].func;
-			blendAlpha |= srcBlendLUT[ int(Get_Src_Blend_Func()) ].useAlpha;
-			blendAlpha |= dstBlendLUT[ int(Get_Dst_Blend_Func()) ].useAlpha;
+			sf = srcBlendLUT[int(Get_Src_Blend_Func())];
+			df = dstBlendLUT[int(Get_Dst_Blend_Func())];
 		}
 
-		BOOL blendOn = FALSE;
+		RenderBlendState blend;
+		blend.source = sf;
+		blend.destination = df;
+		blend.colorWriteEnabled = planeMask != 0;
+		blend.blendEnabled = (sf != RENDER_BLEND_ONE || df != RENDER_BLEND_ZERO);
+		blend.alphaTestEnabled = (Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE);
 
-		if(sf != D3DBLEND_ONE || df != D3DBLEND_ZERO)
+		if(blend.alphaTestEnabled)
 		{
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND,sf);
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND,df);
-			blendOn = TRUE;
-		}
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE,blendOn);
-
-		BOOL alphaTest = FALSE;
-
-		if(Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE)
-		{
-			unsigned char alphareference = 0x60;	// Alpha reference value that produces best results with mip-mapped textures.
-
-			if(sf == D3DBLEND_INVSRCALPHA)
+			const unsigned alphaReference = 0x60; // Legacy alpha-tested mipmap threshold.
+			if(sf == RENDER_BLEND_INV_SRC_ALPHA)
 			{
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF,0xff - alphareference);
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAFUNC,D3DCMP_LESSEQUAL);
+				blend.alphaReference = 0xff - alphaReference;
+				blend.alphaCompare = RENDER_COMPARE_LESS_EQUAL;
 			}
 			else
 			{
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF,alphareference);
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAFUNC,D3DCMP_GREATEREQUAL);
+				blend.alphaReference = alphaReference;
+				blend.alphaCompare = RENDER_COMPARE_GREATER_EQUAL;
 			}
-			blendAlpha = true;
-			alphaTest = TRUE;
 		}
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE,alphaTest);
+		Renderer::Apply_Blend_State(blend);
 
 		diff &= ~(ShaderClass::MASK_COLORMASK | ShaderClass::MASK_SRCBLEND | ShaderClass::MASK_DSTBLEND | ShaderClass::MASK_ALPHATEST);
 		if(!diff)
@@ -1018,16 +997,16 @@ void ShaderClass::Apply()
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_SPECULARENABLE,BOOL(Get_Secondary_Gradient()));
 
 	// DEPTH COMPARE FUNCTION
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC,D3DCMPFUNC(int(Get_Depth_Compare())+1));
+	Renderer::Set_Depth_Compare(static_cast<RenderCompareFunc>(Get_Depth_Compare()));
 
 	// DEPTH MASK
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ZWRITEENABLE,BOOL(Get_Depth_Mask()));
+	Renderer::Set_Depth_Write(Get_Depth_Mask() != ShaderClass::DEPTH_WRITE_DISABLE);
 
 	// DITHERING
 //	DX8Wrapper::Set_DX8_Render_State(D3DRS_DITHERENABLE,BOOL(Get_Dither_Mask()));
 
 	// CULLMODE
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE,Get_Cull_Mode() ? _PolygonCullMode : D3DCULL_NONE);
+	Renderer::Set_Cull_Mode(Get_Cull_Mode() ? _PolygonCullMode : RENDER_CULL_NONE);
 
 	// NPATCHES
 	if (diff&ShaderClass::MASK_NPATCHENABLE) {
@@ -1037,7 +1016,7 @@ void ShaderClass::Apply()
 	}
 
 	// Enable/disable alpha test
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE,BOOL(Get_Alpha_Test()));
+	Renderer::Set_Alpha_Test_Enabled(Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE);
 
 	// Enable/disable stencil test
 	// Not supported yet
@@ -1059,9 +1038,9 @@ void ShaderClass::Apply()
 void ShaderClass::Invert_Backface_Culling(bool onoff)
 {
 	if (onoff == true) {
-		_PolygonCullMode = D3DCULL_CCW;
+		_PolygonCullMode = RENDER_CULL_CCW;
 	} else {
-		_PolygonCullMode = D3DCULL_CW;
+		_PolygonCullMode = RENDER_CULL_CW;
 	}
 	Invalidate();
 }
@@ -1158,7 +1137,7 @@ int ShaderClass::Guess_Sort_Level() const
  *=============================================================================================*/
 bool ShaderClass::Is_Backface_Culling_Inverted()
 {
-	return (_PolygonCullMode == D3DCULL_CCW);
+	return (_PolygonCullMode == RENDER_CULL_CCW);
 }
 
 StringClass ShaderClass::Get_Description() const

@@ -615,3 +615,80 @@ void Renderer::Set_Texture_Max_Anisotropy(unsigned stage, unsigned level)
 {
     DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MAXANISOTROPY, level);
 }
+
+
+static D3DBLEND To_DX8_Blend(RenderBlendFactor factor)
+{
+    switch (factor)
+    {
+    case RENDER_BLEND_ZERO: return D3DBLEND_ZERO;
+    case RENDER_BLEND_SRC_COLOR: return D3DBLEND_SRCCOLOR;
+    case RENDER_BLEND_INV_SRC_COLOR: return D3DBLEND_INVSRCCOLOR;
+    case RENDER_BLEND_SRC_ALPHA: return D3DBLEND_SRCALPHA;
+    case RENDER_BLEND_INV_SRC_ALPHA: return D3DBLEND_INVSRCALPHA;
+    case RENDER_BLEND_DEST_COLOR: return D3DBLEND_DESTCOLOR;
+    case RENDER_BLEND_ONE:
+    default: return D3DBLEND_ONE;
+    }
+}
+
+static D3DCMPFUNC To_DX8_Compare(RenderCompareFunc compare)
+{
+    switch (compare)
+    {
+    case RENDER_COMPARE_NEVER: return D3DCMP_NEVER;
+    case RENDER_COMPARE_LESS: return D3DCMP_LESS;
+    case RENDER_COMPARE_EQUAL: return D3DCMP_EQUAL;
+    case RENDER_COMPARE_GREATER: return D3DCMP_GREATER;
+    case RENDER_COMPARE_NOT_EQUAL: return D3DCMP_NOTEQUAL;
+    case RENDER_COMPARE_GREATER_EQUAL: return D3DCMP_GREATEREQUAL;
+    case RENDER_COMPARE_ALWAYS: return D3DCMP_ALWAYS;
+    case RENDER_COMPARE_LESS_EQUAL:
+    default: return D3DCMP_LESSEQUAL;
+    }
+}
+
+void Renderer::Apply_Blend_State(const RenderBlendState & state)
+{
+    // Original ShaderClass::Apply sets the factors only when blending is
+    // active, followed by the enable bit, alpha reference / compare and
+    // alpha-test enable. Preserve that exact order for the DX8 state cache.
+    if (state.blendEnabled)
+    {
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, To_DX8_Blend(state.source));
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, To_DX8_Blend(state.destination));
+    }
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE, state.blendEnabled);
+
+    if (state.alphaTestEnabled)
+    {
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF, state.alphaReference);
+        DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAFUNC, To_DX8_Compare(state.alphaCompare));
+    }
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE, state.alphaTestEnabled);
+}
+
+void Renderer::Set_Depth_Compare(RenderCompareFunc compare)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC, To_DX8_Compare(compare));
+}
+
+void Renderer::Set_Depth_Write(bool enabled)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ZWRITEENABLE, enabled);
+}
+
+void Renderer::Set_Cull_Mode(RenderCullMode cullMode)
+{
+    D3DCULL cull = D3DCULL_NONE;
+    if (cullMode == RENDER_CULL_CW)
+        cull = D3DCULL_CW;
+    else if (cullMode == RENDER_CULL_CCW)
+        cull = D3DCULL_CCW;
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE, cull);
+}
+
+void Renderer::Set_Alpha_Test_Enabled(bool enabled)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE, enabled);
+}

@@ -15,6 +15,45 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, BlendStateDescribesOpaqueAndTransparentMaterials)
+{
+    const RenderBlendState opaque;
+    EXPECT_TRUE(opaque.Is_Opaque());
+    EXPECT_FALSE(opaque.blendEnabled);
+    EXPECT_FALSE(opaque.alphaTestEnabled);
+    EXPECT_EQ(RENDER_BLEND_ONE, opaque.source);
+    EXPECT_EQ(RENDER_BLEND_ZERO, opaque.destination);
+    EXPECT_EQ(0x60u, opaque.alphaReference);
+    EXPECT_EQ(RENDER_COMPARE_GREATER_EQUAL, opaque.alphaCompare);
+    EXPECT_TRUE(opaque.colorWriteEnabled);
+
+    RenderBlendState alphaBlend;
+    alphaBlend.source = RENDER_BLEND_SRC_ALPHA;
+    alphaBlend.destination = RENDER_BLEND_INV_SRC_ALPHA;
+    alphaBlend.blendEnabled = true;
+    EXPECT_FALSE(alphaBlend.Is_Opaque());
+
+    RenderBlendState masked;
+    masked.alphaTestEnabled = true;
+    masked.alphaReference = 0x9f;
+    masked.alphaCompare = RENDER_COMPARE_LESS_EQUAL;
+    EXPECT_FALSE(masked.Is_Opaque());
+    EXPECT_EQ(0x9fu, masked.alphaReference);
+}
+
+TEST(RendererBackend, DepthAndCullModesAreBackendNeutral)
+{
+    EXPECT_NE(RENDER_COMPARE_LESS_EQUAL, RENDER_COMPARE_GREATER_EQUAL);
+    EXPECT_NE(RENDER_CULL_NONE, RENDER_CULL_CW);
+    EXPECT_NE(RENDER_CULL_CW, RENDER_CULL_CCW);
+    static_assert(std::is_same_v<decltype(&Renderer::Apply_Blend_State),
+                                 void (*)(const RenderBlendState &)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Depth_Compare),
+                                 void (*)(RenderCompareFunc)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Cull_Mode),
+                                 void (*)(RenderCullMode)>);
+}
+
 TEST(RendererBackend, SamplerDescriptionIsIndependentOfDirect3D)
 {
     const RenderSamplerDescription defaults;
