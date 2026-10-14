@@ -266,7 +266,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     const D3D_SHADER_MACRO * defines = untextured ? untexturedDefines
         : (twoStage ? twoStageDefines : texturedDefines);
     auto vs = solid ? CompileSolid(minimalShader, "W3D_VS", "vs_5_1")
-                    : Compile(shader, "W3D_VS", "vs_5_1");
+                    : Compile(shader, "W3D_VS", "vs_5_1", defines);
     auto ps = (solid || w3dVertexOnly)
         ? CompileSolid(minimalShader, "W3D_PS", "ps_5_1")
         : basicTexture
