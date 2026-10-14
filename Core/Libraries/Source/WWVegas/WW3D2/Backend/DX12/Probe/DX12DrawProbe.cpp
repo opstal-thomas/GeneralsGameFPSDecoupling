@@ -397,14 +397,14 @@ void Run(const wchar_t * shader)
     std::cout << "D3D12 WARP triangle center: " << unsigned(inside[0])
               << ',' << unsigned(inside[1]) << ',' << unsigned(inside[2])
               << ',' << unsigned(inside[3]) << '\n';
-    auto near = [](BYTE actual, int expected) {
+    auto closeTo = [](BYTE actual, int expected) {
         return std::abs(int(actual) - expected) <= 10;
     };
     // 128/255/255 texture * (1, 0.25, 0.5) diffuse vertex color.
-    if (!(near(inside[0], 128) && near(inside[1], 64) &&
-          near(inside[2], 128) && near(inside[3], 255) &&
-          near(outside[0], 0) && near(outside[1], 0) &&
-          near(outside[2], 0) && near(outside[3], 255)))
+    if (!(closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
+          closeTo(inside[2], 128) && closeTo(inside[3], 255) &&
+          closeTo(outside[0], 0) && closeTo(outside[1], 0) &&
+          closeTo(outside[2], 0) && closeTo(outside[3], 255)))
         throw std::runtime_error("D3D12 WARP pixel verification failed");
     std::cout << "D3D12 device, PSO, descriptors, triangle and readback: PASS\n";
 }
