@@ -7,10 +7,13 @@ endif()
 
 # Compile the same backend-owned device implementation intended for WW3D2,
 # not an independent reimplementation in the test harness.
-add_library(W3DDX12PresentationDevice STATIC ../DX12PresentationDevice.cpp)
+add_library(W3DDX12PresentationDevice STATIC
+    ../DX12PresentationDevice.cpp
+    ../DX12IndexedMeshPass.cpp
+)
 target_compile_features(W3DDX12PresentationDevice PUBLIC cxx_std_17)
 target_compile_definitions(W3DDX12PresentationDevice PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(W3DDX12PresentationDevice PUBLIC d3d12 dxgi dxguid)
+target_link_libraries(W3DDX12PresentationDevice PUBLIC d3d12 dxgi dxguid d3dcompiler)
 
 add_executable(W3DDX12PresentationSmoke DX12PresentationSmoke.cpp)
 target_compile_features(W3DDX12PresentationSmoke PRIVATE cxx_std_17)
