@@ -65,6 +65,16 @@ void Renderer::Shutdown()
     Initialized = false;
 }
 
+bool Renderer::Is_Initialized()
+{
+    return DX8Wrapper::Is_Initted();
+}
+
+unsigned Renderer::Get_Render_Thread_ID()
+{
+    return DX8Wrapper::_Get_Main_Thread_ID();
+}
+
 void Renderer::Set_Gamma(float gamma, float bright, float contrast, bool calibrate, bool uselimit)
 {
     DX8Wrapper::Set_Gamma(gamma, bright, contrast, calibrate, uselimit);
@@ -305,6 +315,8 @@ RenderCapabilities Renderer::Get_Capabilities()
     const D3DCAPS8 & native = caps->Get_DX8_Caps();
     out.maxTextureWidth = native.MaxTextureWidth;
     out.maxTextureHeight = native.MaxTextureHeight;
+    out.maxVolumeExtent = native.MaxVolumeExtent;
+    out.maxTextureAspectRatio = native.MaxTextureAspectRatio;
     out.linearMinFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MINFLINEAR) != 0;
     out.linearMagFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MAGFLINEAR) != 0;
     out.linearMipFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MIPFLINEAR) != 0;

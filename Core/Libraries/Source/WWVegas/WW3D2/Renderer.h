@@ -111,6 +111,7 @@ struct RenderCapabilities
           cubeTextures(false), bumpEnvironmentMapping(false),
           pointSprites(false), maxSimultaneousTextures(0),
           maxTexturesPerPass(0), maxTextureWidth(0), maxTextureHeight(0),
+          maxVolumeExtent(0), maxTextureAspectRatio(0),
           linearMinFilter(false), linearMagFilter(false), linearMipFilter(false),
           anisotropicMinFilter(false), anisotropicMagFilter(false)
     {
@@ -127,6 +128,8 @@ struct RenderCapabilities
     unsigned maxTexturesPerPass;
     unsigned maxTextureWidth;
     unsigned maxTextureHeight;
+    unsigned maxVolumeExtent;
+    unsigned maxTextureAspectRatio;
     bool linearMinFilter;
     bool linearMagFilter;
     bool linearMipFilter;
@@ -520,6 +523,10 @@ public:
     // Initialized in WW3D::Init and shut down in WW3D::Shutdown.
     static bool Init(void * window, bool lite);
     static void Shutdown();
+    // Exact legacy DX8 initialization/thread identity checks, without exposing
+    // DX8Wrapper to resource and asynchronous-loading callers.
+    static bool Is_Initialized();
+    static unsigned Get_Render_Thread_ID();
 
     // Device selection, resolution and present policy stay behind the
     // backend boundary. The DX8 implementation preserves legacy semantics.

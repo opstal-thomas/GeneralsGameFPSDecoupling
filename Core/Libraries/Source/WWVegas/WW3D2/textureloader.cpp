@@ -342,7 +342,7 @@ void TextureLoader::Deinit()
 
 bool TextureLoader::Is_DX8_Thread()
 {
-	return (ThreadClass::_Get_Current_Thread_ID() == DX8Wrapper::_Get_Main_Thread_ID());
+	return (ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
 }
 
 
@@ -359,7 +359,7 @@ void TextureLoader::Validate_Texture_Size
 	unsigned& depth
 )
 {
-	const D3DCAPS8& dx8caps=DX8Wrapper::Get_Current_Caps()->Get_DX8_Caps();
+	const RenderCapabilities capabilities = Renderer::Get_Capabilities();
 
 	unsigned poweroftwowidth = 1;
 	while (poweroftwowidth < width)
@@ -379,20 +379,20 @@ void TextureLoader::Validate_Texture_Size
 		poweroftwodepth <<= 1;
 	}
 
-	if (poweroftwowidth>dx8caps.MaxTextureWidth)
+	if (poweroftwowidth>capabilities.maxTextureWidth)
 	{
-		poweroftwowidth=dx8caps.MaxTextureWidth;
+		poweroftwowidth=capabilities.maxTextureWidth;
 	}
-	if (poweroftwoheight>dx8caps.MaxTextureHeight)
+	if (poweroftwoheight>capabilities.maxTextureHeight)
 	{
-		poweroftwoheight=dx8caps.MaxTextureHeight;
+		poweroftwoheight=capabilities.maxTextureHeight;
 	}
-	if (poweroftwodepth>dx8caps.MaxVolumeExtent)
+	if (poweroftwodepth>capabilities.maxVolumeExtent)
 	{
-		poweroftwodepth=dx8caps.MaxVolumeExtent;
+		poweroftwodepth=capabilities.maxVolumeExtent;
 	}
 
-	const unsigned maxTextureAspectRatio = dx8caps.MaxTextureAspectRatio;
+	const unsigned maxTextureAspectRatio = capabilities.maxTextureAspectRatio;
 	if (maxTextureAspectRatio != 0)
 	{
 		if (poweroftwowidth>poweroftwoheight)
@@ -1658,7 +1658,7 @@ void TextureLoadTaskClass::Unlock_Surfaces()
 	{
 		if (LockedSurfacePtr[i])
 		{
-			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == DX8Wrapper::_Get_Main_Thread_ID());
+			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
 			DX8_ErrorCode(Peek_D3D_Texture()->UnlockRect(i));
 		}
 		LockedSurfacePtr[i] = nullptr;
@@ -2035,7 +2035,7 @@ void CubeTextureLoadTaskClass::Unlock_Surfaces()
 		{
 			if (LockedCubeSurfacePtr[f][i])
 			{
-				WWASSERT(ThreadClass::_Get_Current_Thread_ID() == DX8Wrapper::_Get_Main_Thread_ID());
+				WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
 				DX8_ErrorCode
 				(
 					Peek_D3D_Cube_Texture()->UnlockRect((D3DCUBEMAP_FACES)f,i)
@@ -2349,7 +2349,7 @@ void VolumeTextureLoadTaskClass::Unlock_Surfaces()
 	{
 		if (LockedSurfacePtr[i])
 		{
-			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == DX8Wrapper::_Get_Main_Thread_ID());
+			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
 			DX8_ErrorCode
 			(
 				Peek_D3D_Volume_Texture()->UnlockBox(i)
