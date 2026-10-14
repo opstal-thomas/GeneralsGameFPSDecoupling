@@ -764,8 +764,8 @@ void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disabl
 		return;
 	}
 	// Setup the vertex buffer, shader & texture.
-	DX8Wrapper::Set_Index_Buffer(m_indexTerrain,0);
-	DX8Wrapper::Set_Vertex_Buffer(m_vertexTerrain);
+	Renderer::Bind_Legacy_Index_Buffer(m_indexTerrain,0);
+	Renderer::Bind_Legacy_Vertex_Buffer(m_vertexTerrain);
   if (!disableTextures) {
 		if (m_terrainTexture4X) {
 			Renderer::Set_Texture(1, m_terrainTexture4X);
@@ -775,7 +775,7 @@ void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disabl
 			Renderer::Set_Texture(1, m_terrainTexture);
 		}
 	}
-	DX8Wrapper::Draw_Triangles(	0, m_curNumTerrainIndices/3, 0,	m_curNumTerrainVertices);
+	Renderer::Draw_Triangles(	0, m_curNumTerrainIndices/3, 0,	m_curNumTerrainVertices);
 #else
 	if (m_curNumTerrainIndices == 0) {
 		return;
@@ -784,8 +784,8 @@ void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disabl
 		return;
 	}
 	// Setup the vertex buffer, shader & texture.
-	DX8Wrapper::Set_Index_Buffer(m_indexTerrain,0);
-	DX8Wrapper::Set_Vertex_Buffer(m_vertexTerrain);
+	Renderer::Bind_Legacy_Index_Buffer(m_indexTerrain,0);
+	Renderer::Bind_Legacy_Vertex_Buffer(m_vertexTerrain);
   if (!disableTextures) {
 		if (m_terrainTexture4X) {
 			Renderer::Set_Texture(0, m_terrainTexture4X);
@@ -795,7 +795,7 @@ void W3DTerrainBackground::drawVisiblePolys(RenderInfoClass & rinfo, Bool disabl
 			Renderer::Set_Texture(0, m_terrainTexture);
 		}
 	}
-	DX8Wrapper::Draw_Triangles(	0, m_curNumTerrainIndices/3, 0,	m_curNumTerrainVertices);
+	Renderer::Draw_Triangles(	0, m_curNumTerrainIndices/3, 0,	m_curNumTerrainVertices);
 #endif
 }
 

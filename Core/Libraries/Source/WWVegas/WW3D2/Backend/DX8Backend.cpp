@@ -737,6 +737,16 @@ void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
     DX8Wrapper::Set_Index_Buffer(buffer, baseVertexIndex);
 }
 
+void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)
+{
+    DX8Wrapper::Set_Vertex_Buffer(buffer);
+}
+
+void Renderer::Set_Index_Buffer_Index_Offset(unsigned offset)
+{
+    DX8Wrapper::Set_Index_Buffer_Index_Offset(offset);
+}
+
 
 static D3DPOOL Get_Legacy_Texture_Memory(RenderTextureMemory memory)
 {
@@ -1438,8 +1448,20 @@ void Renderer::Set_Texture_Address(unsigned stage, RenderSamplerAxis axis,
     case RENDER_SAMPLER_AXIS_U:
     default: break;
     }
-    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, nativeField,
-        address == RENDER_SAMPLER_REPEAT ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+    D3DTEXTUREADDRESS nativeAddress = D3DTADDRESS_CLAMP;
+    switch (address)
+    {
+    case RENDER_SAMPLER_REPEAT: nativeAddress = D3DTADDRESS_WRAP; break;
+    case RENDER_SAMPLER_BORDER: nativeAddress = D3DTADDRESS_BORDER; break;
+    case RENDER_SAMPLER_CLAMP:
+    default: break;
+    }
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, nativeField, nativeAddress);
+}
+
+void Renderer::Set_Texture_Border_Color(unsigned stage, unsigned packedARGB)
+{
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_BORDERCOLOR, packedARGB);
 }
 
 void Renderer::Set_Source_Blend(RenderBlendFactor factor)

@@ -485,6 +485,19 @@ calls and native render target, pixel shader and effect resources. The current
 work removes DX8 *call sites* but does not yet provide a complete DX12
 execution path or parity for those effects.
 
+### Additional terrain submission and effects decoupling
+
+Terrain background, ground scorch marks, terrain tracks and terrain particles
+now bind the original persistent/dynamic W3D buffers, pack vertex colors and
+submit triangles through Renderer instead of directly calling DX8Wrapper.
+Track index-offset handling is kept explicit and backend-owned. Terrain
+particles also request transparent-black texture borders using semantic
+address and packed-border-color state, matching the old DX8 behavior.
+
+The actual DX8 vertex/index buffer allocations and memory ownership are
+unchanged. Snow, smudge, height-map rendering, water, mouse and display
+overlays remain to be audited and migrated before the renderer cutover.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

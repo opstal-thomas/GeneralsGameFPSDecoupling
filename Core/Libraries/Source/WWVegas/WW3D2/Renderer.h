@@ -32,6 +32,7 @@ class DynamicVBAccessClass;
 class DynamicIBAccessClass;
 struct RenderStateStruct;
 class IndexBufferClass;
+class VertexBufferClass;
 class Vector3;
 class Vector4;
 class Matrix3D;
@@ -301,7 +302,8 @@ enum RenderSamplerFilter
 enum RenderSamplerAddress
 {
     RENDER_SAMPLER_REPEAT,
-    RENDER_SAMPLER_CLAMP
+    RENDER_SAMPLER_CLAMP,
+    RENDER_SAMPLER_BORDER
 };
 
 // Per-field sampler updates avoid changing unrelated cached texture states.
@@ -731,6 +733,10 @@ public:
     // Persistent W3D index buffers are distinct from ring-buffer accessors.
     static void Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
                                           unsigned short baseVertexIndex);
+    static void Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer);
+    // Some legacy terrain tracks advance the index offset while reusing a
+    // single index buffer. Retain its exact draw-base semantics.
+    static void Set_Index_Buffer_Index_Offset(unsigned offset);
 
     // W3D retains ownership of existing native texture references for now.
     // Both creation entry points support the original device-reset tracker.
@@ -813,6 +819,8 @@ public:
                                    RenderSamplerFilter filter);
     static void Set_Texture_Address(unsigned stage, RenderSamplerAxis axis,
                                     RenderSamplerAddress address);
+    // Transparent black border for terrain particles; preserve packed ARGB.
+    static void Set_Texture_Border_Color(unsigned stage, unsigned packedARGB);
 
     // W3D material/shader state. Keep the historic SetRenderState ordering
     // and dirty-field update behavior inside the DX8 backend. Fixed-function

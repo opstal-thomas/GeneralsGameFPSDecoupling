@@ -88,7 +88,7 @@ W3DTerrainParticles::W3DTerrainParticles()
   , m_defaultPointAlpha(1.0f)
   , m_defaultPointOrientation(0)
 {
-	m_defaultDiffuse = DX8Wrapper::Convert_Color_Clamp(Vector4(m_defaultPointColor.X, m_defaultPointColor.Y, m_defaultPointColor.Z, m_defaultPointAlpha));
+	m_defaultDiffuse = Renderer::Pack_Color_ARGB_Clamp(Vector4(m_defaultPointColor.X, m_defaultPointColor.Y, m_defaultPointColor.Z, m_defaultPointAlpha));
 }
 
 void W3DTerrainParticles::render()
@@ -119,7 +119,7 @@ void W3DTerrainParticles::render()
 		if (bounds.width() < 2 || bounds.height() < 2)
 			continue;
 		
-		const UnsignedInt diffuse = m_pointDiffuse ? DX8Wrapper::Convert_Color_Clamp(m_pointDiffuse->Get_Array()[p]) : m_defaultDiffuse;
+		const UnsignedInt diffuse = m_pointDiffuse ? Renderer::Pack_Color_ARGB_Clamp(m_pointDiffuse->Get_Array()[p]) : m_defaultDiffuse;
 
 		ParticleContext particle;
 		particle.loc = loc;
@@ -256,10 +256,10 @@ void W3DTerrainParticles::flushBatch()
 			       m_numIndices * sizeof(UnsignedShort));
 		}
 
-		DX8Wrapper::Set_Index_Buffer(indexAccess, 0);
-		DX8Wrapper::Set_Vertex_Buffer(vertexAccess);
+		Renderer::Bind_Dynamic_Index_Buffer(indexAccess, 0);
+		Renderer::Bind_Dynamic_Vertex_Buffer(vertexAccess);
 		DX8_RECORD_TERRAIN_PARTICLE_BATCH(m_numIndices / 3);
-		DX8Wrapper::Draw_Triangles(0,
+		Renderer::Draw_Triangles(0,
 		                           m_numIndices / 3,
 		                           0,
 		                           m_numVertices);
@@ -330,9 +330,9 @@ void W3DTerrainParticles::updateSettings()
 	if (m_texture)
 	{
 		Renderer::Apply_Pending_State_Changes();
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ADDRESSU, D3DTADDRESS_BORDER);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_ADDRESSV, D3DTADDRESS_BORDER);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_BORDERCOLOR, 0x00000000);
+		Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_BORDER);
+		Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_BORDER);
+		Renderer::Set_Texture_Border_Color(0, 0x00000000);
 	}
 }
 

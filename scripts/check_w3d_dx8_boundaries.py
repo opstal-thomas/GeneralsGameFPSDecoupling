@@ -18,6 +18,10 @@ FULLY_ROUTED = [
     WW3D / "line3d.cpp",
     WW3D / "pointgr.cpp",
     WW3D / "streakRender.cpp",
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DScorch.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainBackground.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp"),
     Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
     Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
 ]
