@@ -15,6 +15,27 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, VertexMaterialDescriptionPreservesColorAndSpecularPower)
+{
+    const RenderVertexMaterialDescription defaults;
+    EXPECT_FLOAT_EQ(1.0f, defaults.diffuse.r);
+    EXPECT_FLOAT_EQ(1.0f, defaults.diffuse.a);
+    EXPECT_FLOAT_EQ(1.0f, defaults.ambient.g);
+    EXPECT_FLOAT_EQ(0.0f, defaults.specular.r);
+    EXPECT_FLOAT_EQ(0.0f, defaults.emissive.b);
+    EXPECT_FLOAT_EQ(1.0f, defaults.power);
+
+    RenderVertexMaterialDescription material;
+    material.diffuse = RenderMaterialColor(0.2f, 0.4f, 0.6f, 0.8f);
+    material.specular = RenderMaterialColor(0.9f, 0.7f, 0.5f, 0.3f);
+    material.power = 32.0f;
+    EXPECT_FLOAT_EQ(0.8f, material.diffuse.a);
+    EXPECT_FLOAT_EQ(0.7f, material.specular.g);
+    EXPECT_FLOAT_EQ(32.0f, material.power);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Vertex_Material),
+                                 void (*)(const RenderVertexMaterialDescription &)>);
+}
+
 TEST(RendererBackend, VertexMaterialColorSourcesAreApiIndependent)
 {
     RenderMaterialColorSources defaults;

@@ -728,3 +728,28 @@ void Renderer::Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex)
     DX8Wrapper::Set_DX8_Texture_Stage_State(
         stage, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
+
+
+static D3DCOLORVALUE To_DX8_Material_Color(const RenderMaterialColor & color)
+{
+    D3DCOLORVALUE nativeColor = {};
+    nativeColor.r = color.r;
+    nativeColor.g = color.g;
+    nativeColor.b = color.b;
+    nativeColor.a = color.a;
+    return nativeColor;
+}
+
+void Renderer::Set_Vertex_Material(const RenderVertexMaterialDescription & material)
+{
+    // The DX8 wrapper forwards this immediately to IDirect3DDevice8::SetMaterial.
+    // The transient stack allocation is therefore safe, and the material
+    // value has no native binary-format dependencies in the W3D interface.
+    D3DMATERIAL8 nativeMaterial = {};
+    nativeMaterial.Diffuse = To_DX8_Material_Color(material.diffuse);
+    nativeMaterial.Ambient = To_DX8_Material_Color(material.ambient);
+    nativeMaterial.Specular = To_DX8_Material_Color(material.specular);
+    nativeMaterial.Emissive = To_DX8_Material_Color(material.emissive);
+    nativeMaterial.Power = material.power;
+    DX8Wrapper::Set_DX8_Material(&nativeMaterial);
+}

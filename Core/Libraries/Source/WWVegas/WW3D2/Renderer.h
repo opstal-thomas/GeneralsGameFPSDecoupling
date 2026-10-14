@@ -319,6 +319,30 @@ struct RenderMaterialColorSources
     RenderMaterialColorSource emissive;
 };
 
+// Vertex material colors are a W3D concept, independent of the native
+// fixed-function material memory layout.
+struct RenderMaterialColor
+{
+    RenderMaterialColor(float red = 0.0f, float green = 0.0f, float blue = 0.0f,
+                        float alpha = 0.0f)
+        : r(red), g(green), b(blue), a(alpha) {}
+    float r, g, b, a;
+};
+
+struct RenderVertexMaterialDescription
+{
+    RenderVertexMaterialDescription()
+        : diffuse(1.0f, 1.0f, 1.0f, 1.0f),
+          ambient(1.0f, 1.0f, 1.0f, 1.0f),
+          power(1.0f) {}
+
+    RenderMaterialColor diffuse;
+    RenderMaterialColor ambient;
+    RenderMaterialColor specular;
+    RenderMaterialColor emissive;
+    float power;
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -471,6 +495,10 @@ public:
     static void Set_Vertex_Lighting(bool enabled);
     static void Set_Vertex_Color_Sources(const RenderMaterialColorSources & sources);
     static void Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex);
+
+    // Submit the actual material colors and specular exponent without
+    // exposing the D3D8 material binary layout.
+    static void Set_Vertex_Material(const RenderVertexMaterialDescription & material);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

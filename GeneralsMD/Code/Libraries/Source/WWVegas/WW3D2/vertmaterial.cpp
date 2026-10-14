@@ -962,7 +962,17 @@ void VertexMaterialClass::Apply() const
 {
 	int i;
 
-	DX8Wrapper::Set_DX8_Material(Material);
+	RenderVertexMaterialDescription materialDescription;
+	materialDescription.diffuse = RenderMaterialColor(Material->Diffuse.r, Material->Diffuse.g,
+        Material->Diffuse.b, Material->Diffuse.a);
+	materialDescription.ambient = RenderMaterialColor(Material->Ambient.r, Material->Ambient.g,
+        Material->Ambient.b, Material->Ambient.a);
+	materialDescription.specular = RenderMaterialColor(Material->Specular.r, Material->Specular.g,
+        Material->Specular.b, Material->Specular.a);
+	materialDescription.emissive = RenderMaterialColor(Material->Emissive.r, Material->Emissive.g,
+        Material->Emissive.b, Material->Emissive.a);
+	materialDescription.power = Material->Power;
+	Renderer::Set_Vertex_Material(materialDescription);
 
 	Renderer::Set_Vertex_Lighting(!WW3D::Is_Coloring_Enabled() && UseLighting);
 	RenderMaterialColorSources sources;
@@ -984,17 +994,10 @@ void VertexMaterialClass::Apply() const
 void VertexMaterialClass::Apply_Null()
 {
 	int i;
-	static D3DMATERIAL8 default_settings =
-	{
-		{ 1.0f, 1.0f, 1.0f, 1.0f },	// diffuse
-		{ 1.0f, 1.0f, 1.0f, 1.0f },	// ambient
-		{ 0.0f, 0.0f, 0.0f, 0.0f },	// specular
-		{ 0.0f, 0.0f, 0.0f, 0.0f },	// emissive
-		1.0f									// power
-	};
+	const RenderVertexMaterialDescription default_settings;
 
 	Renderer::Set_Vertex_Lighting(false);
-	DX8Wrapper::Set_DX8_Material(&default_settings);
+	Renderer::Set_Vertex_Material(default_settings);
 
 	Renderer::Set_Vertex_Color_Sources(RenderMaterialColorSources());
 

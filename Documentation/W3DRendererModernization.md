@@ -36,6 +36,20 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Twelfth milestone: native-independent vertex-material values
+
+VertexMaterialClass now submits full ambient, diffuse, specular and emissive
+RGBA values plus the specular power using RenderVertexMaterialDescription.
+The DX8 backend builds a temporary native D3DMATERIAL8 immediately before
+the original device SetMaterial call. Both Generals and Zero Hour use the
+same interface, including their default unlit material.
+
+The existing W3D material asset class continues storing D3DMATERIAL8
+internally for now, so unrelated serialization, CRC, and legacy import code
+are unchanged. Renderer's public interface and material upload path no
+longer require that native memory layout. This is required when fixed-
+function lighting becomes a generated DX12 vertex shader.
+
 ### Eleventh milestone: vertex lighting, material color sources and UV stages
 
 Both Generals and Zero Hour now route vertex lighting selection, ambient/
