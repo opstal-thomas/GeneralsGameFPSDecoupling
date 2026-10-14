@@ -300,8 +300,8 @@ void Line3DClass::Render(RenderInfoClass & rinfo)
 			mem[i]=Indices[i];
 	}
 
-	DX8Wrapper::Set_Vertex_Buffer(vb);
-	DX8Wrapper::Set_Index_Buffer(ib,0);
+	Renderer::Bind_Dynamic_Vertex_Buffer(vb);
+	Renderer::Bind_Dynamic_Index_Buffer(ib,0);
 	Renderer::Draw_Triangles(0,36/3,0,8);
 }
 

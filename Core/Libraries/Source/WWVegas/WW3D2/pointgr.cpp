@@ -981,8 +981,8 @@ void PointGroupClass::Render(RenderInfoClass &rinfo)
 			}
 		}
 
-		DX8Wrapper::Set_Index_Buffer (indexbuffer, 0);
-		DX8Wrapper::Set_Vertex_Buffer (PointVerts);
+		Renderer::Bind_Dynamic_Index_Buffer(indexbuffer, 0);
+		Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts);
 
 		if ( sort )
 		{
@@ -1910,8 +1910,8 @@ void PointGroupClass::RenderVolumeParticle(RenderInfoClass &rinfo, unsigned int 
 				}
 			}
 
-			DX8Wrapper::Set_Index_Buffer (indexbuffer, 0);
-			DX8Wrapper::Set_Vertex_Buffer (PointVerts);
+			Renderer::Bind_Dynamic_Index_Buffer(indexbuffer, 0);
+			Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts);
 
 			/// @todo lorenzen sez: precompute these params, above
 

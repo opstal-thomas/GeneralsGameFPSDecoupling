@@ -28,6 +28,8 @@
 
 class LightEnvironmentClass;
 class CameraClass;
+class DynamicVBAccessClass;
+class DynamicIBAccessClass;
 class Vector3;
 class Vector4;
 class Matrix3D;
@@ -638,6 +640,14 @@ public:
     // buffer to the backend without exposing native graphics API types.
     static void Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride);
     static void Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex);
+
+    // Transitional dynamic-buffer accessors used by W3D primitives and
+    // sorted transparent geometry. They preserve the existing ring-buffer
+    // offset/sorting behavior; their allocations remain legacy-owned until
+    // the dynamic access classes are made fully backend-independent.
+    static void Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access);
+    static void Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
+                                           unsigned short baseVertexIndex);
 
     // W3D retains ownership of existing native texture references for now.
     // Both creation entry points support the original device-reset tracker.
