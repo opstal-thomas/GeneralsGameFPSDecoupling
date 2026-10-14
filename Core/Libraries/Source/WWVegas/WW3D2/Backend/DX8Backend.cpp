@@ -298,7 +298,9 @@ RenderCapabilities Renderer::Get_Capabilities()
     out.anisotropicFiltering = caps->Support_Anisotropic_Filtering();
     out.cubeTextures = caps->Support_Cubemaps();
     out.bumpEnvironmentMapping = caps->Support_Bump_Envmap();
+    out.pointSprites = caps->Support_PointSprites();
     out.maxSimultaneousTextures = static_cast<unsigned>(caps->Get_Max_Simultaneous_Textures());
+    out.maxTexturesPerPass = static_cast<unsigned>(caps->Get_Max_Textures_Per_Pass());
     return out;
 }
 
@@ -940,4 +942,15 @@ void Renderer::Set_Blending_Enabled(bool enabled)
 void Renderer::Set_Texture_Factor(unsigned packedARGB)
 {
     DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, packedARGB);
+}
+
+bool Renderer::Supports_Texture_Format(unsigned w3dPixelFormat)
+{
+    const DX8Caps * caps = DX8Wrapper::Is_Initted() ? DX8Wrapper::Get_Current_Caps() : nullptr;
+    return caps && caps->Support_Texture_Format(static_cast<WW3DFormat>(w3dPixelFormat));
+}
+
+unsigned Renderer::Get_Back_Buffer_Format()
+{
+    return static_cast<unsigned>(DX8Wrapper::getBackBufferFormat());
 }

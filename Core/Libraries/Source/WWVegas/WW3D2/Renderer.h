@@ -91,7 +91,8 @@ struct RenderCapabilities
         : hardwareTransformAndLighting(false), nPatches(false),
           textureCompression(false), anisotropicFiltering(false),
           cubeTextures(false), bumpEnvironmentMapping(false),
-          maxSimultaneousTextures(0)
+          pointSprites(false), maxSimultaneousTextures(0),
+          maxTexturesPerPass(0)
     {
     }
 
@@ -101,7 +102,9 @@ struct RenderCapabilities
     bool anisotropicFiltering;
     bool cubeTextures;
     bool bumpEnvironmentMapping;
+    bool pointSprites;
     unsigned maxSimultaneousTextures;
+    unsigned maxTexturesPerPass;
 };
 
 // Transitional descriptions for legacy W3D geometry allocations. They
@@ -512,6 +515,11 @@ public:
     static DeviceStatus Get_Device_Status();
     static bool Reset_Device();
     static RenderCapabilities Get_Capabilities();
+
+    // The W3D image format identifiers are asset-format IDs, not Direct3D
+    // constants. Query the device/backend without exposing DX8Caps.
+    static bool Supports_Texture_Format(unsigned w3dPixelFormat);
+    static unsigned Get_Back_Buffer_Format();
 
     static void Set_Gamma(float gamma, float bright, float contrast, bool calibrate = true, bool uselimit = true);
 
