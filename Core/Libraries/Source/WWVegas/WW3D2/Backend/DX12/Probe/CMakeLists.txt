@@ -34,3 +34,11 @@ add_test(
     COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --untextured
 )
 set_tests_properties(W3D_DX12_WARP_Offscreen_Untextured PROPERTIES TIMEOUT 45)
+
+# Minimal vertex/pixel shader without W3D combiner or textures, to isolate
+# basic rasterization failures from W3D-specific shader semantics.
+add_test(
+    NAME W3D_DX12_WARP_Offscreen_Solid
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --solid
+)
+set_tests_properties(W3D_DX12_WARP_Offscreen_Solid PROPERTIES TIMEOUT 45)
