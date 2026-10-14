@@ -29,7 +29,6 @@
 
 
 
-#define D3DFVF_POINTVERTEX (D3DFVF_XYZ)
 #define SNOW_BUFFER_SIZE 4096	//size of vertex buffer holding particles.
 #define SNOW_BATCH_SIZE	2048	//we render at most this many particles per drawprimitive call.  This number * 6 must be less than 65536 to fit into index buffer.
 
@@ -42,7 +41,7 @@ W3DSnowManager::W3DSnowManager()
 {
 	m_indexBuffer=nullptr;
 	m_snowTexture=nullptr;
-	m_VertexBufferD3D=nullptr;
+	m_pointVertexBuffer=nullptr;
 }
 
 W3DSnowManager::~W3DSnowManager()
@@ -61,10 +60,10 @@ void W3DSnowManager::ReleaseResources()
 {
 	REF_PTR_RELEASE(m_snowTexture);
 
-	if (m_VertexBufferD3D)
-		m_VertexBufferD3D->Release();
+	if (m_pointVertexBuffer)
+		Renderer::Release_Vertex_Buffer(m_pointVertexBuffer);
 
-	m_VertexBufferD3D=nullptr;
+	m_pointVertexBuffer=nullptr;
 
 	REF_PTR_RELEASE(m_indexBuffer);
 }
@@ -79,22 +78,14 @@ Bool W3DSnowManager::ReAcquireResources()
 
 	if (TheWeatherSetting->m_usePointSprites && Renderer::Get_Capabilities().pointSprites)
 	{
-		LPDIRECT3DDEVICE8 m_pDev=DX8Wrapper::_Get_D3D_Device8();
+		DEBUG_ASSERTCRASH(Renderer::Is_Initialized(),
+			("Trying to ReAcquireResources on W3DSnowManager without renderer"));
 
-		DEBUG_ASSERTCRASH(m_pDev, ("Trying to ReAcquireResources on W3DSnowManager without device"));
-
-		if (m_VertexBufferD3D == nullptr)
+		if (m_pointVertexBuffer == nullptr)
 		{
-			// Create vertex buffer
-
-			if (FAILED(m_pDev->CreateVertexBuffer
-			(
-				SNOW_BUFFER_SIZE*sizeof(POINTVERTEX),
-				D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC|D3DUSAGE_POINTS,
-				D3DFVF_POINTVERTEX,
-				D3DPOOL_DEFAULT,
-				&m_VertexBufferD3D
-			)))
+			m_pointVertexBuffer = Renderer::Create_Point_Sprite_Vertex_Buffer(
+				SNOW_BUFFER_SIZE * sizeof(POINTVERTEX));
+			if (!m_pointVertexBuffer)
 				return FALSE;
 		}
 	}
@@ -271,10 +262,11 @@ void W3DSnowManager::renderSubBox(RenderInfoClass &rinfo, Int originX, Int origi
 		if((m_dwBase + batchSize) > m_dwDiscard)
 			m_dwBase = 0;
 
-		POINTVERTEX* verts;
-
-		if(m_VertexBufferD3D->Lock(m_dwBase * sizeof(POINTVERTEX), batchSize * sizeof(POINTVERTEX),
-			(unsigned char **) &verts, m_dwBase ? D3DLOCK_NOOVERWRITE : D3DLOCK_DISCARD) != D3D_OK )
+		POINTVERTEX* verts = static_cast<POINTVERTEX *>(Renderer::Map_Vertex_Buffer(
+			m_pointVertexBuffer, m_dwBase * sizeof(POINTVERTEX),
+			batchSize * sizeof(POINTVERTEX),
+			m_dwBase ? RENDER_MAP_NO_OVERWRITE : RENDER_MAP_DISCARD));
+		if (!verts)
 			return;	//couldn't lock buffer.
 
 		Int numberInBatch=0;
@@ -314,12 +306,12 @@ void W3DSnowManager::renderSubBox(RenderInfoClass &rinfo, Int originX, Int origi
 		}
 
 flush_particles:
-		m_VertexBufferD3D->Unlock();
+		Renderer::Unmap_Vertex_Buffer(m_pointVertexBuffer);
 		//Render any particles that may be queued up.
 		if (numberInBatch)
 		{
 			Debug_Statistics::Record_DX8_Polys_And_Vertices(numberInBatch*2,numberInBatch*4,ShaderClass::_PresetOpaqueShader);
-			DX8Wrapper::_Get_D3D_Device8()->DrawPrimitive( D3DPT_POINTLIST, m_dwBase, numberInBatch);
+			Renderer::Draw_Point_List(m_dwBase, numberInBatch);
 			totalPart -= numberInBatch;
 			m_dwBase += numberInBatch;
 		}
@@ -407,7 +399,7 @@ void W3DSnowManager::render(RenderInfoClass &rinfo)
 	REF_PTR_RELEASE(vmat);
 
 	//make sure we have all the resources we need
-	if (usePointSprites && !m_VertexBufferD3D)
+	if (usePointSprites && !m_pointVertexBuffer)
 		ReAcquireResources();
 
 	if (!usePointSprites && !m_indexBuffer)
@@ -425,18 +417,10 @@ void W3DSnowManager::render(RenderInfoClass &rinfo)
 
 	Renderer::Apply_Pending_State_Changes();
 
-    // Set the render states for using point sprites
-	DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSPRITEENABLE, TRUE );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSCALEENABLE,  TRUE );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSIZE,     FtoDW(m_pointSize) );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSIZE_MIN, FtoDW(m_minPointSize) );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSIZE_MAX, FtoDW(m_maxPointSize) );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSCALE_A,  FtoDW(0.00f) );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSCALE_B,  FtoDW(0.00f) );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSCALE_C,  FtoDW(1.00f) );
-
-	DX8Wrapper::_Get_D3D_Device8()->SetStreamSource( 0, m_VertexBufferD3D, sizeof(POINTVERTEX) );
-    DX8Wrapper::_Get_D3D_Device8()->SetVertexShader( D3DFVF_POINTVERTEX );
+	// The DX8 implementation keeps the original eight render-state writes
+	// and the position-only point vertex stream.
+	Renderer::Set_Point_Sprite_Rendering(true, m_pointSize, m_minPointSize, m_maxPointSize);
+	Renderer::Bind_Point_Sprite_Vertex_Buffer(m_pointVertexBuffer, sizeof(POINTVERTEX));
 	m_dwBase = SNOW_BUFFER_SIZE;	//start with a new vertex buffer each frame.
 
 	m_leafDim = 45;	//cull boxes that are 20x20 emitters in size. Making them much smaller will result in too many draw calls.
@@ -448,8 +432,7 @@ void W3DSnowManager::render(RenderInfoClass &rinfo)
 	renderSubBox(rinfo,cubeOriginX,cubeOriginY,cubeDimX,cubeDimY);
 
 	// Reset render states
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSPRITEENABLE, FALSE );
-    DX8Wrapper::Set_DX8_Render_State( D3DRS_POINTSCALEENABLE,  FALSE );
+	Renderer::Set_Point_Sprite_Rendering(false);
 
 }
 
@@ -491,7 +474,7 @@ void W3DSnowManager::renderAsQuads(RenderInfoClass &rinfo, Int cubeOriginX, Int 
 	Matrix4x4 identity(true);
 	Renderer::Set_Transform(RENDER_TRANSFORM_VIEW,identity);
 
-	DX8Wrapper::Set_Index_Buffer(m_indexBuffer,0);
+	Renderer::Bind_Legacy_Index_Buffer(m_indexBuffer,0);
 
 	Int y=cubeOriginY;	//loop counter.
 	Int cubeOriginXRemainder = cubeOriginX;	//loop counter - adjusted when not all particles fit into render buffer.
@@ -569,8 +552,8 @@ flush_particles:
 		//Render any particles that may be queued up.
 		if (numberInBatch)
 		{
-			DX8Wrapper::Set_Vertex_Buffer(vb_access);
-			DX8Wrapper::Draw_Triangles(	0,numberInBatch*2, 0, numberInBatch*4);
+			Renderer::Bind_Dynamic_Vertex_Buffer(vb_access);
+			Renderer::Draw_Triangles(0,numberInBatch*2, 0, numberInBatch*4);
 			totalPart -= numberInBatch;
 		}
 	}

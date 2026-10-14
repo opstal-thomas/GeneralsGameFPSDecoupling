@@ -703,6 +703,9 @@ public:
     // address in the opaque handle during the transition; higher layers do
     // not depend on COM identity or the backend's allocation strategy.
     static RenderVertexBufferHandle Create_Vertex_Buffer(const RenderBufferDescription & description);
+    // Position-only dynamic point stream (snow). The backend selects its
+    // native point-vertex usage, memory pool and vertex-input representation.
+    static RenderVertexBufferHandle Create_Point_Sprite_Vertex_Buffer(unsigned byteSize);
     static RenderIndexBufferHandle Create_Index_Buffer(const RenderBufferDescription & description);
     static void Release_Vertex_Buffer(RenderVertexBufferHandle buffer);
     static void Release_Index_Buffer(RenderIndexBufferHandle buffer);
@@ -721,6 +724,12 @@ public:
     // state-cache selection. These calls submit a previously selected GPU
     // buffer to the backend without exposing native graphics API types.
     static void Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride);
+    static void Bind_Point_Sprite_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stride);
+    static void Draw_Point_List(unsigned firstVertex, unsigned pointCount);
+    // Setting enabled=false only restores the two states disabled by snow,
+    // matching the old renderer without resetting unrelated point parameters.
+    static void Set_Point_Sprite_Rendering(bool enabled, float size = 0.0f,
+                                           float minSize = 0.0f, float maxSize = 0.0f);
     static void Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex);
 
     // Transitional dynamic-buffer accessors used by W3D primitives and

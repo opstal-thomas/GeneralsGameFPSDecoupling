@@ -496,7 +496,7 @@ particles also request transparent-black texture borders using semantic
 address and packed-border-color state, matching the old DX8 behavior.
 
 The actual DX8 vertex/index buffer allocations and memory ownership are
-unchanged. Snow, height-map rendering, water, mouse and display
+unchanged. Height-map rendering, water, mouse and display
 overlays remain to be audited and migrated before the renderer cutover.
 
 ### Smudge hardware probe and backbuffer decoupling
@@ -508,6 +508,17 @@ readback semantics. Backbuffer acquisition, background copying, sampler
 settings and indexed smudge batches also go through Renderer, while legacy
 vertex/index buffer allocation, texture ownership and sorting order remain.
 An automated boundary audit now guards the migrated smudge call sites.
+
+### Snow geometry and point-sprite resource decoupling
+
+Both the quad-based fallback and the point-sprite path now submit through the
+Renderer interface. Snow owns its point vertex buffer through an opaque
+backend handle and maps/unmaps that buffer with neutral flags while retaining
+the existing ring offsets, draw order and discard/no-overwrite policy.
+The DX8 backend preserves the exact legacy POINTS vertex-buffer usage/FVF,
+eight sprite-state writes, and indexed or point-list draw commands.
+The DX8 snow index buffer and shared dynamic VB allocation are still legacy
+types; those can be migrated separately without changing the effect.
 
 ### Known remaining Direct3D 8 dependencies
 

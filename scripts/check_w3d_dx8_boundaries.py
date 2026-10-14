@@ -20,6 +20,7 @@ FULLY_ROUTED = [
     WW3D / "streakRender.cpp",
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DScorch.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSnow.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainBackground.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp"),
@@ -77,6 +78,11 @@ def main() -> int:
         r"\bIDirect3D(?:Texture|Surface|BaseTexture|Device)8\b",
         r"\bLPDIRECT3DDEVICE8\b",
         r"\bD3DLOCKED_RECT\b",
+    ]))
+    errors.extend(check(Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSnow.cpp"), [
+        r"\bIDirect3D(?:VertexBuffer|Device)8\b",
+        r"\bLPDIRECT3DDEVICE8\b",
+        r"\bD3D(?:USAGE|LOCK|FVF|RS)_\w+",
     ]))
     errors.extend(check(CUSTOM_SHADER_HEADER, [
         r"\bIDirect3DSurface8\s*\*\s*m_(oldRenderSurface|newRenderSurface|oldDepthSurface)",

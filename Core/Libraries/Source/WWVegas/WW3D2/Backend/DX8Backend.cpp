@@ -609,6 +609,23 @@ RenderVertexBufferHandle Renderer::Create_Vertex_Buffer(const RenderBufferDescri
     return reinterpret_cast<RenderVertexBufferHandle>(buffer);
 }
 
+RenderVertexBufferHandle Renderer::Create_Point_Sprite_Vertex_Buffer(unsigned byteSize)
+{
+    DX8_THREAD_ASSERT();
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device || !byteSize)
+        return nullptr;
+
+    IDirect3DVertexBuffer8 * buffer = nullptr;
+    // Preserve snow's original WRITEONLY|DYNAMIC|POINTS, XYZ-only FVF and
+    // DEFAULT-pool allocation. Do not add other buffer usage flags.
+    const HRESULT result = device->CreateVertexBuffer(
+        byteSize, D3DUSAGE_WRITEONLY | D3DUSAGE_DYNAMIC | D3DUSAGE_POINTS,
+        D3DFVF_XYZ, D3DPOOL_DEFAULT, &buffer);
+    DX8_ErrorCode(result);
+    return SUCCEEDED(result) ? reinterpret_cast<RenderVertexBufferHandle>(buffer) : nullptr;
+}
+
 RenderIndexBufferHandle Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
 {
     DX8_THREAD_ASSERT();
@@ -712,6 +729,37 @@ void Renderer::Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stre
 {
     DX8_THREAD_ASSERT();
     DX8CALL(SetStreamSource(stream, reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer), stride));
+}
+
+void Renderer::Bind_Point_Sprite_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stride)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return;
+    device->SetStreamSource(0, reinterpret_cast<IDirect3DVertexBuffer8 *>(buffer), stride);
+    device->SetVertexShader(D3DFVF_XYZ);
+}
+
+void Renderer::Draw_Point_List(unsigned firstVertex, unsigned pointCount)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->DrawPrimitive(D3DPT_POINTLIST, firstVertex, pointCount);
+}
+
+void Renderer::Set_Point_Sprite_Rendering(bool enabled, float size, float minSize, float maxSize)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSPRITEENABLE, enabled ? TRUE : FALSE);
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALEENABLE, enabled ? TRUE : FALSE);
+    if (!enabled)
+        return;
+
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE, FtoDW(size));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MIN, FtoDW(minSize));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MAX, FtoDW(maxSize));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_A, FtoDW(0.00f));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_B, FtoDW(0.00f));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_C, FtoDW(1.00f));
 }
 
 void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex)
