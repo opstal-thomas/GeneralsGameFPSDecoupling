@@ -282,7 +282,7 @@ void Line3DClass::Render(RenderInfoClass & rinfo)
 		const FVFInfoClass &fi=vb.FVF_Info();
 		unsigned char *vb=(unsigned char*)Lock.Get_Formatted_Vertex_Array();
 		int i;
-		unsigned int color=DX8Wrapper::Convert_Color(Color);
+		unsigned int color=Renderer::Pack_Color_ARGB(Color);
 
 		for (i=0; i<8; i++)
 		{
@@ -302,7 +302,7 @@ void Line3DClass::Render(RenderInfoClass & rinfo)
 
 	DX8Wrapper::Set_Vertex_Buffer(vb);
 	DX8Wrapper::Set_Index_Buffer(ib,0);
-	DX8Wrapper::Draw_Triangles(0,36/3,0,8);
+	Renderer::Draw_Triangles(0,36/3,0,8);
 }
 
 /**************************************************************************

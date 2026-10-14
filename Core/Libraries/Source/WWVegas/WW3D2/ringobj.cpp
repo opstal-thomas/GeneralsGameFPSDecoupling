@@ -550,9 +550,9 @@ void RingRenderObjClass::render_ring(RenderInfoClass & rinfo,const Vector3 & cen
 		//
 		unsigned color;
 		if (RingShader.Get_Dst_Blend_Func () == ShaderClass::DSTBLEND_ONE) {
-			color = DX8Wrapper::Convert_Color(Alpha * Color,1.0f);
+			color = Renderer::Pack_Color_ARGB(Alpha * Color,1.0f);
 		} else {
-			color = DX8Wrapper::Convert_Color(Color,Alpha);
+			color = Renderer::Pack_Color_ARGB(Color,Alpha);
 		}
 
 		for (int i=0; i<ring.Vertex_ct; i++)
@@ -593,7 +593,7 @@ void RingRenderObjClass::render_ring(RenderInfoClass & rinfo,const Vector3 & cen
 	if (sort) {
 		SortingRendererClass::Insert_Triangles(Get_Bounding_Sphere(), 0, ring.face_ct, 0, ring.Vertex_ct);
 	} else {
-		DX8Wrapper::Draw_Triangles(0, ring.face_ct, 0, ring.Vertex_ct);
+		Renderer::Draw_Triangles(0, ring.face_ct, 0, ring.Vertex_ct);
 	}
 
 }

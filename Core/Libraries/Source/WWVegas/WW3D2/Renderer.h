@@ -29,6 +29,7 @@
 class LightEnvironmentClass;
 class CameraClass;
 class Vector3;
+class Vector4;
 class Matrix3D;
 class Matrix4x4;
 class ShaderClass;
@@ -566,6 +567,17 @@ public:
     static void Set_Viewport(const RenderViewport & viewport);
     static void Set_Polygon_Mode(PolygonMode mode);
     static void Invalidate_Cached_Render_States();
+
+    // Packed W3D ARGB diffuse colors, with legacy DX8 rounding preserved
+    // by the active backend. These operations are CPU-side only.
+    static unsigned Pack_Color_ARGB(const Vector3 & color, float alpha);
+    static unsigned Pack_Color_ARGB(const Vector4 & color);
+    static unsigned Pack_Color_ARGB_Clamp(const Vector4 & color);
+
+    // Submit already-bound indexed triangle geometry. Buffer ownership and
+    // dynamic sorting remain separate from this draw command for now.
+    static void Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,
+                               unsigned short minVertexIndex, unsigned short vertexCount);
 
     // W3D-owned material, shader and texture selections. The original DX8
     // backend preserves its deferred state cache and reference ownership.

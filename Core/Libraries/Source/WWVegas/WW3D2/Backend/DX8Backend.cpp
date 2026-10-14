@@ -119,6 +119,27 @@ void Renderer::Invalidate_Cached_Render_States()
     DX8Wrapper::Invalidate_Cached_Render_States();
 }
 
+unsigned Renderer::Pack_Color_ARGB(const Vector3 & color, float alpha)
+{
+    return DX8Wrapper::Convert_Color(color, alpha);
+}
+
+unsigned Renderer::Pack_Color_ARGB(const Vector4 & color)
+{
+    return DX8Wrapper::Convert_Color(color);
+}
+
+unsigned Renderer::Pack_Color_ARGB_Clamp(const Vector4 & color)
+{
+    return DX8Wrapper::Convert_Color_Clamp(color);
+}
+
+void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,
+                              unsigned short minVertexIndex, unsigned short vertexCount)
+{
+    DX8Wrapper::Draw_Triangles(startIndex, triangleCount, minVertexIndex, vertexCount);
+}
+
 void Renderer::Set_Shader(const ShaderClass & shader)
 {
     DX8Wrapper::Set_Shader(shader);
