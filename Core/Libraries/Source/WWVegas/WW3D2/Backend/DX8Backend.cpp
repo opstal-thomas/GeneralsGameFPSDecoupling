@@ -238,6 +238,16 @@ void Renderer::Bind_Immediate_Texture(unsigned stage, RenderTextureHandle textur
         device->SetTexture(stage, reinterpret_cast<IDirect3DBaseTexture8 *>(texture));
 }
 
+void Renderer::Set_Immediate_Stage_Alpha_Current(unsigned stage)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return;
+    device->SetTextureStageState(stage, D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+    device->SetTextureStageState(stage, D3DTSS_ALPHAARG2, D3DTA_TEXTURE);
+    device->SetTextureStageState(stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+}
+
 void Renderer::Set_Shader(const ShaderClass & shader)
 {
     DX8Wrapper::Set_Shader(shader);
@@ -413,6 +423,22 @@ void Renderer::Set_Polygon_Mode(PolygonMode mode)
 }
 
 
+bool Renderer::Get_Adapter_Identification(RenderAdapterIdentification & identification)
+{
+    identification = RenderAdapterIdentification();
+    IDirect3D8 * interface8 = DX8Wrapper::_Get_D3D8();
+    if (!interface8 || !DX8Wrapper::_Get_D3D_Device8())
+        return false;
+
+    // Preserve legacy adapter-zero vendor classification and driver version.
+    D3DADAPTER_IDENTIFIER8 native = {};
+    interface8->GetAdapterIdentifier(0, D3DENUM_NO_WHQL_LEVEL, &native);
+    identification.vendorId = native.VendorId;
+    identification.deviceId = native.DeviceId;
+    identification.driverVersion = static_cast<unsigned long long>(native.DriverVersion.QuadPart);
+    return true;
+}
+
 RenderCapabilities Renderer::Get_Capabilities()
 {
     RenderCapabilities out;
@@ -429,6 +455,9 @@ RenderCapabilities Renderer::Get_Capabilities()
     out.cubeTextures = caps->Support_Cubemaps();
     out.bumpEnvironmentMapping = caps->Support_Bump_Envmap();
     out.pointSprites = caps->Support_PointSprites();
+    out.dot3TextureOperation = caps->Support_Dot3();
+    out.pixelShaderMajorVersion = static_cast<unsigned>(caps->Get_Pixel_Shader_Major_Version());
+    out.pixelShaderMinorVersion = static_cast<unsigned>(caps->Get_Pixel_Shader_Minor_Version());
     out.maxSimultaneousTextures = static_cast<unsigned>(caps->Get_Max_Simultaneous_Textures());
     out.maxTexturesPerPass = static_cast<unsigned>(caps->Get_Max_Textures_Per_Pass());
     const D3DCAPS8 & native = caps->Get_DX8_Caps();

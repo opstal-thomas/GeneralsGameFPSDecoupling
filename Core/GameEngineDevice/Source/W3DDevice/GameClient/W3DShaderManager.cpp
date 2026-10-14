@@ -561,7 +561,7 @@ Bool ScreenBWFilterDOT3::postRender(FilterModes mode, Coord2D &scrollDelta,Bool 
 
 
 	//Draw B&W version first
-	if (DX8Wrapper::Get_Current_Caps()->Support_Dot3())
+	if (Renderer::Get_Capabilities().dot3TextureOperation)
 	{
 		//Override W3D states with customizations for grayscale
 		Renderer::Set_Texture_Factor(0x80A5CA8E);
@@ -962,7 +962,7 @@ Bool ScreenMotionBlurFilter::postRender(FilterModes mode, Coord2D &scrollDelta,B
 	if (!tex) return false;
 	if (!set(mode)) return false;
 
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	Bool continueEffect = true;
 	struct _TRANS_LIT_TEX_VERTEX {
@@ -1072,9 +1072,7 @@ Bool ScreenMotionBlurFilter::postRender(FilterModes mode, Coord2D &scrollDelta,B
 			v[i].v = ((v[i].v-center.y)*factor) + center.y;
 		}
 	}
-	pDev->SetTextureStageState(0,D3DTSS_ALPHAARG1, D3DTA_CURRENT);
-	pDev->SetTextureStageState(0,D3DTSS_ALPHAARG2, D3DTA_TEXTURE);
-	pDev->SetTextureStageState(0,D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+	Renderer::Set_Immediate_Stage_Alpha_Current(0);
 	Renderer::Draw_Transformed_Quad(v, sizeof(_TRANS_LIT_TEX_VERTEX), 1);
 	Renderer::Set_Blending_Enabled(true);
 
@@ -2964,72 +2962,67 @@ ChipsetType W3DShaderManager::getChipset()
 		return (ChipsetType)TheGlobalData->m_chipSetType;
 
 	ChipsetType chip=DC_UNKNOWN;
-	IDirect3D8* d3d8Interface=DX8Wrapper::_Get_D3D8();
-
-	if (d3d8Interface && DX8Wrapper::_Get_D3D_Device8())
+	RenderAdapterIdentification adapter;
+	if (Renderer::Get_Adapter_Identification(adapter))
 	{
+		m_driverVersion = static_cast<__int64>(adapter.driverVersion);
 
-		D3DADAPTER_IDENTIFIER8 did;
-		::ZeroMemory(&did, sizeof(D3DADAPTER_IDENTIFIER8));
-	/*	HRESULT res = */ d3d8Interface->GetAdapterIdentifier(0,D3DENUM_NO_WHQL_LEVEL,&did);
-		*((LARGE_INTEGER*)&m_driverVersion) = did.DriverVersion;
-
-		if(did.VendorId == DC_NVIDIA_VENDOR_ID)
+		if(adapter.vendorId == DC_NVIDIA_VENDOR_ID)
 		{
 			m_currentVendor = DC_NVIDIA_VENDOR_ID;
 
-			if (did.DeviceId == 0x20)
+			if (adapter.deviceId == 0x20)
 				return DC_TNT;
 
-			if (did.DeviceId >= 0x28 && did.DeviceId < 0x100)
+			if (adapter.deviceId >= 0x28 && adapter.deviceId < 0x100)
 				return DC_TNT2;
 
-			if ( (did.DeviceId >= 0x100 && did.DeviceId <= 0x103) ||	//GeForce
-				 (did.DeviceId >= 0x110 && did.DeviceId <= 0x113) ||	//GeForce2 MX
-						 (did.DeviceId >= 0x150 && did.DeviceId <= 0x153) )	//GeForce2
+			if ( (adapter.deviceId >= 0x100 && adapter.deviceId <= 0x103) ||	//GeForce
+				 (adapter.deviceId >= 0x110 && adapter.deviceId <= 0x113) ||	//GeForce2 MX
+						 (adapter.deviceId >= 0x150 && adapter.deviceId <= 0x153) )	//GeForce2
            		return DC_GEFORCE2;
 
-			if (did.DeviceId >= 0x200 && did.DeviceId < 0x250)
+			if (adapter.deviceId >= 0x200 && adapter.deviceId < 0x250)
 				return DC_GEFORCE3;
 
-			if (did.DeviceId >= 0x250)
+			if (adapter.deviceId >= 0x250)
 				return DC_GEFORCE4;
 		}
 		else
-		if(did.VendorId == DC_3DFX_VENDOR_ID)
+		if(adapter.vendorId == DC_3DFX_VENDOR_ID)
 		{
 			m_currentVendor = DC_3DFX_VENDOR_ID;
 
-			if (did.DeviceId == 0x0002)
+			if (adapter.deviceId == 0x0002)
 				return DC_VOODOO2;
-			if (did.DeviceId == 0x0005)
+			if (adapter.deviceId == 0x0005)
 				return DC_VOODOO3;
-			if (did.DeviceId == 0x0008)	///@todo: Just guessing on this one - find actual Voodoo4 deviceID.
+			if (adapter.deviceId == 0x0008)	///@todo: Just guessing on this one - find actual Voodoo4 deviceID.
 				return DC_VOODOO4;
-			if (did.DeviceId == 0x0009)
+			if (adapter.deviceId == 0x0009)
 				return DC_VOODOO5;
 		}
 		else
-		if(did.VendorId == DC_ATI_VENDOR_ID)
+		if(adapter.vendorId == DC_ATI_VENDOR_ID)
 		{
 			m_currentVendor = DC_ATI_VENDOR_ID;
 
-			if (did.DeviceId == 0x5144)
+			if (adapter.deviceId == 0x5144)
 				return DC_RADEON;
-			if (did.DeviceId == 0x514C)
+			if (adapter.deviceId == 0x514C)
 				return DC_RADEON_8500;
-			if (did.DeviceId == 0x4e44)
+			if (adapter.deviceId == 0x4e44)
 				return DC_RADEON_9700;
 		}
 
 		//None of the vendor specific ID's matched so use generic means to classify the card
-		Int maxTextures=DX8Wrapper::Get_Current_Caps()->Get_Max_Simultaneous_Textures();
+		Int maxTextures=Renderer::Get_Capabilities().maxSimultaneousTextures;
 		Real pixelShaderVersion;
 
 		char buf[256];
 
 		//Convert version to Real
-		sprintf(buf,"%d.%d",DX8Wrapper::Get_Current_Caps()->Get_Pixel_Shader_Major_Version(),DX8Wrapper::Get_Current_Caps()->Get_Pixel_Shader_Minor_Version());
+		sprintf(buf,"%d.%d",Renderer::Get_Capabilities().pixelShaderMajorVersion,Renderer::Get_Capabilities().pixelShaderMinorVersion);
 		sscanf(buf,"%f",&pixelShaderVersion);
 
 		if (maxTextures >= 4)

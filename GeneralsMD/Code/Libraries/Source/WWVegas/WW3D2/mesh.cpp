@@ -115,6 +115,7 @@
 #include "dx8polygonrenderer.h"
 #include "dx8indexbuffer.h"
 #include "dx8renderer.h"
+#include "WW3D2/Renderer.h"
 #include "visrasterizer.h"
 #include "WWDebug/wwmemlog.h"
 #include "dx8rendererdebugger.h"
@@ -827,7 +828,7 @@ void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass *
 	Vector3 oldEmissive(-1,-1,-1);
 
 	if (LightEnvironment != nullptr) {
-		DX8Wrapper::Set_Light_Environment(LightEnvironment);
+		Renderer::Set_Light_Environment(LightEnvironment);
 	}
 
 	if (Model->Get_Flag(MeshModelClass::SKIN)) {
@@ -852,10 +853,10 @@ void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass *
 			}
 		}
 		pass->Install_Materials();
-		DX8Wrapper::Set_Index_Buffer(ib,0);
+		Renderer::Bind_Legacy_Index_Buffer(ib,0);
 
 		SNAPSHOT_SAY(("Set_World_Identity"));
-		DX8Wrapper::Set_World_Identity();
+		Renderer::Set_World_Identity();
 
 		DX8PolygonRendererListIterator it(&Model->PolygonRendererList);
 		while (!it.Is_Done()) {
@@ -947,10 +948,10 @@ void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass *
 			int vertex_offset = Model->PolygonRendererList.Peek_Head()->Get_Vertex_Offset();
 			pass->Install_Materials();
 
-			DX8Wrapper::Set_Transform(D3DTS_WORLD,Get_Transform());
-			DX8Wrapper::Set_Index_Buffer(dynamic_ib,vertex_offset);
+			Renderer::Set_Transform(RENDER_TRANSFORM_WORLD,Get_Transform());
+			Renderer::Bind_Dynamic_Index_Buffer(dynamic_ib,vertex_offset);
 
-			DX8Wrapper::Draw_Triangles(
+			Renderer::Draw_Triangles(
 				0,
 				temp_apt.Count(),
 				min_v,
@@ -980,10 +981,10 @@ void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass *
 			}
 		}
 		pass->Install_Materials();
-		DX8Wrapper::Set_Index_Buffer(ib,0);
+		Renderer::Bind_Legacy_Index_Buffer(ib,0);
 
 		SNAPSHOT_SAY(("Set_World_Transform"));
-		DX8Wrapper::Set_Transform(D3DTS_WORLD,Transform);
+		Renderer::Set_Transform(RENDER_TRANSFORM_WORLD,Transform);
 
 		DX8PolygonRendererListIterator it(&Model->PolygonRendererList);
 		while (!it.Is_Done()) {

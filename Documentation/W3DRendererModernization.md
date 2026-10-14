@@ -441,6 +441,33 @@ formats, sorted dynamic geometry, plus terrain/effect/UI modules that
 still directly hold D3D8 COM objects or call DX8Wrapper. These must be
 addressed before the DX8 backend can be fully replaced.
 
+### Sorting, mesh submission and screen-effect decoupling
+
+The sorted geometry pool no longer calls `DX8Wrapper::` directly. It
+captures/restores the current render state, applies saved transforms and
+lights, binds dynamic buffers, and draws through `Renderer`. The old sorting
+algorithm, draw-enable policy and reference release ordering remain intact.
+
+The Generals and Zero Hour `mesh.cpp` variants now route their remaining
+direct DX8 wrapper calls through existing `Renderer` operations: dynamic
+and persistent index buffers, world matrices, light environment and triangle
+draws. Their polygon renderer objects still use the legacy DX8-compatible
+vertex and index buffer classes.
+
+The custom `W3DShaderManager` now submits its screen-space two-triangle
+strips through `Renderer::Draw_Transformed_Quad`, with the original XYZRHW,
+diffuse ARGB and one/two UV layout. Explicit render-texture bindings use an
+immediate method that deliberately bypasses the deferred DX8 texture cache,
+preserving previous behavior. Driver vendor/device identification and shader
+capability queries now have backend-neutral results.
+
+**Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
+matrix types; dynamic buffers and polygon renderers are still legacy-owned;
+`W3DShaderManager` retains numerous fixed-function stage/texture-transform
+calls and native render target, pixel shader and effect resources. The current
+work removes DX8 *call sites* but does not yet provide a complete DX12
+execution path or parity for those effects.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

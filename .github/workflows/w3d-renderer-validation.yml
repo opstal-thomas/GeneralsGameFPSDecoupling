@@ -14,7 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dx8-boundary-audit:
+    name: Migrated W3D caller boundary audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prevent direct DX8 call regressions
+        run: python3 scripts/check_w3d_dx8_boundaries.py
+
   build-and-test:
+    needs: dx8-boundary-audit
     name: ${{ matrix.game }} win32
     strategy:
       fail-fast: false

@@ -131,7 +131,8 @@ struct RenderCapabilities
         : hardwareTransformAndLighting(false), nPatches(false),
           textureCompression(false), anisotropicFiltering(false),
           cubeTextures(false), bumpEnvironmentMapping(false),
-          pointSprites(false), maxSimultaneousTextures(0),
+          pointSprites(false), dot3TextureOperation(false),
+          pixelShaderMajorVersion(0), pixelShaderMinorVersion(0), maxSimultaneousTextures(0),
           maxTexturesPerPass(0), maxTextureWidth(0), maxTextureHeight(0),
           maxVolumeExtent(0), maxTextureAspectRatio(0),
           linearMinFilter(false), linearMagFilter(false), linearMipFilter(false),
@@ -146,6 +147,9 @@ struct RenderCapabilities
     bool cubeTextures;
     bool bumpEnvironmentMapping;
     bool pointSprites;
+    bool dot3TextureOperation;
+    unsigned pixelShaderMajorVersion;
+    unsigned pixelShaderMinorVersion;
     unsigned maxSimultaneousTextures;
     unsigned maxTexturesPerPass;
     unsigned maxTextureWidth;
@@ -157,6 +161,15 @@ struct RenderCapabilities
     bool linearMipFilter;
     bool anisotropicMinFilter;
     bool anisotropicMagFilter;
+};
+
+// Backend-neutral hardware identity for vendor shader selection.
+struct RenderAdapterIdentification
+{
+    RenderAdapterIdentification() : vendorId(0), deviceId(0), driverVersion(0) {}
+    unsigned vendorId;
+    unsigned deviceId;
+    unsigned long long driverVersion;
 };
 
 // Transitional descriptions for legacy W3D geometry allocations. They
@@ -571,6 +584,7 @@ public:
     static DeviceStatus Get_Device_Status();
     static bool Reset_Device();
     static RenderCapabilities Get_Capabilities();
+    static bool Get_Adapter_Identification(RenderAdapterIdentification & identification);
 
     // The W3D image format identifiers are asset-format IDs, not Direct3D
     // constants. Query the device/backend without exposing DX8Caps.
@@ -619,6 +633,9 @@ public:
     // Screen filters deliberately bypass the WW3D deferred texture cache.
     // Keep this immediate binding distinct from Bind_Texture's cached path.
     static void Bind_Immediate_Texture(unsigned stage, RenderTextureHandle texture);
+    // Immediate fixed-function alpha selection for motion-blur passes.
+    // This bypasses the deferred DX8 state cache like the original calls.
+    static void Set_Immediate_Stage_Alpha_Current(unsigned stage);
 
     // W3D-owned material, shader and texture selections. The original DX8
     // backend preserves its deferred state cache and reference ownership.
