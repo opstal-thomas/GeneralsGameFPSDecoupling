@@ -469,8 +469,10 @@ The original state-write order and its cache remain unchanged. Stage
 texture transform operations now use the neutral indexed transform API;
 render-target device operations are now routed through the neutral offscreen-target
 API, preserving the original one-mip allocation and MSAA failure behavior.
-Surface and texture ownership in the shader-manager class, and the native
-pixel shader handles, still require decoupling.
+Surface and texture ownership in the shader-manager class, and the original
+DX8 shader-token assets, still require a modern programmable replacement.
+Shader creation, selection, constants, deletion and immediate alpha-blend
+writes are now dispatched through Renderer, without changing DX8 behavior.
 
 **Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
 matrix types; dynamic buffers and polygon renderers are still legacy-owned;

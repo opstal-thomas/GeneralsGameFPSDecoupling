@@ -37,6 +37,8 @@ SHADER_MIGRATED_PATTERNS = [
     r"\bDX8Wrapper::_Set_DX8_Transform\s*\(",
     r"\bDX8Wrapper::_Get_DX8_Transform\s*\(",
     r"DX8Wrapper::_Get_D3D_Device8\s*\(\s*\)\s*->\s*(GetRenderTarget|GetDepthStencilSurface|CreateTexture|SetRenderTarget)\s*\(",
+    r"DX8Wrapper::_Get_D3D_Device8\s*\(\s*\)\s*->\s*(SetPixelShader|DeletePixelShader|SetPixelShaderConstant|CreatePixelShader|CreateVertexShader)\s*\(",
+    r"DX8Wrapper::_Get_D3D_Device8\s*\(\s*\)\s*->\s*SetRenderState\s*\(\s*D3DRS_ALPHABLENDENABLE",
 ]
 
 def executable_source(content: str) -> str:

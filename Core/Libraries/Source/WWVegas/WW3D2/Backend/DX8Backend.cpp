@@ -249,6 +249,55 @@ void Renderer::Set_Immediate_Stage_Alpha_Current(unsigned stage)
     device->SetTextureStageState(stage, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
 }
 
+void Renderer::Set_Immediate_Alpha_Blending(bool enabled)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->SetRenderState(D3DRS_ALPHABLENDENABLE, enabled ? TRUE : FALSE);
+}
+
+bool Renderer::Create_Legacy_Shader(bool vertexShader, const void * declaration,
+                                    const void * bytecode, unsigned usage, unsigned & handle)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    handle = 0;
+    if (!device || !bytecode || (vertexShader && !declaration))
+        return false;
+
+    DWORD nativeHandle = 0;
+    const HRESULT hr = vertexShader
+        ? device->CreateVertexShader(static_cast<const DWORD *>(declaration),
+                                     static_cast<const DWORD *>(bytecode), &nativeHandle, usage)
+        : device->CreatePixelShader(static_cast<const DWORD *>(bytecode), &nativeHandle);
+    if (hr != S_OK)
+        return false;
+    handle = static_cast<unsigned>(nativeHandle);
+    return true;
+}
+
+bool Renderer::Select_Legacy_Pixel_Shader(unsigned handle)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    return device && device->SetPixelShader(static_cast<DWORD>(handle)) == S_OK;
+}
+
+void Renderer::Delete_Legacy_Pixel_Shader(unsigned handle)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->DeletePixelShader(static_cast<DWORD>(handle));
+}
+
+void Renderer::Set_Legacy_Pixel_Shader_Vector(unsigned registerIndex,
+                                              float x, float y, float z, float w)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return;
+    const float value[4] = {x, y, z, w};
+    device->SetPixelShaderConstant(registerIndex, value, 1);
+}
+
 void Renderer::Set_Shader(const ShaderClass & shader)
 {
     DX8Wrapper::Set_Shader(shader);

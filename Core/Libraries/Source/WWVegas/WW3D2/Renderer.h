@@ -651,6 +651,17 @@ public:
     // Immediate fixed-function alpha selection for motion-blur passes.
     // This bypasses the deferred DX8 state cache like the original calls.
     static void Set_Immediate_Stage_Alpha_Current(unsigned stage);
+    static void Set_Immediate_Alpha_Blending(bool enabled);
+
+    // Transitional shader-program boundary: the existing .pso assets still
+    // contain legacy DX8 shader tokens. A future backend will need a modern
+    // shader representation rather than interpreting these tokens directly.
+    static bool Create_Legacy_Shader(bool vertexShader, const void * declaration,
+                                     const void * bytecode, unsigned usage, unsigned & handle);
+    static bool Select_Legacy_Pixel_Shader(unsigned handle);
+    static void Delete_Legacy_Pixel_Shader(unsigned handle);
+    static void Set_Legacy_Pixel_Shader_Vector(unsigned registerIndex,
+                                               float x, float y, float z, float w);
 
     // W3D-owned material, shader and texture selections. The original DX8
     // backend preserves its deferred state cache and reference ownership.
