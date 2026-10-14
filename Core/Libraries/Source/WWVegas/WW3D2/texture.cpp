@@ -1333,7 +1333,7 @@ CubeTextureClass::CubeTextureClass
 	bool rendertarget,
 	bool allow_reduction
 )
-: TextureClass(width, height, format, mip_level_count, pool, rendertarget)
+: TextureClass(width, height, mip_level_count, pool, rendertarget, format, allow_reduction)
 {
 	Initialized=true;
 	IsProcedural=true;
@@ -1351,27 +1351,14 @@ CubeTextureClass::CubeTextureClass
 	default : break;
 	}
 
-	D3DPOOL d3dpool=(D3DPOOL)0;
-	switch(pool)
-	{
-	case POOL_DEFAULT		: d3dpool=D3DPOOL_DEFAULT; break;
-	case POOL_MANAGED		: d3dpool=D3DPOOL_MANAGED; break;
-	case POOL_SYSTEMMEM	: d3dpool=D3DPOOL_SYSTEMMEM; break;
-	default: WWASSERT(0);
-	}
-
-	Poke_Texture
-	(
-		DX8Wrapper::_Create_DX8_Cube_Texture
-		(
-			width,
-			height,
-			format,
-			mip_level_count,
-			d3dpool,
-			rendertarget
-		)
-	);
+	RenderTextureCubeDescription description;
+	description.edgeLength = width;
+	description.pixelFormat = static_cast<unsigned>(format);
+	description.mipLevels = static_cast<unsigned>(mip_level_count);
+	description.memory = Get_Render_Texture_Memory(pool);
+	description.renderTarget = rendertarget;
+	Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+		Renderer::Create_Texture_Cube(description)));
 
 	if (pool==POOL_DEFAULT)
 	{
@@ -1383,7 +1370,8 @@ CubeTextureClass::CubeTextureClass
 			format,
 			mip_level_count,
 			this,
-			rendertarget
+			rendertarget,
+			DX8TextureTrackerClass::TRACK_CUBE
 		);
 		DX8TextureManagerClass::Add(track);
 	}
@@ -1616,7 +1604,7 @@ VolumeTextureClass::VolumeTextureClass
 	bool rendertarget,
 	bool allow_reduction
 )
-: TextureClass(width, height, format, mip_level_count, pool, rendertarget),
+: TextureClass(width, height, mip_level_count, pool, rendertarget, format, allow_reduction),
   Depth(depth)
 {
 	Initialized=true;
@@ -1635,27 +1623,15 @@ VolumeTextureClass::VolumeTextureClass
 	default : break;
 	}
 
-	D3DPOOL d3dpool=(D3DPOOL)0;
-	switch(pool)
-	{
-	case POOL_DEFAULT		: d3dpool=D3DPOOL_DEFAULT; break;
-	case POOL_MANAGED		: d3dpool=D3DPOOL_MANAGED; break;
-	case POOL_SYSTEMMEM	: d3dpool=D3DPOOL_SYSTEMMEM; break;
-	default: WWASSERT(0);
-	}
-
-	Poke_Texture
-	(
-		DX8Wrapper::_Create_DX8_Volume_Texture
-		(
-			width,
-			height,
-			depth,
-			format,
-			mip_level_count,
-			d3dpool
-		)
-	);
+	RenderTextureVolumeDescription description;
+	description.width = width;
+	description.height = height;
+	description.depth = depth;
+	description.pixelFormat = static_cast<unsigned>(format);
+	description.mipLevels = static_cast<unsigned>(mip_level_count);
+	description.memory = Get_Render_Texture_Memory(pool);
+	Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+		Renderer::Create_Texture_Volume(description)));
 
 	if (pool==POOL_DEFAULT)
 	{
@@ -1667,7 +1643,9 @@ VolumeTextureClass::VolumeTextureClass
 			format,
 			mip_level_count,
 			this,
-			rendertarget
+			rendertarget,
+			DX8TextureTrackerClass::TRACK_VOLUME,
+			depth
 		);
 		DX8TextureManagerClass::Add(track);
 	}

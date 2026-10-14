@@ -496,3 +496,34 @@ void Renderer::Release_Texture(RenderTextureHandle texture)
     if (texture)
         reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->Release();
 }
+
+
+RenderTextureCubeHandle Renderer::Create_Texture_Cube(const RenderTextureCubeDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid())
+        return nullptr;
+
+    IDirect3DCubeTexture8 * texture = DX8Wrapper::_Create_DX8_Cube_Texture(
+        description.edgeLength, description.edgeLength,
+        static_cast<WW3DFormat>(description.pixelFormat),
+        static_cast<MipCountType>(description.mipLevels),
+        Get_Legacy_Texture_Memory(description.memory),
+        description.renderTarget);
+    return reinterpret_cast<RenderTextureCubeHandle>(texture);
+}
+
+RenderTextureVolumeHandle Renderer::Create_Texture_Volume(const RenderTextureVolumeDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid())
+        return nullptr;
+
+    // DX8 volume textures do not support the cube/2D render-target flag.
+    IDirect3DVolumeTexture8 * texture = DX8Wrapper::_Create_DX8_Volume_Texture(
+        description.width, description.height, description.depth,
+        static_cast<WW3DFormat>(description.pixelFormat),
+        static_cast<MipCountType>(description.mipLevels),
+        Get_Legacy_Texture_Memory(description.memory));
+    return reinterpret_cast<RenderTextureVolumeHandle>(texture);
+}

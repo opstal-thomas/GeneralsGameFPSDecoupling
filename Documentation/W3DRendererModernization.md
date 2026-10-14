@@ -36,6 +36,27 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Seventh milestone: procedural cube/volume textures and reset tracking
+
+Procedural cube and volume textures now use separate backend-neutral
+descriptions and typed creation handles. The DX8 backend preserves the
+existing mipmap, pool and format conversion paths. Volume texture dimensions
+include depth; cube textures use one edge dimension.
+
+A device-reset problem in the legacy code has also been corrected: default
+pool cube and volume textures previously registered an ordinary 2D texture
+tracker, which recreated a 2D resource after reset. The tracker now records
+the texture dimension and volume depth, recreating the correct kind.
+
+The specialized texture constructors now use the TextureClass base
+constructor that does **not** allocate an unrelated 2D texture or register
+a second default-pool tracker. This also avoids leaking that unused
+allocation when the derived cube/volume resource replaces the pointer.
+
+Existing W3D assets and file-loaded cube/volume texture behavior are
+unchanged. Texture binding and reference lifetimes continue through the
+previously added Renderer methods.
+
 ### Sixth milestone: texture stage binding and base-resource references
 
 TextureBaseClass and its standard 2D/depth texture bindings now select

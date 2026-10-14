@@ -15,6 +15,42 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, CubeAndVolumeTextureDescriptors)
+{
+    const RenderTextureCubeDescription emptyCube;
+    const RenderTextureVolumeDescription emptyVolume;
+    EXPECT_FALSE(emptyCube.Is_Valid());
+    EXPECT_FALSE(emptyVolume.Is_Valid());
+
+    RenderTextureCubeDescription cube;
+    cube.edgeLength = 512;
+    cube.mipLevels = 1;
+    cube.memory = RENDER_TEXTURE_DEFAULT;
+    cube.renderTarget = true;
+    EXPECT_TRUE(cube.Is_Valid());
+    EXPECT_TRUE(cube.renderTarget);
+
+    RenderTextureVolumeDescription volume;
+    volume.width = 32;
+    volume.height = 24;
+    volume.depth = 8;
+    volume.memory = RENDER_TEXTURE_MANAGED;
+    EXPECT_TRUE(volume.Is_Valid());
+    EXPECT_EQ(8u, volume.depth);
+    volume.depth = 0;
+    EXPECT_FALSE(volume.Is_Valid());
+
+    static_assert(std::is_pointer_v<RenderTextureCubeHandle>);
+    static_assert(std::is_pointer_v<RenderTextureVolumeHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureCubeHandle, RenderTextureVolumeHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureCubeHandle, RenderTexture2DHandle>);
+    static_assert(!std::is_convertible_v<RenderTextureVolumeHandle, RenderTexture2DHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Texture_Cube(cube)),
+                                 RenderTextureCubeHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Texture_Volume(volume)),
+                                 RenderTextureVolumeHandle>);
+}
+
 TEST(RendererBackend, TextureBindingHandleAcceptsAllTextureTypes)
 {
     // A common texture binding handle must remain distinct from both

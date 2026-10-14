@@ -84,39 +84,73 @@ protected:
 	TextureBaseClass *Texture;
 };
 
+// One W3D texture tracker supports the three color texture dimensions.
+// The type is retained through a device reset; recreating a cube or a volume
+// as a 2D texture was incorrect and broke the resource contract.
 class DX8TextureTrackerClass : public TextureTrackerClass
 {
 public:
-	DX8TextureTrackerClass
-	(
-		unsigned int w,
-		unsigned int h,
-		WW3DFormat format,
-		MipCountType count,
-		TextureBaseClass *tex,
-		bool rt
-	)
-	: TextureTrackerClass(w,h,count,tex), Format(format), RenderTarget(rt)
-	{
-	}
+    enum TextureKind
+    {
+        TRACK_2D,
+        TRACK_CUBE,
+        TRACK_VOLUME
+    };
 
-	virtual void Recreate() const override
-	{
-		WWASSERT(Texture->Peek_D3D_Base_Texture()==nullptr);
-		RenderTexture2DDescription description;
-		description.width = Width;
-		description.height = Height;
-		description.pixelFormat = static_cast<unsigned>(Format);
-		description.mipLevels = static_cast<unsigned>(Mip_level_count);
-		description.memory = RENDER_TEXTURE_DEFAULT;
-		description.renderTarget = RenderTarget;
-		Texture->Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
-			Renderer::Create_Texture_2D(description)));
-	}
+    DX8TextureTrackerClass(
+        unsigned int w, unsigned int h, WW3DFormat format,
+        MipCountType count, TextureBaseClass * tex, bool rt,
+        TextureKind kind = TRACK_2D, unsigned int depth = 0)
+        : TextureTrackerClass(w, h, count, tex),
+          Format(format), RenderTarget(rt), Kind(kind), Depth(depth)
+    {
+    }
+
+    virtual void Recreate() const override
+    {
+        WWASSERT(Texture->Peek_D3D_Base_Texture() == nullptr);
+        if (Kind == TRACK_CUBE)
+        {
+            RenderTextureCubeDescription description;
+            description.edgeLength = Width;
+            description.pixelFormat = static_cast<unsigned>(Format);
+            description.mipLevels = static_cast<unsigned>(Mip_level_count);
+            description.memory = RENDER_TEXTURE_DEFAULT;
+            description.renderTarget = RenderTarget;
+            Texture->Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+                Renderer::Create_Texture_Cube(description)));
+        }
+        else if (Kind == TRACK_VOLUME)
+        {
+            RenderTextureVolumeDescription description;
+            description.width = Width;
+            description.height = Height;
+            description.depth = Depth;
+            description.pixelFormat = static_cast<unsigned>(Format);
+            description.mipLevels = static_cast<unsigned>(Mip_level_count);
+            description.memory = RENDER_TEXTURE_DEFAULT;
+            Texture->Poke_Texture(reinterpret_cast<IDirect3DBaseTexture8 *>(
+                Renderer::Create_Texture_Volume(description)));
+        }
+        else
+        {
+            RenderTexture2DDescription description;
+            description.width = Width;
+            description.height = Height;
+            description.pixelFormat = static_cast<unsigned>(Format);
+            description.mipLevels = static_cast<unsigned>(Mip_level_count);
+            description.memory = RENDER_TEXTURE_DEFAULT;
+            description.renderTarget = RenderTarget;
+            Texture->Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+                Renderer::Create_Texture_2D(description)));
+        }
+    }
 
 private:
-	WW3DFormat Format;
-	bool RenderTarget;
+    WW3DFormat Format;
+    bool RenderTarget;
+    TextureKind Kind;
+    unsigned int Depth;
 };
 
 class DX8ZTextureTrackerClass : public TextureTrackerClass

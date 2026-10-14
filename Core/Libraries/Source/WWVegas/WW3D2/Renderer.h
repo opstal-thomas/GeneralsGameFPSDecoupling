@@ -49,6 +49,13 @@ using RenderTexture2DHandle = RendererTexture2DResource *;
 struct RendererTextureResource;
 using RenderTextureHandle = RendererTextureResource *;
 
+// Distinct creation handles for specialized textures. All texture types
+// still bind to a stage through the generic RenderTextureHandle.
+struct RendererTextureCubeResource;
+struct RendererTextureVolumeResource;
+using RenderTextureCubeHandle = RendererTextureCubeResource *;
+using RenderTextureVolumeHandle = RendererTextureVolumeResource *;
+
 struct RenderViewport
 {
     unsigned int x;
@@ -144,6 +151,41 @@ struct RenderTexture2DDescription
     bool renderTarget;
 
     bool Is_Valid() const { return width > 0 && height > 0; }
+};
+
+struct RenderTextureCubeDescription
+{
+    RenderTextureCubeDescription()
+        : edgeLength(0), pixelFormat(0), mipLevels(0),
+          memory(RENDER_TEXTURE_MANAGED), renderTarget(false)
+    {
+    }
+
+    unsigned edgeLength;
+    unsigned pixelFormat;
+    unsigned mipLevels;
+    RenderTextureMemory memory;
+    bool renderTarget;
+
+    bool Is_Valid() const { return edgeLength > 0; }
+};
+
+struct RenderTextureVolumeDescription
+{
+    RenderTextureVolumeDescription()
+        : width(0), height(0), depth(0), pixelFormat(0), mipLevels(0),
+          memory(RENDER_TEXTURE_MANAGED)
+    {
+    }
+
+    unsigned width;
+    unsigned height;
+    unsigned depth;
+    unsigned pixelFormat;
+    unsigned mipLevels;
+    RenderTextureMemory memory;
+
+    bool Is_Valid() const { return width > 0 && height > 0 && depth > 0; }
 };
 
 // A method appears here once a caller routes through it, not in anticipation of
@@ -256,6 +298,8 @@ public:
     // Both creation entry points support the original device-reset tracker.
     static RenderTexture2DHandle Create_Texture_2D(const RenderTexture2DDescription & description);
     static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
+    static RenderTextureCubeHandle Create_Texture_Cube(const RenderTextureCubeDescription & description);
+    static RenderTextureVolumeHandle Create_Texture_Volume(const RenderTextureVolumeDescription & description);
 
     // Texture stage binding retains the original DX8 reference cache,
     // texture-stage invalidation and AddRef/Release semantics. The abstract
