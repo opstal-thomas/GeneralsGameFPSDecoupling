@@ -33,6 +33,7 @@ SHADER_MIGRATED_PATTERNS = [
     r"\bIDirect3D8\s*\*\s*d3d8Interface\b",
     r"\bDX8Wrapper::Set_DX8_Texture\s*\(",
     r"\bDX8Wrapper::Set_DX8_Render_State\s*\(",
+    r"\bDX8Wrapper::Set_DX8_Texture_Stage_State\s*\(",
 ]
 
 def executable_source(content: str) -> str:

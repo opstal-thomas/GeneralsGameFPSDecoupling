@@ -462,8 +462,12 @@ preserving previous behavior. Driver vendor/device identification and shader
 capability queries now have backend-neutral results. Its legacy direct
 `Set_DX8_Texture` calls now use the existing backend texture-binding method;
 RGB-only/alpha-only mask operations use `Set_Color_Write_Mask`. The
-fixed-function stage combiners and render-target lifetime code are still
-native DX8-dependent.
+fixed-function stage updates now pass semantic operation, argument and texture
+coordinate descriptions to `Renderer`; all 268 direct texture-stage state
+writes previously in `W3DShaderManager.cpp` now belong to the DX8 backend.
+The original state-write order and its cache remain unchanged. Stage
+texture transforms, render-target ownership and native pixel shader handles
+are still DX8-dependent.
 
 **Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
 matrix types; dynamic buffers and polygon renderers are still legacy-owned;

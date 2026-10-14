@@ -1193,6 +1193,64 @@ static DWORD To_DX8_Texture_Argument(RenderTextureArgument argument)
     }
 }
 
+
+void Renderer::Set_Fixed_Stage_Operation(unsigned stage, bool alpha,
+                                         RenderFixedStageOperation operation)
+{
+    D3DTEXTUREOP nativeOperation = D3DTOP_DISABLE;
+    switch (operation)
+    {
+    case RENDER_FIXED_STAGE_SELECT_ARG1: nativeOperation = D3DTOP_SELECTARG1; break;
+    case RENDER_FIXED_STAGE_SELECT_ARG2: nativeOperation = D3DTOP_SELECTARG2; break;
+    case RENDER_FIXED_STAGE_MODULATE: nativeOperation = D3DTOP_MODULATE; break;
+    case RENDER_FIXED_STAGE_ADD: nativeOperation = D3DTOP_ADD; break;
+    case RENDER_FIXED_STAGE_BLEND_CURRENT_ALPHA: nativeOperation = D3DTOP_BLENDCURRENTALPHA; break;
+    case RENDER_FIXED_STAGE_DOT_PRODUCT3: nativeOperation = D3DTOP_DOTPRODUCT3; break;
+    case RENDER_FIXED_STAGE_MULTIPLY_ADD: nativeOperation = D3DTOP_MULTIPLYADD; break;
+    case RENDER_FIXED_STAGE_DISABLE: break;
+    default: WWASSERT(0); return;
+    }
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, alpha ? D3DTSS_ALPHAOP : D3DTSS_COLOROP, nativeOperation);
+}
+
+void Renderer::Set_Fixed_Stage_Argument(unsigned stage, bool alpha, unsigned slot,
+                                        RenderTextureArgument source, bool complement,
+                                        bool replicateAlpha)
+{
+    // D3D8 offers COLORARG0 for three-input operations but no ALPHAARG0.
+    if (slot > 2 || (alpha && slot == 0))
+    {
+        WWASSERT(0);
+        return;
+    }
+    const D3DTEXTURESTAGESTATETYPE nativeField = alpha
+        ? (slot == 1 ? D3DTSS_ALPHAARG1 : D3DTSS_ALPHAARG2)
+        : (slot == 0 ? D3DTSS_COLORARG0
+           : slot == 1 ? D3DTSS_COLORARG1 : D3DTSS_COLORARG2);
+    unsigned nativeArgument = To_DX8_Texture_Argument(source);
+    if (complement)
+        nativeArgument |= D3DTA_COMPLEMENT;
+    if (replicateAlpha)
+        nativeArgument |= D3DTA_ALPHAREPLICATE;
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, nativeField, nativeArgument);
+}
+
+void Renderer::Set_Texture_Coordinate_Source(unsigned stage, unsigned uvIndex,
+                                             bool cameraSpacePosition)
+{
+    const unsigned nativeIndex = uvIndex |
+        (cameraSpacePosition ? D3DTSS_TCI_CAMERASPACEPOSITION : D3DTSS_TCI_PASSTHRU);
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_TEXCOORDINDEX, nativeIndex);
+}
+
+void Renderer::Set_Texture_Transform_2D(unsigned stage, bool enabled)
+{
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_TEXTURETRANSFORMFLAGS, enabled ? D3DTTFF_COUNT2 : D3DTTFF_DISABLE);
+}
+
 static void Apply_DX8_Texture_Channel(
     unsigned stage,
     const RenderTextureStageChannel & channel,

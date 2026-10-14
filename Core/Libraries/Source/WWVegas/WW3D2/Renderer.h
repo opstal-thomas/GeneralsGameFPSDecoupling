@@ -464,6 +464,20 @@ enum RenderTextureOperation
     RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE
 };
 
+// Legacy shader-manager stage operations. This is separate from the 4-bit
+// W3D material combiner key, which cannot encode all legacy screen effects.
+enum RenderFixedStageOperation
+{
+    RENDER_FIXED_STAGE_DISABLE,
+    RENDER_FIXED_STAGE_SELECT_ARG1,
+    RENDER_FIXED_STAGE_SELECT_ARG2,
+    RENDER_FIXED_STAGE_MODULATE,
+    RENDER_FIXED_STAGE_ADD,
+    RENDER_FIXED_STAGE_BLEND_CURRENT_ALPHA,
+    RENDER_FIXED_STAGE_DOT_PRODUCT3,
+    RENDER_FIXED_STAGE_MULTIPLY_ADD
+};
+
 enum RenderTextureArgument
 {
     RENDER_TEXARG_CURRENT,
@@ -808,6 +822,15 @@ public:
                                           bool uncached = false);
     static void Apply_Texture_Stage_Alpha(unsigned stage, const RenderTextureStageChannel & channel,
                                           bool uncached = false);
+
+    // Individual fixed-function stage updates preserve the historical write
+    // order and DX8 state cache, while no native D3D8 values reach callers.
+    static void Set_Fixed_Stage_Operation(unsigned stage, bool alpha, RenderFixedStageOperation operation);
+    static void Set_Fixed_Stage_Argument(unsigned stage, bool alpha, unsigned slot,
+                                         RenderTextureArgument source, bool complement = false,
+                                         bool replicateAlpha = false);
+    static void Set_Texture_Coordinate_Source(unsigned stage, unsigned uvIndex, bool cameraSpacePosition);
+    static void Set_Texture_Transform_2D(unsigned stage, bool enabled);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);
