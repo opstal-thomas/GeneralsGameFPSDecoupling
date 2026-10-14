@@ -12,6 +12,16 @@ geometry probe and a reusable, opt-in WW3D2 device/presentation module
 that creates and presents to an actual Windows swapchain. Neither is a
 DX12 gameplay backend or changes the game's image quality.
 
+### DX8 call-site consolidation (migration phase)
+
+DX12 game integration is paused while remaining WW3D2/GameEngineDevice
+direct DX8 device dependencies are isolated. The next pass routes W3D-level
+shader, material, texture and transform selections plus state flushes through
+`Renderer.h`, with exact forwarding semantics in `DX8Backend.cpp`.
+This does not add any DX12 runtime behavior. Backend-neutral callers must
+not name D3D transform ordinals or call `DX8Wrapper` to select shaders,
+materials, or textures. Legacy raw D3D8 texture-stage states, device
+pointers, buffer types and render targets require separate migrations.
 ## Existing architecture
 
 The repository already has `WW3D2/Renderer.h` and

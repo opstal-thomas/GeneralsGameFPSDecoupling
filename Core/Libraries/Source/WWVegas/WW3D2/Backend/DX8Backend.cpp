@@ -108,6 +108,57 @@ void Renderer::Invalidate_Cached_Render_States()
     DX8Wrapper::Invalidate_Cached_Render_States();
 }
 
+void Renderer::Set_Shader(const ShaderClass & shader)
+{
+    DX8Wrapper::Set_Shader(shader);
+}
+
+void Renderer::Set_Material(const VertexMaterialClass * material)
+{
+    DX8Wrapper::Set_Material(material);
+}
+
+void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
+{
+    DX8Wrapper::Set_Texture(stage, texture);
+}
+
+void Renderer::Apply_Pending_State_Changes()
+{
+    DX8Wrapper::Apply_Render_State_Changes();
+}
+
+static D3DTRANSFORMSTATETYPE To_DX8_Transform(RenderTransform transform)
+{
+    switch (transform)
+    {
+    case RENDER_TRANSFORM_VIEW: return D3DTS_VIEW;
+    case RENDER_TRANSFORM_PROJECTION: return D3DTS_PROJECTION;
+    case RENDER_TRANSFORM_WORLD:
+    default: return D3DTS_WORLD;
+    }
+}
+
+void Renderer::Set_Transform(RenderTransform transform, const Matrix3D & matrix)
+{
+    DX8Wrapper::Set_Transform(To_DX8_Transform(transform), matrix);
+}
+
+void Renderer::Set_Transform(RenderTransform transform, const Matrix4x4 & matrix)
+{
+    DX8Wrapper::Set_Transform(To_DX8_Transform(transform), matrix);
+}
+
+void Renderer::Get_Transform(RenderTransform transform, Matrix4x4 & matrix)
+{
+    DX8Wrapper::Get_Transform(To_DX8_Transform(transform), matrix);
+}
+
+void Renderer::Set_World_Identity()
+{
+    DX8Wrapper::Set_World_Identity();
+}
+
 void Renderer::Set_Ambient(const Vector3 & color)
 {
     DX8Wrapper::Set_Ambient(color);

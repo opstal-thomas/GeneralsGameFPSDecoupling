@@ -29,6 +29,11 @@
 class LightEnvironmentClass;
 class CameraClass;
 class Vector3;
+class Matrix3D;
+class Matrix4x4;
+class ShaderClass;
+class VertexMaterialClass;
+class TextureBaseClass;
 
 // Strongly typed, incomplete GPU resource handles. The backend owns the
 // actual object and its lifetime. A vertex handle cannot be passed to an
@@ -58,6 +63,14 @@ using RenderTextureVolumeHandle = RendererTextureVolumeResource *;
 
 struct RendererSurfaceResource;
 using RenderSurfaceHandle = RendererSurfaceResource *;
+
+// Semantic W3D transforms; no Direct3D transform-state ordinals are exposed.
+enum RenderTransform
+{
+    RENDER_TRANSFORM_WORLD,
+    RENDER_TRANSFORM_VIEW,
+    RENDER_TRANSFORM_PROJECTION
+};
 
 struct RenderViewport
 {
@@ -494,6 +507,21 @@ public:
     static void Set_Viewport(const RenderViewport & viewport);
     static void Set_Polygon_Mode(PolygonMode mode);
     static void Invalidate_Cached_Render_States();
+
+    // W3D-owned material, shader and texture selections. The original DX8
+    // backend preserves its deferred state cache and reference ownership.
+    // New backends interpret these as rendering intent, not DX8 commands.
+    static void Set_Shader(const ShaderClass & shader);
+    static void Set_Material(const VertexMaterialClass * material);
+    static void Set_Texture(unsigned stage, TextureBaseClass * texture);
+    static void Apply_Pending_State_Changes();
+
+    // A neutral transform boundary. Texture projection and special DX8
+    // transform IDs remain in the legacy code until translated separately.
+    static void Set_Transform(RenderTransform transform, const Matrix3D & matrix);
+    static void Set_Transform(RenderTransform transform, const Matrix4x4 & matrix);
+    static void Get_Transform(RenderTransform transform, Matrix4x4 & matrix);
+    static void Set_World_Identity();
 
     // The high-level W3D scene submits geometry using these methods, rather
     // than reaching into the DX8 mesh renderer. Preserve flush ordering:
