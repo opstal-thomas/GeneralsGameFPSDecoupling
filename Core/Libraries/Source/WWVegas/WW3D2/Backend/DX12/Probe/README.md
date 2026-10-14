@@ -32,8 +32,13 @@ not add files to the game's deployment.
 
 ## Shader permutation isolation
 
-The default and `--untextured` modes exercise dynamic combiner-key branching.
-The `--static-textured` and `--static-untextured` modes provide the same
-combinations as compile-time HLSL constants, making it possible to distinguish
-WARP's handling of the dynamically interpreted combiner from a specialized
-PSO. Both paths must pass before full pixel parity can be claimed.
+The WARP regression was localized to dynamic combiner-key interpretation
+(DXGI_ERROR_DEVICE_REMOVED). Compiling equivalent W3D combiner keys as shader
+constants passed on the same Windows runner. Every W3D pixel shader probe now
+requires `W3D_STATIC_COMBINER_KEY`. This is a shader permutation identifier
+for the future material PSO cache; no production DX12 backend is active yet.
+
+The probe validates clear/readback, geometry submission, W3D vertex shading,
+texture sampling, an untextured material, a two-stage texture modulate
+combiner, and alpha-test rejection with GPU pixel readback. Unsupported
+permutations must be handled explicitly rather than silently substituted.

@@ -130,10 +130,10 @@ struct Vertex {
 struct alignas(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) Constants {
     float wvp[16] = {};
     float textureFactor[4] = {1.f, 1.f, 1.f, 1.f};
-    unsigned combiner = 0x10101193u; // stage 0: texture * diffuse
     unsigned alphaTest = 1;
     unsigned alphaReference = 0x60;
     unsigned alphaCompare = 6; // GREATER_EQUAL from Renderer.h
+    unsigned reserved = 0;
 };
 static_assert(sizeof(Constants) == 256, "CBV layout/alignment");
 
@@ -161,8 +161,7 @@ void PrintDiagnostics(ID3D12Device * device)
 }
 
 void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
-         bool w3dVertexOnly, bool basicTexture,
-         bool staticUntextured, bool staticTextured)
+         bool w3dVertexOnly, bool basicTexture, bool twoStage, bool alphaReject)
 {
     ComPtr<ID3D12Debug> debug;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
@@ -253,14 +252,19 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
                             * input.diffuse);
         }
     )";
-    const D3D_SHADER_MACRO staticUntexturedDefines[] = {
+    // Combiner key channels: stage0 color/alpha, stage1 color/alpha.
+    // Stage 1 modulates current color with the same bound 1x1 texture.
+    const D3D_SHADER_MACRO untexturedDefines[] = {
         {"W3D_STATIC_COMBINER_KEY", "0x10101010u"}, {nullptr, nullptr}
     };
-    const D3D_SHADER_MACRO staticTexturedDefines[] = {
+    const D3D_SHADER_MACRO texturedDefines[] = {
         {"W3D_STATIC_COMBINER_KEY", "0x10101193u"}, {nullptr, nullptr}
     };
-    const D3D_SHADER_MACRO * defines = staticUntextured ? staticUntexturedDefines
-        : (staticTextured ? staticTexturedDefines : nullptr);
+    const D3D_SHADER_MACRO twoStageDefines[] = {
+        {"W3D_STATIC_COMBINER_KEY", "0x10431193u"}, {nullptr, nullptr}
+    };
+    const D3D_SHADER_MACRO * defines = untextured ? untexturedDefines
+        : (twoStage ? twoStageDefines : texturedDefines);
     auto vs = solid ? CompileSolid(minimalShader, "W3D_VS", "vs_5_1")
                     : Compile(shader, "W3D_VS", "vs_5_1");
     auto ps = (solid || w3dVertexOnly)
@@ -353,7 +357,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     auto transition = Barrier(texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    if (!clearOnly && !untextured && !staticUntextured && !solid && !w3dVertexOnly) {
+    if (!clearOnly && !untextured && !solid && !w3dVertexOnly) {
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         list->ResourceBarrier(1, &transition);
     }
@@ -413,11 +417,14 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     Constants constants;
     constants.wvp[0] = constants.wvp[5] =
         constants.wvp[10] = constants.wvp[15] = 1.f;
-    if (untextured || staticUntextured) {
-        // COLOROP=DISABLE on both stages: the pixel shader should return
-        // interpolated diffuse vertex color without sampling the texture.
-        constants.combiner = 0x10101010u;
+    if (untextured) {
+        // COLOROP=DISABLE: return interpolated diffuse without sampling.
         constants.alphaTest = 0;
+    }
+    if (alphaReject) {
+        // Greater-than-255 must discard even a fully opaque fragment.
+        constants.alphaReference = 255;
+        constants.alphaCompare = 4; // GREATER from Renderer.h
     }
     auto cbv = Resource(device.Get(), D3D12_HEAP_TYPE_UPLOAD,
         Buffer(sizeof(constants)), D3D12_RESOURCE_STATE_GENERIC_READ);
@@ -515,14 +522,17 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     };
     // The clear-only test isolates basic GPU submission/copy from texture
     // uploads, pixel shading and drawing. It must produce the clear color.
-    const bool insideMatches = clearOnly
+    const bool insideMatches = (clearOnly || alphaReject)
         ? (closeTo(inside[0], 0) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
         : (solid || w3dVertexOnly)
         ? (closeTo(inside[0], 255) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
-        : (untextured || staticUntextured)
+        : untextured
         ? (closeTo(inside[0], 255) && closeTo(inside[1], 64) &&
+           closeTo(inside[2], 128) && closeTo(inside[3], 255))
+        : twoStage
+        ? (closeTo(inside[0], 64) && closeTo(inside[1], 64) &&
            closeTo(inside[2], 128) && closeTo(inside[3], 255))
         : (closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
            closeTo(inside[2], 128) && closeTo(inside[3], 255));
@@ -531,13 +541,13 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
           closeTo(outside[3], 255)))
         throw std::runtime_error("D3D12 WARP pixel verification failed");
     const char * mode = clearOnly ? "clear/readback"
-        : (solid ? "minimal solid-color draw"
-            : (w3dVertexOnly ? "W3D vertex with minimal pixel shader"
-                : (basicTexture ? "basic texture-modulated draw"
-                    : (staticUntextured ? "static-key untextured W3D draw"
-                        : (staticTextured ? "static-key textured W3D draw"
-                            : (untextured ? "untextured W3D draw"
-                                : "textured W3D draw"))))));
+        : solid ? "minimal solid-color draw"
+        : w3dVertexOnly ? "W3D vertex with minimal pixel shader"
+        : basicTexture ? "basic texture-modulated draw"
+        : untextured ? "untextured W3D draw"
+        : twoStage ? "two-stage textured W3D draw"
+        : alphaReject ? "alpha-rejected W3D draw"
+        : "textured W3D draw";
     std::cout << "D3D12 WARP " << mode << ": PASS\n";
 }
 }
@@ -545,7 +555,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
 int wmain(int argc, wchar_t ** argv)
 {
     if (argc < 2 || argc > 3) {
-        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid|--w3d-vs|--basic-texture|--static-untextured|--static-textured]\n";
+        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid|--w3d-vs|--basic-texture|--two-stage|--alpha-reject]\n";
         return 2;
     }
     try {
@@ -554,13 +564,13 @@ int wmain(int argc, wchar_t ** argv)
         const bool solid = argc == 3 && std::wcscmp(argv[2], L"--solid") == 0;
         const bool w3dVertexOnly = argc == 3 && std::wcscmp(argv[2], L"--w3d-vs") == 0;
         const bool basicTexture = argc == 3 && std::wcscmp(argv[2], L"--basic-texture") == 0;
-        const bool staticUntextured = argc == 3 && std::wcscmp(argv[2], L"--static-untextured") == 0;
-        const bool staticTextured = argc == 3 && std::wcscmp(argv[2], L"--static-textured") == 0;
+        const bool twoStage = argc == 3 && std::wcscmp(argv[2], L"--two-stage") == 0;
+        const bool alphaReject = argc == 3 && std::wcscmp(argv[2], L"--alpha-reject") == 0;
         if (argc == 3 && !clearOnly && !untextured && !solid && !w3dVertexOnly &&
-            !basicTexture && !staticUntextured && !staticTextured)
+            !basicTexture && !twoStage && !alphaReject)
             throw std::runtime_error("Unknown mode");
         Run(argv[1], clearOnly, untextured, solid, w3dVertexOnly, basicTexture,
-            staticUntextured, staticTextured);
+            twoStage, alphaReject);
         return 0;
     } catch (const std::exception & e) {
         std::cerr << "DX12 WARP probe failure: " << e.what() << '\n';

@@ -61,16 +61,16 @@ add_test(
 )
 set_tests_properties(W3D_DX12_WARP_Basic_Texture_Draw PROPERTIES TIMEOUT 45)
 
-# These preserve pixel checks while specializing the combiner at shader
-# compilation time, matching the intended DX12 material-PSO approach.
+# Validate an additional two-stage combination and alpha-test rejection.
+# These remain GPU pixel assertions, not compilation-only smoke checks.
 add_test(
-    NAME W3D_DX12_WARP_Static_Key_Untextured
-    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --static-untextured
+    NAME W3D_DX12_WARP_Two_Stage_Combiner
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --two-stage
 )
-set_tests_properties(W3D_DX12_WARP_Static_Key_Untextured PROPERTIES TIMEOUT 45)
+set_tests_properties(W3D_DX12_WARP_Two_Stage_Combiner PROPERTIES TIMEOUT 45)
 
 add_test(
-    NAME W3D_DX12_WARP_Static_Key_Textured
-    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --static-textured
+    NAME W3D_DX12_WARP_Alpha_Test_Rejection
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --alpha-reject
 )
-set_tests_properties(W3D_DX12_WARP_Static_Key_Textured PROPERTIES TIMEOUT 45)
+set_tests_properties(W3D_DX12_WARP_Alpha_Test_Rejection PROPERTIES TIMEOUT 45)

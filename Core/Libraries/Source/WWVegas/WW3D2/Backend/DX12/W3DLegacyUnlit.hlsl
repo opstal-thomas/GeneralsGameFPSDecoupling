@@ -9,10 +9,10 @@ cbuffer W3DPerDraw : register(b0)
 {
     row_major float4x4 W3D_WorldViewProjection;
     float4 W3D_TextureFactor;
-    uint W3D_CombinerKey;
     uint W3D_AlphaTestEnabled;
     uint W3D_AlphaReference;
     uint W3D_AlphaCompare;
+    uint W3D_Reserved;
 };
 
 Texture2D W3D_Texture0 : register(t0);
@@ -63,14 +63,13 @@ bool W3DAlphaComparison(float alpha, uint reference, uint compare)
 
 float4 W3D_PS(W3DVertexOutput input) : SV_TARGET0
 {
-    // Runtime key support is retained for reference. A DX12 backend can
-    // specialize fixed-function material combinations while building PSOs.
-    // The probe compares that path against the runtime-key implementation.
-#ifdef W3D_STATIC_COMBINER_KEY
-    const uint combinerKey = W3D_STATIC_COMBINER_KEY;
-#else
-    const uint combinerKey = W3D_CombinerKey;
+    // W3D fixed-function material combiners are shader permutations.
+    // The dynamically-interpreted key caused WARP device removal in CI,
+    // while the equivalent compile-time permutations passed pixel tests.
+#ifndef W3D_STATIC_COMBINER_KEY
+#error W3D_STATIC_COMBINER_KEY must be defined when compiling W3D shaders
 #endif
+    const uint combinerKey = W3D_STATIC_COMBINER_KEY;
     const uint color0 = W3DGetChannel(combinerKey, 0u, false);
     const uint alpha0 = W3DGetChannel(combinerKey, 0u, true);
     const uint color1 = W3DGetChannel(combinerKey, 1u, false);

@@ -30,9 +30,9 @@ jobs:
           $outVS = Join-Path $env:RUNNER_TEMP "W3DLegacyUnlit.vs.cso"
           $outPS = Join-Path $env:RUNNER_TEMP "W3DLegacyUnlit.ps.cso"
 
-          & $compiler.FullName /nologo /T vs_5_1 /E W3D_VS /Fo $outVS $shader
+          & $compiler.FullName /nologo /T vs_5_1 /E W3D_VS /D W3D_STATIC_COMBINER_KEY=0x10101193u /Fo $outVS $shader
           if ($LASTEXITCODE -ne 0) { throw "DX12 vertex shader compilation failed" }
-          & $compiler.FullName /nologo /T ps_5_1 /E W3D_PS /Fo $outPS $shader
+          & $compiler.FullName /nologo /T ps_5_1 /E W3D_PS /D W3D_STATIC_COMBINER_KEY=0x10101193u /Fo $outPS $shader
           if ($LASTEXITCODE -ne 0) { throw "DX12 pixel shader compilation failed" }
 
           if ((Get-Item $outVS).Length -eq 0 -or (Get-Item $outPS).Length -eq 0) {
