@@ -387,6 +387,45 @@ struct RenderTextureStageChannel
     RenderTextureArgument argument2;
 };
 
+// Each channel uses four bits for the operation and two bits for each
+// input source. Two fixed-function W3D stages therefore fit into one
+// stable 32-bit shader permutation key without hashing struct padding.
+// A future DX12 pipeline cache can compile/select a shader for this key.
+struct RenderTextureCombinerKey
+{
+    RenderTextureStageChannel color[2];
+    RenderTextureStageChannel alpha[2];
+
+    static unsigned Encode_Channel(const RenderTextureStageChannel & c)
+    {
+        return (static_cast<unsigned>(c.operation) & 0x0fu)
+            | ((static_cast<unsigned>(c.argument1) & 0x03u) << 4)
+            | ((static_cast<unsigned>(c.argument2) & 0x03u) << 6);
+    }
+
+    unsigned Encode() const
+    {
+        return Encode_Channel(color[0])
+            | (Encode_Channel(alpha[0]) << 8)
+            | (Encode_Channel(color[1]) << 16)
+            | (Encode_Channel(alpha[1]) << 24);
+    }
+
+    static bool Is_Bump_Operation(RenderTextureOperation operation)
+    {
+        return operation == RENDER_TEXOP_BUMP_ENV_MAP
+            || operation == RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE;
+    }
+
+    bool Requires_Bump_Shader() const
+    {
+        return Is_Bump_Operation(color[0].operation)
+            || Is_Bump_Operation(alpha[0].operation)
+            || Is_Bump_Operation(color[1].operation)
+            || Is_Bump_Operation(alpha[1].operation);
+    }
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a

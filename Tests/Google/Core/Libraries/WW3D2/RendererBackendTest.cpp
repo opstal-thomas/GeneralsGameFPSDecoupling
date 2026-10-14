@@ -15,6 +15,45 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, FixedFunctionTextureStageHasStableDx12PermutationEncoding)
+{
+    // Numeric operation IDs intentionally match the DX12 HLSL reference.
+    static_assert(RENDER_TEXOP_DISABLE == 0);
+    static_assert(RENDER_TEXOP_SELECT_ARG1 == 1);
+    static_assert(RENDER_TEXOP_SELECT_ARG2 == 2);
+    static_assert(RENDER_TEXOP_MODULATE == 3);
+    static_assert(RENDER_TEXOP_MODULATE2X == 4);
+    static_assert(RENDER_TEXOP_ADD == 5);
+    static_assert(RENDER_TEXOP_ADD_SMOOTH == 6);
+    static_assert(RENDER_TEXOP_SUBTRACT == 7);
+    static_assert(RENDER_TEXOP_BLEND_TEXTURE_ALPHA == 8);
+    static_assert(RENDER_TEXOP_BLEND_CURRENT_ALPHA == 9);
+    static_assert(RENDER_TEXOP_ADD_SIGNED == 10);
+    static_assert(RENDER_TEXOP_ADD_SIGNED2X == 11);
+    static_assert(RENDER_TEXOP_MODULATE_ALPHA_ADD_COLOR == 12);
+    static_assert(RENDER_TEXOP_BUMP_ENV_MAP == 13);
+    static_assert(RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE == 14);
+    static_assert(RENDER_TEXARG_CURRENT == 0);
+    static_assert(RENDER_TEXARG_TEXTURE == 1);
+    static_assert(RENDER_TEXARG_DIFFUSE == 2);
+    static_assert(RENDER_TEXARG_TEXTURE_FACTOR == 3);
+
+    const RenderTextureCombinerKey defaults;
+    EXPECT_EQ(0x10101010u, defaults.Encode());
+    EXPECT_FALSE(defaults.Requires_Bump_Shader());
+
+    RenderTextureCombinerKey modulate;
+    modulate.color[0] = RenderTextureStageChannel(
+        RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+    EXPECT_EQ(0x10101093u, modulate.Encode());
+    EXPECT_FALSE(modulate.Requires_Bump_Shader());
+
+    modulate.alpha[1] = RenderTextureStageChannel(
+        RENDER_TEXOP_BUMP_ENV_MAP, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_CURRENT);
+    EXPECT_TRUE(modulate.Requires_Bump_Shader());
+    EXPECT_NE(0x10101093u, modulate.Encode());
+}
+
 TEST(RendererBackend, FixedFunctionTextureStageIsApiNeutral)
 {
     const RenderTextureStageChannel disabled;

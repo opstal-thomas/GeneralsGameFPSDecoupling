@@ -36,6 +36,24 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### DX12 shader reference and permutation identity
+
+The backend-neutral texture operation and argument IDs are now encoded into
+a deterministic two-stage RenderTextureCombinerKey. Each color/alpha
+channel fits into one byte; the four channels share a 32-bit key. This
+avoids hashing W3D object addresses, C++ padding or native D3D values and
+allows a DX12 pipeline cache to select a matching shader permutation.
+
+An initial reusable HLSL implementation lives at
+`WW3D2/Backend/DX12/W3DLegacyTextureCombiner.hlsli`. It implements the
+common color and alpha arithmetic of the W3D fixed-function pipeline and
+uses the exact same numeric operations/input sources as Renderer.h.
+
+**This is not a running DX12 backend.** No W3D draw code yet compiles or
+binds the HLSL file. Bump-environment operations and special vendor stage
+handling require dedicated DX12 permutations and must not silently use the
+generic arithmetic path. The original DX8 backend remains active.
+
 ### Thirteenth milestone: fixed-function texture combiner stage boundary
 
 W3D material pixel combiners describe color and alpha operations separately
