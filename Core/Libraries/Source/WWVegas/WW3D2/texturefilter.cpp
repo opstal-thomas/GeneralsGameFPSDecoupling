@@ -121,7 +121,7 @@ void TextureFilterClass::Apply(unsigned int stage)
 */
 void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, AnisotropicFilterMode anisotropy_level)
 {
-	const D3DCAPS8& dx8caps=DX8Wrapper::Get_Current_Caps()->Get_DX8_Caps();
+	const RenderCapabilities capabilities = Renderer::Get_Capabilities();
 
 	// TheSuperHackers @info Init zero stage filter defaults, point filtering is the lowest type for non mip filtering
 	_MinTextureFilters[0][FILTER_TYPE_NONE]=D3DTEXF_POINT;
@@ -172,8 +172,8 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, Anisotr
 
 	case TEXTURE_FILTER_BILINEAR:
 
-		FilterSupported = (dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MINFLINEAR) &&
-			(dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MAGFLINEAR);
+		FilterSupported = capabilities.linearMinFilter &&
+			capabilities.linearMagFilter;
 
 		if (FilterSupported) {
 			_MinTextureFilters[0][FILTER_TYPE_BEST]=D3DTEXF_LINEAR;
@@ -189,8 +189,8 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, Anisotr
 
 	case TEXTURE_FILTER_TRILINEAR:
 
-		FilterSupported = (dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MINFLINEAR) &&
-			(dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MAGFLINEAR);
+		FilterSupported = capabilities.linearMinFilter &&
+			capabilities.linearMagFilter;
 
 		if (FilterSupported) {
 			_MinTextureFilters[0][FILTER_TYPE_BEST]=D3DTEXF_LINEAR;
@@ -201,7 +201,7 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, Anisotr
 			_MagTextureFilters[0][FILTER_TYPE_BEST]=D3DTEXF_POINT;
 		}
 
-		if (dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MIPFLINEAR) {
+		if (capabilities.linearMipFilter) {
 			_MipMapFilters[0][FILTER_TYPE_BEST]=D3DTEXF_LINEAR;
 		}
 		else {
@@ -213,8 +213,8 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, Anisotr
 
 	case TEXTURE_FILTER_ANISOTROPIC:
 
-		FilterSupported = (dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MAGFANISOTROPIC) &&
-			(dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MINFANISOTROPIC);
+		FilterSupported = capabilities.anisotropicMagFilter &&
+			capabilities.anisotropicMinFilter;
 
 		if (FilterSupported) {
 			_MinTextureFilters[0][FILTER_TYPE_BEST]=D3DTEXF_ANISOTROPIC;
@@ -228,7 +228,7 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode texture_filter, Anisotr
 			_MagTextureFilters[0][FILTER_TYPE_BEST]=D3DTEXF_POINT;
 		}
 
-		if (dx8caps.TextureFilterCaps & D3DPTFILTERCAPS_MIPFLINEAR) {
+		if (capabilities.linearMipFilter) {
 			_MipMapFilters[0][FILTER_TYPE_BEST]=D3DTEXF_LINEAR;
 		}
 		else {
