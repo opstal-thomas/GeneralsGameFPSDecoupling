@@ -576,3 +576,42 @@ void Renderer::Release_Surface(RenderSurfaceHandle surface)
     if (surface)
         reinterpret_cast<IDirect3DSurface8 *>(surface)->Release();
 }
+
+
+static D3DTEXTUREFILTERTYPE To_DX8_Sampler_Filter(RenderSamplerFilter filter)
+{
+    switch (filter)
+    {
+    case RENDER_SAMPLER_NONE:
+        return D3DTEXF_NONE;
+    case RENDER_SAMPLER_LINEAR:
+        return D3DTEXF_LINEAR;
+    case RENDER_SAMPLER_ANISOTROPIC:
+        return D3DTEXF_ANISOTROPIC;
+    case RENDER_SAMPLER_POINT:
+    default:
+        return D3DTEXF_POINT;
+    }
+}
+
+void Renderer::Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler)
+{
+    // Preserve DX8's exact per-stage state order and cache invalidation.
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_MINFILTER, To_DX8_Sampler_Filter(sampler.minFilter));
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_MAGFILTER, To_DX8_Sampler_Filter(sampler.magFilter));
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_MIPFILTER, To_DX8_Sampler_Filter(sampler.mipFilter));
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_ADDRESSU,
+        sampler.addressU == RENDER_SAMPLER_REPEAT ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_ADDRESSV,
+        sampler.addressV == RENDER_SAMPLER_REPEAT ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+}
+
+void Renderer::Set_Texture_Max_Anisotropy(unsigned stage, unsigned level)
+{
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MAXANISOTROPY, level);
+}

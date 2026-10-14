@@ -15,6 +15,26 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, SamplerDescriptionIsIndependentOfDirect3D)
+{
+    const RenderSamplerDescription defaults;
+    EXPECT_EQ(RENDER_SAMPLER_POINT, defaults.minFilter);
+    EXPECT_EQ(RENDER_SAMPLER_POINT, defaults.magFilter);
+    EXPECT_EQ(RENDER_SAMPLER_NONE, defaults.mipFilter);
+    EXPECT_EQ(RENDER_SAMPLER_REPEAT, defaults.addressU);
+    EXPECT_EQ(RENDER_SAMPLER_REPEAT, defaults.addressV);
+
+    RenderSamplerDescription trilinear;
+    trilinear.minFilter = RENDER_SAMPLER_LINEAR;
+    trilinear.magFilter = RENDER_SAMPLER_LINEAR;
+    trilinear.mipFilter = RENDER_SAMPLER_LINEAR;
+    trilinear.addressU = RENDER_SAMPLER_CLAMP;
+    EXPECT_NE(trilinear.mipFilter, defaults.mipFilter);
+    EXPECT_NE(trilinear.addressU, defaults.addressU);
+    static_assert(std::is_same_v<decltype(&Renderer::Apply_Texture_Sampler),
+                                 void (*)(unsigned, const RenderSamplerDescription &)>);
+}
+
 TEST(RendererBackend, SurfaceResourcesAreSeparateFromTextures)
 {
     RenderSurfaceDescription empty;

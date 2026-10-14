@@ -39,6 +39,7 @@
 
 #include "texturefilter.h"
 #include "dx8wrapper.h"
+#include "Renderer.h"
 
 const char* const TextureFilterClass::TextureFilterModeString[TEXTURE_FILTER_COUNT] = {
 	"None",
@@ -85,33 +86,33 @@ TextureFilterClass::TextureFilterClass(MipCountType mip_level_count)
 //! Apply filters (legacy)
 /*!
 */
+// Keep the legacy filter selection tables unchanged while exposing only
+// renderer-level sampler values to the backend. Supported DX8 values in
+// those tables are none, point, linear, and anisotropic.
+static RenderSamplerFilter To_Render_Sampler_Filter(unsigned filter)
+{
+    switch (filter)
+    {
+    case D3DTEXF_NONE: return RENDER_SAMPLER_NONE;
+    case D3DTEXF_LINEAR: return RENDER_SAMPLER_LINEAR;
+    case D3DTEXF_ANISOTROPIC: return RENDER_SAMPLER_ANISOTROPIC;
+    case D3DTEXF_POINT:
+    default: return RENDER_SAMPLER_POINT;
+    }
+}
+
 void TextureFilterClass::Apply(unsigned int stage)
 {
-	DX8Wrapper::Set_DX8_Texture_Stage_State(stage,D3DTSS_MINFILTER,_MinTextureFilters[stage][TextureMinFilter]);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(stage,D3DTSS_MAGFILTER,_MagTextureFilters[stage][TextureMagFilter]);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(stage,D3DTSS_MIPFILTER,_MipMapFilters[stage][MipMapFilter]);
+    RenderSamplerDescription sampler;
+    sampler.minFilter = To_Render_Sampler_Filter(_MinTextureFilters[stage][TextureMinFilter]);
+    sampler.magFilter = To_Render_Sampler_Filter(_MagTextureFilters[stage][TextureMagFilter]);
+    sampler.mipFilter = To_Render_Sampler_Filter(_MipMapFilters[stage][MipMapFilter]);
+    sampler.addressU = Get_U_Addr_Mode() == TEXTURE_ADDRESS_CLAMP
+        ? RENDER_SAMPLER_CLAMP : RENDER_SAMPLER_REPEAT;
+    sampler.addressV = Get_V_Addr_Mode() == TEXTURE_ADDRESS_CLAMP
+        ? RENDER_SAMPLER_CLAMP : RENDER_SAMPLER_REPEAT;
 
-	switch (Get_U_Addr_Mode())
-	{
-	case TEXTURE_ADDRESS_REPEAT:
-		DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-		break;
-
-	case TEXTURE_ADDRESS_CLAMP:
-		DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSU, D3DTADDRESS_CLAMP);
-		break;
-	}
-
-	switch (Get_V_Addr_Mode())
-	{
-	case TEXTURE_ADDRESS_REPEAT:
-		DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
-		break;
-
-	case TEXTURE_ADDRESS_CLAMP:
-		DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSV, D3DTADDRESS_CLAMP);
-		break;
-	}
+    Renderer::Apply_Texture_Sampler(stage, sampler);
 }
 
 //**********************************************************************************************
@@ -298,7 +299,7 @@ void TextureFilterClass::Set_Mip_Mapping(FilterType mipmap)
 void TextureFilterClass::_Set_Max_Anisotropy(AnisotropicFilterMode mode)
 {
 	for (int stage = 0; stage < MAX_TEXTURE_STAGES; ++stage)
-		DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MAXANISOTROPY, mode);
+		Renderer::Set_Texture_Max_Anisotropy(stage, mode);
 }
 
 //**********************************************************************************************

@@ -36,6 +36,22 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Ninth milestone: backend-neutral sampler state
+
+W3D's TextureFilterClass now resolves its min/mag/mip filters and U/V address
+mode into RenderSamplerDescription before applying them. The DX8 backend
+translates these modes to the original D3DTSS_MINFILTER, MAGFILTER,
+MIPFILTER, ADDRESSU and ADDRESSV commands in the same order using the
+original DX8Wrapper state cache. The anisotropy stage setting is also
+routed through Renderer.
+
+The existing runtime graphics settings, texture-filter selection arrays
+and DX8 capability fallback decisions remain unchanged; W3D's filter
+initialization is still tied to DX8 capability bits. This is a sampler-state
+boundary, **not** a complete programmable material or shader port. It
+will allow a modern backend to implement the corresponding sampler states
+without exposing D3D8 texture-stage constants through Renderer.
+
 ### Eighth milestone: image-surface creation and COM ownership
 
 W3D's SurfaceClass now delegates image-surface allocation, file-backed

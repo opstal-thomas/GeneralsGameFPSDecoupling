@@ -205,6 +205,41 @@ struct RenderSurfaceDescription
     bool Is_Valid() const { return width > 0 && height > 0; }
 };
 
+// Sampler state is a renderer concept, not a Direct3D texture-stage enum.
+// Filter mode initialization remains in W3D for now; only translated,
+// resolved sampler settings cross the backend boundary.
+enum RenderSamplerFilter
+{
+    RENDER_SAMPLER_NONE,
+    RENDER_SAMPLER_POINT,
+    RENDER_SAMPLER_LINEAR,
+    RENDER_SAMPLER_ANISOTROPIC
+};
+
+enum RenderSamplerAddress
+{
+    RENDER_SAMPLER_REPEAT,
+    RENDER_SAMPLER_CLAMP
+};
+
+struct RenderSamplerDescription
+{
+    RenderSamplerDescription()
+        : minFilter(RENDER_SAMPLER_POINT),
+          magFilter(RENDER_SAMPLER_POINT),
+          mipFilter(RENDER_SAMPLER_NONE),
+          addressU(RENDER_SAMPLER_REPEAT),
+          addressV(RENDER_SAMPLER_REPEAT)
+    {
+    }
+
+    RenderSamplerFilter minFilter;
+    RenderSamplerFilter magFilter;
+    RenderSamplerFilter mipFilter;
+    RenderSamplerAddress addressU;
+    RenderSamplerAddress addressV;
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -337,6 +372,11 @@ public:
     // that the caller is the render thread. Null handles are valid no-ops.
     static void Retain_Texture(RenderTextureHandle texture);
     static void Release_Texture(RenderTextureHandle texture);
+
+    // Apply W3D's resolved texture filtering and wrap/clamp modes through
+    // backend-specific texture stage state, preserving DX8 state caching.
+    static void Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler);
+    static void Set_Texture_Max_Anisotropy(unsigned stage, unsigned level);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);
