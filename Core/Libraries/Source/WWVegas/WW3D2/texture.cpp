@@ -306,7 +306,7 @@ bool TextureBaseClass::Is_Missing_Texture()
 
 	if (missing_texture)
 	{
-		missing_texture->Release();
+		Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(missing_texture));
 	}
 
 	return flag;
@@ -337,7 +337,7 @@ unsigned int TextureBaseClass::Get_Priority()
 		return 0;
 	}
 
-	return D3DTexture->GetPriority();
+	return Renderer::Get_Texture_Priority(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 }
 
 
@@ -353,7 +353,7 @@ unsigned int TextureBaseClass::Set_Priority(unsigned int priority)
 		return 0;
 	}
 
-	return D3DTexture->SetPriority(priority);
+	return Renderer::Set_Texture_Priority(reinterpret_cast<RenderTextureHandle>(D3DTexture), priority);
 }
 
 
@@ -887,10 +887,10 @@ void TextureClass::Apply_New_Surface
 {
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
-	if (d3d_tex) d3d_tex->Release();
+	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
 	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
-	d3d_texture->AddRef();
+	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
@@ -1252,10 +1252,10 @@ void ZTextureClass::Apply_New_Surface
 {
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
-	if (d3d_tex) d3d_tex->Release();
+	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
 	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
-	d3d_texture->AddRef();
+	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
@@ -1552,10 +1552,10 @@ void CubeTextureClass::Apply_New_Surface
 {
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
-	if (d3d_tex) d3d_tex->Release();
+	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
 	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
-	d3d_texture->AddRef();
+	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
@@ -1830,10 +1830,10 @@ void VolumeTextureClass::Apply_New_Surface
 {
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
-	if (d3d_tex) d3d_tex->Release();
+	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
 
 	Poke_Texture(d3d_texture);//TextureLoadTask->Peek_D3D_Texture();
-	d3d_texture->AddRef();
+	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;

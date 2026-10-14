@@ -1106,6 +1106,16 @@ void Renderer::Release_Texture(RenderTextureHandle texture)
 }
 
 
+unsigned Renderer::Get_Texture_Priority(RenderTextureHandle texture)
+{
+    return texture ? reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetPriority() : 0;
+}
+
+unsigned Renderer::Set_Texture_Priority(RenderTextureHandle texture, unsigned priority)
+{
+    return texture ? reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->SetPriority(priority) : 0;
+}
+
 RenderTextureCubeHandle Renderer::Create_Texture_Cube(const RenderTextureCubeDescription & description)
 {
     DX8_THREAD_ASSERT();

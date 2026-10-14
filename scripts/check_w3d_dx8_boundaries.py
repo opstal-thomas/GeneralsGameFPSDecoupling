@@ -82,6 +82,9 @@ def main() -> int:
     ]))
     errors.extend(check(WW3D / "texture.cpp", [
         r"\bPeek_D3D_Texture\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",
+        r"\bD3DTexture\s*->\s*(?:GetPriority|SetPriority)\s*\(",
+        r"\bd3d_texture\s*->\s*AddRef\s*\(",
+        r"\bd3d_tex\s*->\s*Release\s*\(",
     ]))
     errors.extend(check(CUSTOM_SHADER, SHADER_MIGRATED_PATTERNS + [
         r"\bIDirect3D(?:Texture|Surface|BaseTexture|Device)8\b",

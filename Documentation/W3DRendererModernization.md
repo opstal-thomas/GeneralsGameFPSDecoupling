@@ -458,6 +458,15 @@ Texture loader DDS conversion, priority operations, and several legacy
 resource construction/Apply_New_Surface paths still require later migration.
 The boundary audit guards the newly migrated ownership and memory-query paths.
 
+### Texture reference counting and resource priority
+
+The W3D texture base now routes residency priority queries and updates through
+Renderer; the DX8 implementation keeps D3D8 GetPriority and SetPriority return
+semantics. Imported textures in the 2D, depth, cube, and volume classes now
+retain and release their existing references through Renderer, as does the
+missing-texture comparison. Native pointer compatibility and D3D8 format
+inspection in those classes remain to be migrated.
+
 ### Sorting, mesh submission and screen-effect decoupling
 
 The sorted geometry pool no longer calls `DX8Wrapper::` directly. It

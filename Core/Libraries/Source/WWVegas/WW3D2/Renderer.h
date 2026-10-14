@@ -839,6 +839,8 @@ public:
     // that the caller is the render thread. Null handles are valid no-ops.
     static void Retain_Texture(RenderTextureHandle texture);
     static void Release_Texture(RenderTextureHandle texture);
+    static unsigned Get_Texture_Priority(RenderTextureHandle texture);
+    static unsigned Set_Texture_Priority(RenderTextureHandle texture, unsigned priority);
 
     // Apply W3D's resolved texture filtering and wrap/clamp modes through
     // backend-specific texture stage state, preserving DX8 state caching.
