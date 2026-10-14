@@ -1246,7 +1246,7 @@ Int ShroudTextureShader::set(Int stage)
 	{
 		///@todo: All this code really only need to be done once per camera/view.  Find a way to optimize it out.
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -1275,7 +1275,7 @@ Int ShroudTextureShader::set(Int stage)
 		height = 1.0f/(height*shroud->getTextureHeight());
 		D3DXMatrixScaling(&scale, width, height, 1);
 		curView = (inv * offset) * scale;
-		Renderer::Set_Texture_Transform(stage, curView);
+		Renderer::Set_Texture_Transform(stage, &curView._11);
 	}
 	m_stageOfSet=stage;
 	return TRUE;
@@ -1341,7 +1341,7 @@ Int FlatShroudTextureShader::set(Int stage)
 	{
 		///@todo: All this code really only need to be done once per camera/view.  Find a way to optimize it out.
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -1370,7 +1370,7 @@ Int FlatShroudTextureShader::set(Int stage)
 		height = 1.0f/(height*shroud->getTextureHeight());
 		D3DXMatrixScaling(&scale, width, height, 1);
 		curView = (inv * offset) * scale;
-		Renderer::Set_Texture_Transform(stage, curView);
+		Renderer::Set_Texture_Transform(stage, &curView._11);
 	}
 	m_stageOfSet=stage;
 	return TRUE;
@@ -1431,7 +1431,7 @@ Int MaskTextureShader::set(Int pass)
 	Renderer::Apply_Pending_State_Changes();
 
 	D3DXMATRIX curView;
-	Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+	Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 	Renderer::Set_Texture_Coordinate_Source(0, 0, true);
 	Renderer::Set_Texture_Transform_2D(0, true);
@@ -1480,7 +1480,7 @@ Int MaskTextureShader::set(Int pass)
 		curView = ((inv * offset) * scale);
 	}
 
-	Renderer::Set_Texture_Transform(0, curView);
+	Renderer::Set_Texture_Transform(0, &curView._11);
 
 	return TRUE;
 }
@@ -1712,7 +1712,7 @@ Int TerrainShader2Stage::set(Int pass)
 		case 2:
 			// Noise/cloud pass
 			D3DXMATRIX curView;
-			Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+			Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 			//these states apply to all noise/cloud combination passes
 			Renderer::Set_Fixed_Stage_Argument(0, false, 1, RENDER_TEXARG_TEXTURE, false, false);
@@ -1741,7 +1741,7 @@ Int TerrainShader2Stage::set(Int pass)
 				Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
 
 				updateNoise1(&curView,&inv);	//update curView with texture matrix
-				Renderer::Set_Texture_Transform(0, curView);
+				Renderer::Set_Texture_Transform(0, &curView._11);
 				//clouds always need bilinear filtering
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -1750,7 +1750,7 @@ Int TerrainShader2Stage::set(Int pass)
 				Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
 
 				updateNoise2(&curView,&inv);
-				Renderer::Set_Texture_Transform(1, curView);
+				Renderer::Set_Texture_Transform(1, &curView._11);
 				//noise always needs point/linear filtering.  Why point!?
 				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -1789,7 +1789,7 @@ Int TerrainShader2Stage::set(Int pass)
 
 				Renderer::Set_Fixed_Stage_Operation(1, false, RENDER_FIXED_STAGE_DISABLE);
 				Renderer::Set_Fixed_Stage_Operation(1, true, RENDER_FIXED_STAGE_DISABLE);
-				Renderer::Set_Texture_Transform(0, curView);
+				Renderer::Set_Texture_Transform(0, &curView._11);
 			}
 			break;
 	}
@@ -2060,7 +2060,7 @@ Int TerrainShaderPixelShader::set(Int pass)
 	if (W3DShaderManager::getCurrentShader() >= W3DShaderManager::ST_TERRAIN_BASE_NOISE1)
 	{
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -2089,10 +2089,10 @@ Int TerrainShaderPixelShader::set(Int pass)
 			Renderer::Set_Texture_Filter(3, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 
 			terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
-			Renderer::Set_Texture_Transform(2, curView);
+			Renderer::Set_Texture_Transform(2, &curView._11);
 
 			terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
-			Renderer::Set_Texture_Transform(3, curView);
+			Renderer::Set_Texture_Transform(3, &curView._11);
 
 			Renderer::Set_Texture_Coordinate_Source(3, 0, true);
 			// Two output coordinates are used.
@@ -2119,7 +2119,7 @@ Int TerrainShaderPixelShader::set(Int pass)
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 			}
-			Renderer::Set_Texture_Transform(2, curView);
+			Renderer::Set_Texture_Transform(2, &curView._11);
 		}
 	}
 	else
@@ -2185,7 +2185,7 @@ Int CloudTextureShader::init()
 Int CloudTextureShader::set(Int stage)
 {
 	D3DXMATRIX curView;
-	Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+	Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 	D3DXMATRIX inv;
 	float det;
@@ -2197,7 +2197,7 @@ Int CloudTextureShader::set(Int stage)
 
 	Renderer::Set_Texture_Coordinate_Source(stage, 0, true);
 	Renderer::Set_Texture_Transform_2D(stage, true);
-	Renderer::Set_Texture_Transform(stage, curView);
+	Renderer::Set_Texture_Transform(stage, &curView._11);
 	Renderer::Set_Texture_Filter(stage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 	Renderer::Set_Texture_Filter(stage, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 	Renderer::Set_Texture_Address(stage, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
@@ -2320,7 +2320,7 @@ Int RoadShaderPixelShader::set(Int pass)
 	Renderer::Set_Destination_Blend(RENDER_BLEND_INV_SRC_ALPHA);
 
 	D3DXMATRIX curView;
-	Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+	Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 	D3DXMATRIX inv;
 	float det;
@@ -2357,10 +2357,10 @@ Int RoadShaderPixelShader::set(Int pass)
 	Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 
 	terrainShader2Stage.updateNoise1(&curView,&inv, false);	//get texture projection matrix
-	Renderer::Set_Texture_Transform(1, curView);
+	Renderer::Set_Texture_Transform(1, &curView._11);
 
 	terrainShader2Stage.updateNoise2(&curView,&inv, false);	//get texture projection matrix
-	Renderer::Set_Texture_Transform(2, curView);
+	Renderer::Set_Texture_Transform(2, &curView._11);
 
 	Renderer::Set_Texture_Coordinate_Source(2, 0, true);
 	// Two output coordinates are used.
@@ -2436,7 +2436,7 @@ Int RoadShader2Stage::set(Int pass)
 		{
 			//second texture unit will contain a noise pass
 			D3DXMATRIX curView;
-			Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+			Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 			D3DXMATRIX inv;
 			float det;
@@ -2469,7 +2469,7 @@ Int RoadShader2Stage::set(Int pass)
 				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 
 				terrainShader2Stage.updateNoise1(&curView, &inv, false);	//get texture projection matrix
-				Renderer::Set_Texture_Transform(1, curView);
+				Renderer::Set_Texture_Transform(1, &curView._11);
 			}
 			else
 			{
@@ -2490,7 +2490,7 @@ Int RoadShader2Stage::set(Int pass)
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 				}
-				Renderer::Set_Texture_Transform(1, curView);
+				Renderer::Set_Texture_Transform(1, &curView._11);
 			}
 		}
 		else
@@ -2504,7 +2504,7 @@ Int RoadShader2Stage::set(Int pass)
 	{
 		//pass 1, apply additional noise pass
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -2549,7 +2549,7 @@ Int RoadShader2Stage::set(Int pass)
 		Renderer::Set_Source_Blend(RENDER_BLEND_ZERO);
 		Renderer::Set_Destination_Blend(RENDER_BLEND_SRC_COLOR);
 
-		Renderer::Set_Texture_Transform(0, curView);
+		Renderer::Set_Texture_Transform(0, &curView._11);
 	}
 
 	return TRUE;
@@ -3248,7 +3248,7 @@ Int W3DShaderManager::setShroudTex(Int stage)
 		Renderer::Set_Fixed_Stage_Operation(stage, true, RENDER_FIXED_STAGE_SELECT_ARG2);
 
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -3277,7 +3277,7 @@ Int W3DShaderManager::setShroudTex(Int stage)
 		height = 1.0f/(height*shroud->getTextureHeight());
 		D3DXMatrixScaling(&scale, width, height, 1);
 		curView = (inv * offset) * scale;
-		Renderer::Set_Texture_Transform(stage, curView);
+		Renderer::Set_Texture_Transform(stage, &curView._11);
 		return TRUE;
 	}
 	return FALSE;
@@ -3367,7 +3367,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				if ((shroud=TheTerrainRenderObject->getShroud()) != nullptr)
 				{
 					D3DXMATRIX curView;
-					Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+					Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 					D3DXMATRIX inv;
 					float det;
@@ -3396,7 +3396,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 					height = 1.0f/(height*shroud->getTextureHeight());
 					D3DXMatrixScaling(&scale, width, height, 1);
 					curView = (inv * offset) * scale;
-					Renderer::Set_Texture_Transform(0, curView);
+					Renderer::Set_Texture_Transform(0, &curView._11);
 				}
 			}	else {
 				Renderer::Set_Fixed_Stage_Operation(0, false, RENDER_FIXED_STAGE_SELECT_ARG2);
@@ -3420,7 +3420,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 		case 1:
 			// Noise/cloud pass
 			D3DXMATRIX curView;
-			Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+			Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 			//these states apply to all noise/cloud combination passes
 			Renderer::Set_Fixed_Stage_Argument(0, false, 1, RENDER_TEXARG_TEXTURE, false, false);
@@ -3448,7 +3448,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				//setup cloud pass
 
 				terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
-				Renderer::Set_Texture_Transform(0, curView);
+				Renderer::Set_Texture_Transform(0, &curView._11);
 				//clouds always need bilinear filtering
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3457,7 +3457,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				//setup noise pass
 
 				terrainShader2Stage.updateNoise2(&curView,&inv);
-				Renderer::Set_Texture_Transform(1, curView);
+				Renderer::Set_Texture_Transform(1, &curView._11);
 				//noise always needs point/linear filtering.  Why point!?
 				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3497,7 +3497,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 
 				Renderer::Set_Fixed_Stage_Operation(1, false, RENDER_FIXED_STAGE_DISABLE);
 				Renderer::Set_Fixed_Stage_Operation(1, true, RENDER_FIXED_STAGE_DISABLE);
-				Renderer::Set_Texture_Transform(0, curView);
+				Renderer::Set_Texture_Transform(0, &curView._11);
 			}
 			break;
 	}
@@ -3638,7 +3638,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 		//is 1/128 the size of full texture. (assuming 128x128 vid-mem texture).
 		{
 			D3DXMATRIX curView;
-			Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+			Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 			D3DXMATRIX inv;
 			float det;
@@ -3667,7 +3667,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 			height = 1.0f/(height*shroud->getTextureHeight());
 			D3DXMatrixScaling(&scale, width, height, 1);
 			curView = (inv * offset) * scale;
-			Renderer::Set_Texture_Transform(curStage, curView);
+			Renderer::Set_Texture_Transform(curStage, &curView._11);
 		}
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
@@ -3683,7 +3683,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 	if (doNoise1) {
 		// Cloud pass.
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -3697,7 +3697,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 		Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
 		terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
-		Renderer::Set_Texture_Transform(curStage, curView);
+		Renderer::Set_Texture_Transform(curStage, &curView._11);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 
@@ -3710,7 +3710,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 	if (doNoise2)
 	{
 		D3DXMATRIX curView;
-		Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, curView);
+		Renderer::Get_Transform_Elements(RENDER_TRANSFORM_VIEW, &curView._11);
 
 		D3DXMATRIX inv;
 		float det;
@@ -3724,7 +3724,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 		Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
 		terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
-		Renderer::Set_Texture_Transform(curStage, curView);
+		Renderer::Set_Texture_Transform(curStage, &curView._11);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 

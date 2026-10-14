@@ -666,7 +666,10 @@ public:
     static void Get_Transform(RenderTransform transform, Matrix4x4 & matrix);
     // Projected material UV transforms are indexed texture transforms,
     // not DX8 transform-state ordinals.
-    static void Set_Texture_Transform(unsigned stage, const Matrix4x4 & matrix);
+    static void Set_Texture_Transform(unsigned stage, const float matrix[16]);
+    // Raw row-major 4x4 form for existing D3DX-based projection math.
+    // This deliberately avoids exposing D3DXMATRIX in the Renderer API.
+    static void Get_Transform_Elements(RenderTransform transform, float matrix[16]);
     static void Set_World_Identity();
 
     // The high-level W3D scene submits geometry using these methods, rather

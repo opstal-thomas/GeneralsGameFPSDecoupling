@@ -24,6 +24,7 @@
 
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/vertmaterial.h"
+#include <cstring>
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/dx8caps.h"
 #include "WW3D2/dx8texman.h"
@@ -294,15 +295,26 @@ void Renderer::Get_Transform(RenderTransform transform, Matrix4x4 & matrix)
     DX8Wrapper::Get_Transform(To_DX8_Transform(transform), matrix);
 }
 
-void Renderer::Set_Texture_Transform(unsigned stage, const Matrix4x4 & matrix)
+void Renderer::Set_Texture_Transform(unsigned stage, const float matrix[16])
 {
-    // D3D8 texture transform ordinals are contiguous by texture stage;
-    // preserve the exact projection matrix produced by W3DShaderManager.
-    WWASSERT(stage < 8);
-    if (stage >= 8)
+    WWASSERT(stage < 8 && matrix);
+    if (stage >= 8 || !matrix)
         return;
+    D3DMATRIX nativeMatrix = {};
+    static_assert(sizeof(nativeMatrix) == sizeof(float) * 16, "Invalid DX8 matrix layout");
+    std::memcpy(&nativeMatrix, matrix, sizeof(nativeMatrix));
     DX8Wrapper::_Set_DX8_Transform(
-        static_cast<D3DTRANSFORMSTATETYPE>(D3DTS_TEXTURE0 + stage), matrix);
+        static_cast<D3DTRANSFORMSTATETYPE>(D3DTS_TEXTURE0 + stage), nativeMatrix);
+}
+
+void Renderer::Get_Transform_Elements(RenderTransform transform, float matrix[16])
+{
+    WWASSERT(matrix);
+    if (!matrix)
+        return;
+    D3DMATRIX nativeMatrix = {};
+    DX8Wrapper::_Get_DX8_Transform(To_DX8_Transform(transform), nativeMatrix);
+    std::memcpy(matrix, &nativeMatrix, sizeof(nativeMatrix));
 }
 
 void Renderer::Set_World_Identity()
