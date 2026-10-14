@@ -51,3 +51,12 @@ add_test(
     COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --w3d-vs
 )
 set_tests_properties(W3D_DX12_WARP_W3D_Vertex_Shader PROPERTIES TIMEOUT 45)
+
+# Draw with a minimal pixel shader sampling one texture. This verifies the
+# SRV heap, sampler heap, upload/copy and shading independently of the W3D
+# combiner interpreter.
+add_test(
+    NAME W3D_DX12_WARP_Basic_Texture_Draw
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --basic-texture
+)
+set_tests_properties(W3D_DX12_WARP_Basic_Texture_Draw PROPERTIES TIMEOUT 45)
