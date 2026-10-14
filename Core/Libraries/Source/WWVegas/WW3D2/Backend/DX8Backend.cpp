@@ -31,6 +31,7 @@
 #include "WW3D2/lightenvironment.h"
 #include "WWDebug/wwdebug.h"
 #include "WWLib/thread.h"
+#include <d3dx8.h>
 
 static bool Initialized = false;
 static bool Lite = false;
@@ -636,6 +637,48 @@ void Renderer::Release_Surface(RenderSurfaceHandle surface)
 {
     if (surface)
         reinterpret_cast<IDirect3DSurface8 *>(surface)->Release();
+}
+
+// Preserve DX8 CopyRects semantics, including the full-surface/null-region
+// path used by font atlas upload.
+void Renderer::Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect * sourceRect,
+                            RenderSurfaceHandle destination, const RenderSurfacePoint * destinationPoint)
+{
+    RECT nativeSource = {};
+    POINT nativeDestination = {};
+    const RECT * src = nullptr;
+    const POINT * dst = nullptr;
+    if (sourceRect)
+    {
+        nativeSource.left = sourceRect->left;
+        nativeSource.top = sourceRect->top;
+        nativeSource.right = sourceRect->right;
+        nativeSource.bottom = sourceRect->bottom;
+        src = &nativeSource;
+    }
+    if (destinationPoint)
+    {
+        nativeDestination.x = destinationPoint->x;
+        nativeDestination.y = destinationPoint->y;
+        dst = &nativeDestination;
+    }
+    DX8Wrapper::_Copy_DX8_Rects(
+        reinterpret_cast<IDirect3DSurface8 *>(source), src, src ? 1 : 0,
+        reinterpret_cast<IDirect3DSurface8 *>(destination), dst);
+}
+
+void Renderer::Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect & sourceRect,
+                            RenderSurfaceHandle destination, const RenderSurfaceRect & destinationRect,
+                            RenderSurfaceBlitFilter filter)
+{
+    RECT src = {sourceRect.left, sourceRect.top, sourceRect.right, sourceRect.bottom};
+    RECT dst = {destinationRect.left, destinationRect.top,
+                destinationRect.right, destinationRect.bottom};
+    const DWORD nativeFilter = filter == RENDER_SURFACE_BLIT_TRIANGLE
+        ? D3DX_FILTER_TRIANGLE : D3DX_FILTER_NONE;
+    DX8_ErrorCode(D3DXLoadSurfaceFromSurface(
+        reinterpret_cast<IDirect3DSurface8 *>(destination), nullptr, &dst,
+        reinterpret_cast<IDirect3DSurface8 *>(source), nullptr, &src, nativeFilter, 0));
 }
 
 

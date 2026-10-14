@@ -40,6 +40,7 @@
 
 #include "WWLib/always.h"
 #include "ww3dformat.h"
+#include "Renderer.h"
 
 struct IDirect3DSurface8;
 class Vector2i;
@@ -121,6 +122,9 @@ class SurfaceClass : public RefCountClass
 
 			// For use by TextureClass:
 		IDirect3DSurface8 *Peek_D3D_Surface() { return D3DSurface; }
+		RenderSurfaceHandle Peek_Render_Surface() const {
+			return reinterpret_cast<RenderSurfaceHandle>(D3DSurface);
+		}
 
 		// Attaching and detaching a surface pointer
 		void	Attach (IDirect3DSurface8 *surface);

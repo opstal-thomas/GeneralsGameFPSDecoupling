@@ -64,6 +64,24 @@ using RenderTextureVolumeHandle = RendererTextureVolumeResource *;
 struct RendererSurfaceResource;
 using RenderSurfaceHandle = RendererSurfaceResource *;
 
+// Pixel-space surface copy regions, independent of Windows RECT/POINT.
+// Right and bottom are exclusive, matching the existing W3D surface API.
+struct RenderSurfaceRect
+{
+    int left, top, right, bottom;
+};
+
+struct RenderSurfacePoint
+{
+    int x, y;
+};
+
+enum RenderSurfaceBlitFilter
+{
+    RENDER_SURFACE_BLIT_NONE,
+    RENDER_SURFACE_BLIT_TRIANGLE
+};
+
 // Semantic W3D transforms; no Direct3D transform-state ordinals are exposed.
 enum RenderTransform
 {
@@ -609,6 +627,15 @@ public:
     static void Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description);
     static void Retain_Surface(RenderSurfaceHandle surface);
     static void Release_Surface(RenderSurfaceHandle surface);
+
+    // Source/destination resources are borrowed; no ownership changes.
+    // Null rectangles/points select the full-surface copy used by text atlases.
+    static void Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect * sourceRect,
+                             RenderSurfaceHandle destination, const RenderSurfacePoint * destinationPoint);
+    // Source and destination rectangles allow format conversion/stretching.
+    static void Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect & sourceRect,
+                             RenderSurfaceHandle destination, const RenderSurfaceRect & destinationRect,
+                             RenderSurfaceBlitFilter filter);
 
     // Texture stage binding retains the original DX8 reference cache,
     // texture-stage invalidation and AddRef/Release semantics. The abstract

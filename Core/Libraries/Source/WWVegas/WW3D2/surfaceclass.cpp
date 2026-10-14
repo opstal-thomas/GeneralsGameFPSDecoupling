@@ -451,7 +451,7 @@ void SurfaceClass::Copy(
 	Get_Description(sd);
 	const_cast <SurfaceClass*>(other)->Get_Description(osd);
 
-	RECT src;
+	RenderSurfaceRect src;
 	src.left=srcx;
 	src.right=srcx+width;
 	src.top=srcy;
@@ -462,14 +462,14 @@ void SurfaceClass::Copy(
 
 	if (sd.Format==osd.Format && sd.Width==osd.Width && sd.Height==osd.Height)
 	{
-		POINT dst;
+		RenderSurfacePoint dst;
 		dst.x=dstx;
 		dst.y=dsty;
-		DX8Wrapper::_Copy_DX8_Rects(other->D3DSurface,&src,1,D3DSurface,&dst);
+		Renderer::Copy_Surface(other->Peek_Render_Surface(), &src, Peek_Render_Surface(), &dst);
 	}
 	else
 	{
-		RECT dest;
+		RenderSurfaceRect dest;
 		dest.left=dstx;
 		dest.right=dstx+width;
 		dest.top=dsty;
@@ -478,7 +478,7 @@ void SurfaceClass::Copy(
 		if (dest.right>int(sd.Width)) dest.right=int(sd.Width);
 		if (dest.bottom>int(sd.Height)) dest.bottom=int(sd.Height);
 
-		DX8_ErrorCode(D3DXLoadSurfaceFromSurface(D3DSurface,nullptr,&dest,other->D3DSurface,nullptr,&src,D3DX_FILTER_NONE,0));
+		Renderer::Blit_Surface(other->Peek_Render_Surface(), src, Peek_Render_Surface(), dest, RENDER_SURFACE_BLIT_NONE);
 	}
 }
 
@@ -508,19 +508,19 @@ void SurfaceClass::Stretch_Copy(
 	Get_Description(sd);
 	const_cast <SurfaceClass*>(other)->Get_Description(osd);
 
-	RECT src;
+	RenderSurfaceRect src;
 	src.left=srcx;
 	src.right=srcx+srcwidth;
 	src.top=srcy;
 	src.bottom=srcy+srcheight;
 
-	RECT dest;
+	RenderSurfaceRect dest;
 	dest.left=dstx;
 	dest.right=dstx+dstwidth;
 	dest.top=dsty;
 	dest.bottom=dsty+dstheight;
 
-	DX8_ErrorCode(D3DXLoadSurfaceFromSurface(D3DSurface,nullptr,&dest,other->D3DSurface,nullptr,&src,D3DX_FILTER_TRIANGLE ,0));
+	Renderer::Blit_Surface(other->Peek_Render_Surface(), src, Peek_Render_Surface(), dest, RENDER_SURFACE_BLIT_TRIANGLE);
 }
 
 /***********************************************************************************************

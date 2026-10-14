@@ -39,7 +39,6 @@
 #include "texture.h"
 #include "WWDebug/wwprofile.h"
 #include "WWDebug/wwmemlog.h"
-#include "dx8wrapper.h"
 #include "Renderer.h"
 
 
@@ -368,7 +367,7 @@ Render2DSentenceClass::Build_Textures ()
 		//
 		//	Copy the contents of the texture from the surface
 		//
-		DX8Wrapper::_Copy_DX8_Rects (curr_surface->Peek_D3D_Surface (), nullptr, 0, texture_surface->Peek_D3D_Surface (), nullptr);
+		Renderer::Copy_Surface (curr_surface->Peek_Render_Surface (), nullptr, texture_surface->Peek_Render_Surface (), nullptr);
 		REF_PTR_RELEASE (texture_surface);
 
 		//
