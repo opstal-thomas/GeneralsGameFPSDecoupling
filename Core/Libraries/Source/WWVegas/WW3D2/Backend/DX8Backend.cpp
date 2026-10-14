@@ -527,3 +527,52 @@ RenderTextureVolumeHandle Renderer::Create_Texture_Volume(const RenderTextureVol
         Get_Legacy_Texture_Memory(description.memory));
     return reinterpret_cast<RenderTextureVolumeHandle>(texture);
 }
+
+
+RenderSurfaceHandle Renderer::Create_Surface(const RenderSurfaceDescription & description)
+{
+    DX8_THREAD_ASSERT();
+    if (!description.Is_Valid())
+        return nullptr;
+
+    return reinterpret_cast<RenderSurfaceHandle>(DX8Wrapper::_Create_DX8_Surface(
+        description.width, description.height,
+        static_cast<WW3DFormat>(description.pixelFormat)));
+}
+
+RenderSurfaceHandle Renderer::Load_Surface(const char * filename)
+{
+    DX8_THREAD_ASSERT();
+    if (!filename)
+        return nullptr;
+
+    // Preserve the legacy file-loader path and missing-image fallback.
+    return reinterpret_cast<RenderSurfaceHandle>(
+        DX8Wrapper::_Create_DX8_Surface(filename));
+}
+
+void Renderer::Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description)
+{
+    description = RenderSurfaceDescription();
+    if (!surface)
+        return;
+
+    D3DSURFACE_DESC nativeDescription;
+    ::ZeroMemory(&nativeDescription, sizeof(nativeDescription));
+    DX8_ErrorCode(reinterpret_cast<IDirect3DSurface8 *>(surface)->GetDesc(&nativeDescription));
+    description.pixelFormat = static_cast<unsigned>(D3DFormat_To_WW3DFormat(nativeDescription.Format));
+    description.width = nativeDescription.Width;
+    description.height = nativeDescription.Height;
+}
+
+void Renderer::Retain_Surface(RenderSurfaceHandle surface)
+{
+    if (surface)
+        reinterpret_cast<IDirect3DSurface8 *>(surface)->AddRef();
+}
+
+void Renderer::Release_Surface(RenderSurfaceHandle surface)
+{
+    if (surface)
+        reinterpret_cast<IDirect3DSurface8 *>(surface)->Release();
+}

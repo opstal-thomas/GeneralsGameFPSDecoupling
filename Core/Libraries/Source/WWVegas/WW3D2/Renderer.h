@@ -56,6 +56,9 @@ struct RendererTextureVolumeResource;
 using RenderTextureCubeHandle = RendererTextureCubeResource *;
 using RenderTextureVolumeHandle = RendererTextureVolumeResource *;
 
+struct RendererSurfaceResource;
+using RenderSurfaceHandle = RendererSurfaceResource *;
+
 struct RenderViewport
 {
     unsigned int x;
@@ -188,6 +191,20 @@ struct RenderTextureVolumeDescription
     bool Is_Valid() const { return width > 0 && height > 0 && depth > 0; }
 };
 
+// Uncompressed WW3D image surfaces (including file-backed images) remain
+// distinct from GPU textures and render targets. This description has no
+// platform-native graphics types and can also report an existing surface.
+struct RenderSurfaceDescription
+{
+    RenderSurfaceDescription() : width(0), height(0), pixelFormat(0) {}
+
+    unsigned width;
+    unsigned height;
+    unsigned pixelFormat;
+
+    bool Is_Valid() const { return width > 0 && height > 0; }
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -300,6 +317,15 @@ public:
     static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
     static RenderTextureCubeHandle Create_Texture_Cube(const RenderTextureCubeDescription & description);
     static RenderTextureVolumeHandle Create_Texture_Volume(const RenderTextureVolumeDescription & description);
+
+    // Legacy image surfaces are distinct from textures and may also be
+    // constructed from file data through the original W3D asset loader.
+    // SurfaceClass retains native surface access for unmigrated lock/copy.
+    static RenderSurfaceHandle Create_Surface(const RenderSurfaceDescription & description);
+    static RenderSurfaceHandle Load_Surface(const char * filename);
+    static void Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description);
+    static void Retain_Surface(RenderSurfaceHandle surface);
+    static void Release_Surface(RenderSurfaceHandle surface);
 
     // Texture stage binding retains the original DX8 reference cache,
     // texture-stage invalidation and AddRef/Release semantics. The abstract

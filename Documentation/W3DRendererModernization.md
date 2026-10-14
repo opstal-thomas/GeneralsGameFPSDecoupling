@@ -36,6 +36,20 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Eighth milestone: image-surface creation and COM ownership
+
+W3D's SurfaceClass now delegates image-surface allocation, file-backed
+surface loading, surface description queries, and reference acquisition /
+release to the Renderer interface. Its backend-neutral RenderSurfaceHandle
+cannot be accidentally passed to texture or geometry operations.
+
+The DX8 backend forwards image-surface creation to the original W3D/DX8
+factory, preserving file-format handling and missing-file fallbacks. Native
+LockRect, pixel processing, blits and surface attachment pointers are still
+contained in SurfaceClass, so this migration changes no pixel algorithms
+or game content. A future pass can move mapping and blitting behind the
+same backend API before introducing a DX12 implementation.
+
 ### Seventh milestone: procedural cube/volume textures and reset tracking
 
 Procedural cube and volume textures now use separate backend-neutral

@@ -50,6 +50,7 @@
 #include "surfaceclass.h"
 #include "formconv.h"
 #include "dx8wrapper.h"
+#include "Renderer.h"
 #include "WWMath/vector2i.h"
 #include "colorspace.h"
 #include "WWLib/bound.h"
@@ -166,13 +167,17 @@ SurfaceClass::SurfaceClass(unsigned width, unsigned height, WW3DFormat format):
 {
 	WWASSERT(width);
 	WWASSERT(height);
-	D3DSurface = DX8Wrapper::_Create_DX8_Surface(width, height, format);
+	RenderSurfaceDescription description;
+	description.width = width;
+	description.height = height;
+	description.pixelFormat = static_cast<unsigned>(format);
+	D3DSurface = reinterpret_cast<IDirect3DSurface8 *>(Renderer::Create_Surface(description));
 }
 
 SurfaceClass::SurfaceClass(const char *filename):
 	D3DSurface(nullptr)
 {
-	D3DSurface = DX8Wrapper::_Create_DX8_Surface(filename);
+	D3DSurface = reinterpret_cast<IDirect3DSurface8 *>(Renderer::Load_Surface(filename));
 	SurfaceDescription desc;
 	Get_Description(desc);
 	SurfaceFormat=desc.Format;
@@ -190,19 +195,18 @@ SurfaceClass::SurfaceClass(IDirect3DSurface8 *d3d_surface)	:
 SurfaceClass::~SurfaceClass()
 {
 	if (D3DSurface) {
-		D3DSurface->Release();
+		Renderer::Release_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
 		D3DSurface = nullptr;
 	}
 }
 
 void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)
 {
-	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(D3DSurface->GetDesc(&d3d_desc));
-	surface_desc.Format = D3DFormat_To_WW3DFormat(d3d_desc.Format);
-	surface_desc.Height = d3d_desc.Height;
-	surface_desc.Width = d3d_desc.Width;
+	RenderSurfaceDescription description;
+	Renderer::Describe_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface), description);
+	surface_desc.Format = static_cast<WW3DFormat>(description.pixelFormat);
+	surface_desc.Height = description.height;
+	surface_desc.Width = description.width;
 }
 
 unsigned int SurfaceClass::Get_Bytes_Per_Pixel()
@@ -712,7 +716,7 @@ void SurfaceClass::Attach (IDirect3DSurface8 *surface)
 	//	Lock a reference onto the object
 	//
 	if (D3DSurface != nullptr) {
-		D3DSurface->AddRef ();
+		Renderer::Retain_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
 	}
 }
 
@@ -738,7 +742,7 @@ void SurfaceClass::Detach ()
 	//	Release the hold we have on the D3D object
 	//
 	if (D3DSurface != nullptr) {
-		D3DSurface->Release ();
+		Renderer::Release_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
 	}
 
 	D3DSurface = nullptr;

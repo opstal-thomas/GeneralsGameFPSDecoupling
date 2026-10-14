@@ -15,6 +15,32 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, SurfaceResourcesAreSeparateFromTextures)
+{
+    RenderSurfaceDescription empty;
+    EXPECT_FALSE(empty.Is_Valid());
+
+    RenderSurfaceDescription surface;
+    surface.width = 256;
+    surface.height = 128;
+    surface.pixelFormat = 5;
+    EXPECT_TRUE(surface.Is_Valid());
+    EXPECT_EQ(5u, surface.pixelFormat);
+
+    static_assert(std::is_pointer_v<RenderSurfaceHandle>);
+    static_assert(!std::is_convertible_v<RenderSurfaceHandle, RenderTexture2DHandle>);
+    static_assert(!std::is_convertible_v<RenderSurfaceHandle, RenderTextureHandle>);
+    static_assert(!std::is_convertible_v<RenderSurfaceHandle, RenderVertexBufferHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Create_Surface(surface)), RenderSurfaceHandle>);
+    static_assert(std::is_same_v<decltype(Renderer::Load_Surface("test")), RenderSurfaceHandle>);
+
+    Renderer::Retain_Surface(nullptr);
+    Renderer::Release_Surface(nullptr);
+    RenderSurfaceDescription nullDescription;
+    Renderer::Describe_Surface(nullptr, nullDescription);
+    EXPECT_FALSE(nullDescription.Is_Valid());
+}
+
 TEST(RendererBackend, CubeAndVolumeTextureDescriptors)
 {
     const RenderTextureCubeDescription emptyCube;
