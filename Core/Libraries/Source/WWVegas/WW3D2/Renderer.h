@@ -759,7 +759,14 @@ public:
     // retained references; callers release them via Release_Surface().
     static RenderTexture2DHandle Create_Offscreen_Texture(const RenderSurfaceDescription & description);
     static RenderSurfaceHandle Acquire_Current_Color_Surface();
+    // The swapchain backbuffer can differ from the currently bound RTT.
+    // The returned surface is retained; callers release it explicitly.
+    static RenderSurfaceHandle Acquire_Back_Buffer_Surface();
     static RenderSurfaceHandle Acquire_Current_Depth_Surface();
+    // Copy a portion of the active render target to CPU memory, preserving
+    // the legacy smudge probe's image-surface/CopyRects/LockRect behavior.
+    static unsigned Read_Current_Color_Region(unsigned char * destination, unsigned capacity,
+                                               int x, int y, unsigned width, unsigned height);
     // Target surfaces are borrowed. False means unsupported sample/format
     // pairing or device failure, without changing the caller's ownership.
     static bool Set_Render_Target_Surfaces(RenderSurfaceHandle color, RenderSurfaceHandle depth);

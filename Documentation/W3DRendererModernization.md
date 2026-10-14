@@ -496,8 +496,18 @@ particles also request transparent-black texture borders using semantic
 address and packed-border-color state, matching the old DX8 behavior.
 
 The actual DX8 vertex/index buffer allocations and memory ownership are
-unchanged. Snow, smudge, height-map rendering, water, mouse and display
+unchanged. Snow, height-map rendering, water, mouse and display
 overlays remain to be audited and migrated before the renderer cutover.
+
+### Smudge hardware probe and backbuffer decoupling
+
+Smudge hardware validation now draws pretransformed strips through Renderer and
+reads the active target through a neutral CPU-copy operation. The DX8 backend
+retains the original image-surface, CopyRects, read-only lock, and size-limited
+readback semantics. Backbuffer acquisition, background copying, sampler
+settings and indexed smudge batches also go through Renderer, while legacy
+vertex/index buffer allocation, texture ownership and sorting order remain.
+An automated boundary audit now guards the migrated smudge call sites.
 
 ### Known remaining Direct3D 8 dependencies
 

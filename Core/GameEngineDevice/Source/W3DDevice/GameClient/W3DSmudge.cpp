@@ -36,7 +36,6 @@
 #include "GameClient/Display.h"
 #include "WW3D2/texture.h"
 #include "WW3D2/dx8indexbuffer.h"
-#include "WW3D2/dx8wrapper.h"
 #include "WW3D2/Renderer.h"
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
@@ -81,16 +80,22 @@ void W3DSmudgeManager::ReAcquireResources()
 {
 	ReleaseResources();
 
-	SurfaceClass *surface=DX8Wrapper::_Get_DX8_Back_Buffer();
-	SurfaceClass::SurfaceDescription surface_desc;
+	RenderSurfaceHandle surface = Renderer::Acquire_Back_Buffer_Surface();
+	if (!surface)
+		return;
+	RenderSurfaceDescription surface_desc;
+	Renderer::Describe_Surface(surface, surface_desc);
+	Renderer::Release_Surface(surface);
+	if (!surface_desc.Is_Valid())
+		return;
 
-	surface->Get_Description(surface_desc);
-	REF_PTR_RELEASE(surface);
+	m_backgroundTexture = MSGNEW("TextureClass") TextureClass(
+		surface_desc.width, surface_desc.height,
+		static_cast<WW3DFormat>(surface_desc.pixelFormat),
+		MIP_LEVELS_1, TextureClass::POOL_DEFAULT, true);
 
-	m_backgroundTexture = MSGNEW("TextureClass") TextureClass(surface_desc.Width,surface_desc.Height,surface_desc.Format,MIP_LEVELS_1,TextureClass::POOL_DEFAULT, true);
-
-	m_backBufferWidth = surface_desc.Width;
-	m_backBufferHeight = surface_desc.Height;
+	m_backBufferWidth = surface_desc.width;
+	m_backBufferHeight = surface_desc.height;
 
 	m_indexBuffer=NEW_REF(DX8IndexBufferClass,(SMUDGE_DRAW_SIZE*4*3));	//allocate 4 triangles per smudge, each with 3 indices.
 
@@ -133,69 +138,13 @@ void W3DSmudgeManager::ReAcquireResources()
 /*Copies a portion of the current render target into a specified buffer*/
 Int copyRect(unsigned char *buf, Int bufSize, int oX, int oY, int width, int height)
 {
- 	IDirect3DSurface8 *surface=nullptr;	///<previous render target
- 	IDirect3DSurface8 *tempSurface=nullptr;
-	Int result = 0;
-	HRESULT hr = S_OK;
+	if (bufSize <= 0 || width <= 0 || height <= 0)
+		return 0;
 
- 	LPDIRECT3DDEVICE8 m_pDev=DX8Wrapper::_Get_D3D_Device8();
-
-	if (!m_pDev)
-		goto error;
-
- 	m_pDev->GetRenderTarget(&surface);
-
-	if (!surface)
-		goto error;
-
- 	D3DSURFACE_DESC desc;
-
- 	surface->GetDesc(&desc);
-
-	RECT srcRect;
-	srcRect.left=oX;
-	srcRect.top=oY;
-	srcRect.right=oX+width;
-	srcRect.bottom=oY+height;
-
-	POINT dstPoint;
-	dstPoint.x=0;
-	dstPoint.y=0;
-
- 	hr=m_pDev->CreateImageSurface(  width, height, desc.Format, &tempSurface);
-
-	if (hr != S_OK)
-		goto error;
-
- 	hr=m_pDev->CopyRects(surface,&srcRect,1,tempSurface,&dstPoint);
-
-	if (hr != S_OK)
-		goto error;
-
- 	D3DLOCKED_RECT lrect;
-
- 	hr=tempSurface->LockRect(&lrect,nullptr,D3DLOCK_READONLY);
-
-	if (hr != S_OK)
-		goto error;
-
- 	tempSurface->GetDesc(&desc);
-
-	if (desc.Size < bufSize)
-		bufSize = desc.Size;
-
-	memcpy(buf,lrect.pBits,bufSize);
-	result = bufSize;
-
-	tempSurface->UnlockRect();
-
-error:
-	if (surface)
-		surface->Release();
-	if (tempSurface)
-		tempSurface->Release();
-
-	return result;
+	// Preserve the legacy image-surface readback, implemented by the backend.
+	return static_cast<Int>(Renderer::Read_Current_Color_Region(
+		buf, static_cast<unsigned>(bufSize), oX, oY,
+		static_cast<unsigned>(width), static_cast<unsigned>(height)));
 }
 
 #define UNIQUE_COLOR	(0x12345678)
@@ -262,13 +211,8 @@ Bool W3DSmudgeManager::testHardwareSupport()
 		v[2].color = UNIQUE_COLOR;
 		v[3].color = UNIQUE_COLOR;
 
-		LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
-
-		//draw polygons like this is very inefficient but for only 2 triangles, it's
-		//not worth bothering with index/vertex buffers.
-		pDev->SetVertexShader(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1);
-
-		pDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, v, sizeof(_TRANS_LIT_TEX_VERTEX));
+		// Keep the original two-triangle screen-space strip and vertex layout.
+		Renderer::Draw_Transformed_Quad(v, sizeof(_TRANS_LIT_TEX_VERTEX), 1);
 
 		DWORD refData[BLOCK_SIZE*BLOCK_SIZE];
 		memset(refData,0,sizeof(refData));
@@ -289,7 +233,7 @@ Bool W3DSmudgeManager::testHardwareSupport()
 		v[2].color = 0xffffffff;
 		v[3].color = 0xffffffff;
 
-		pDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, v, sizeof(_TRANS_LIT_TEX_VERTEX));
+		Renderer::Draw_Transformed_Quad(v, sizeof(_TRANS_LIT_TEX_VERTEX), 1);
 		bufSize=copyRect((unsigned char *)testData,sizeof(testData),0,0,BLOCK_SIZE,BLOCK_SIZE);
 
 		if (!bufSize)
@@ -324,8 +268,7 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 		return;
 	}
 
-	SurfaceClass *backBuffer = DX8Wrapper::_Get_DX8_Back_Buffer();
-
+	RenderSurfaceHandle backBuffer = Renderer::Acquire_Back_Buffer_Surface();
 	if (!backBuffer)
 		return;
 
@@ -333,12 +276,12 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 
 	if (!background)
 	{
-		REF_PTR_RELEASE(backBuffer);
+		Renderer::Release_Surface(backBuffer);
 		return;
 	}
 
-	SurfaceClass::SurfaceDescription surface_desc;
-	backBuffer->Get_Description(surface_desc);
+	RenderSurfaceDescription surface_desc;
+	Renderer::Describe_Surface(backBuffer, surface_desc);
 
 	CameraClass &camera=rinfo.Camera;
 	Vector3 vsVert;
@@ -361,8 +304,8 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 	camera.Get_View_Matrix(&view);
 	camera.Get_Projection_Matrix(&proj);
 
-	Real texClampX = (Real)TheTacticalView->getWidth()/(Real)surface_desc.Width;
-	Real texClampY = (Real)TheTacticalView->getHeight()/(Real)surface_desc.Height;
+	Real texClampX = (Real)TheTacticalView->getWidth()/(Real)surface_desc.width;
+	Real texClampY = (Real)TheTacticalView->getHeight()/(Real)surface_desc.height;
 
 	Real texScaleX = texClampX*0.5f;
 	Real texScaleY = texClampY*0.5f;
@@ -436,33 +379,55 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 	if (!count)
 	{
 		REF_PTR_RELEASE(background);
-		REF_PTR_RELEASE(backBuffer);
+		Renderer::Release_Surface(backBuffer);
 		return;	//nothing to render.
 	}
 
-	//Copy the area of backbuffer occupied by smudges into an alternate buffer.
-	background->Copy(0,0,0,0,surface_desc.Width,surface_desc.Height,backBuffer);
+	// Match SurfaceClass::Copy: CopyRects for identical surfaces, otherwise
+	// the existing non-filtered D3DX surface blit for differing descriptions.
+	RenderSurfaceDescription background_desc;
+	Renderer::Describe_Surface(background->Peek_Render_Surface(), background_desc);
+	RenderSurfaceRect src = {0, 0,
+		static_cast<int>(surface_desc.width), static_cast<int>(surface_desc.height)};
+	if (background_desc.pixelFormat == surface_desc.pixelFormat &&
+		background_desc.width == surface_desc.width &&
+		background_desc.height == surface_desc.height)
+	{
+		RenderSurfacePoint dst = {0, 0};
+		Renderer::Copy_Surface(backBuffer, &src, background->Peek_Render_Surface(), &dst);
+	}
+	else
+	{
+		RenderSurfaceRect dst = {0, 0,
+			static_cast<int>(surface_desc.width), static_cast<int>(surface_desc.height)};
+		if (dst.right > static_cast<int>(background_desc.width))
+			dst.right = static_cast<int>(background_desc.width);
+		if (dst.bottom > static_cast<int>(background_desc.height))
+			dst.bottom = static_cast<int>(background_desc.height);
+		Renderer::Blit_Surface(backBuffer, src, background->Peek_Render_Surface(),
+			dst, RENDER_SURFACE_BLIT_NONE);
+	}
 
 	REF_PTR_RELEASE(background);
-	REF_PTR_RELEASE(backBuffer);
+	Renderer::Release_Surface(backBuffer);
 
 	Matrix4x4 identity(true);
 	Renderer::Set_Transform(RENDER_TRANSFORM_WORLD,identity);
 	Renderer::Set_Transform(RENDER_TRANSFORM_VIEW,identity);
 
-	DX8Wrapper::Set_Index_Buffer(m_indexBuffer,0);
+	Renderer::Bind_Legacy_Index_Buffer(m_indexBuffer,0);
 	//Renderer::Set_Shader(ShaderClass::_PresetOpaqueSpriteShader);
 
 	Renderer::Set_Shader(ShaderClass::_PresetAlphaShader);
 
 	Renderer::Set_Texture(0,m_backgroundTexture);
 	//Need these states in case texture is non-power-of-2
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ADDRESSU, D3DTADDRESS_CLAMP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ADDRESSV, D3DTADDRESS_CLAMP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ADDRESSW, D3DTADDRESS_CLAMP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
-	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_MIPFILTER, D3DTEXF_NONE);
+	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
+	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
+	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_W, RENDER_SAMPLER_CLAMP);
+	Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
+	Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
+	Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIP_FILTER, RENDER_SAMPLER_NONE);
 	VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
 	Renderer::Set_Material(vmat);
 	REF_PTR_RELEASE(vmat);
@@ -470,7 +435,7 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 
 	//Disable reading texture alpha since it's undefined.
 	//DX8Wrapper::Set_DX8_Texture_Stage_State(0,D3DTSS_COLOROP,D3DTOP_SELECTARG1);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(0,D3DTSS_ALPHAOP,D3DTOP_SELECTARG2);
+	Renderer::Set_Fixed_Stage_Operation(0, true, RENDER_FIXED_STAGE_SELECT_ARG2);
 
 	Int smudgesRemaining=count;
 	setIt=m_usedSmudgeSetList.begin();	//first smudge set that needs rendering.
@@ -542,9 +507,9 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 		}
 
 flushSmudges:
-		DX8Wrapper::Set_Vertex_Buffer(vb_access);
+		Renderer::Bind_Dynamic_Vertex_Buffer(vb_access);
 
-		DX8Wrapper::Draw_Triangles(0,smudgesInRenderBatch*4, 0, smudgesInRenderBatch*5);
+		Renderer::Draw_Triangles(0,smudgesInRenderBatch*4, 0, smudgesInRenderBatch*5);
 
 //Debug Code which draws outline around smudge
 /*		DX8Wrapper::_Get_D3D_Device8()->SetRenderState(D3DRS_FILLMODE,D3DFILL_WIREFRAME);
@@ -558,7 +523,7 @@ flushSmudges:
 		smudgesRemaining -= smudgesInRenderBatch;
 	}
 
-	DX8Wrapper::Set_DX8_Texture_Stage_State(0,D3DTSS_COLOROP,D3DTOP_MODULATE);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(0,D3DTSS_ALPHAOP,D3DTOP_MODULATE);
+	Renderer::Set_Fixed_Stage_Operation(0, false, RENDER_FIXED_STAGE_MODULATE);
+	Renderer::Set_Fixed_Stage_Operation(0, true, RENDER_FIXED_STAGE_MODULATE);
 
 }

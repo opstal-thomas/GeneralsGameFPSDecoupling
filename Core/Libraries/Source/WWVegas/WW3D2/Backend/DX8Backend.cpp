@@ -827,6 +827,60 @@ RenderSurfaceHandle Renderer::Acquire_Current_Color_Surface()
     return reinterpret_cast<RenderSurfaceHandle>(surface);
 }
 
+RenderSurfaceHandle Renderer::Acquire_Back_Buffer_Surface()
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    IDirect3DSurface8 * surface = nullptr;
+    if (!device || device->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &surface) != S_OK)
+        return nullptr;
+    return reinterpret_cast<RenderSurfaceHandle>(surface);
+}
+
+// Preserve the smudge probe's exact native readback sequence and Size-based
+// byte copy. The D3D8 objects are acquired and released entirely here.
+unsigned Renderer::Read_Current_Color_Region(unsigned char * destination, unsigned capacity,
+                                             int x, int y, unsigned width, unsigned height)
+{
+    if (!destination || !capacity || !width || !height)
+        return 0;
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return 0;
+
+    IDirect3DSurface8 * source = nullptr;
+    if (device->GetRenderTarget(&source) != S_OK || !source)
+        return 0;
+
+    unsigned copied = 0;
+    D3DSURFACE_DESC desc = {};
+    if (source->GetDesc(&desc) == S_OK)
+    {
+        IDirect3DSurface8 * image = nullptr;
+        if (device->CreateImageSurface(width, height, desc.Format, &image) == S_OK && image)
+        {
+            RECT region = {x, y, x + static_cast<int>(width), y + static_cast<int>(height)};
+            POINT origin = {0, 0};
+            if (device->CopyRects(source, &region, 1, image, &origin) == S_OK)
+            {
+                D3DLOCKED_RECT locked = {};
+                if (image->LockRect(&locked, nullptr, D3DLOCK_READONLY) == S_OK)
+                {
+                    D3DSURFACE_DESC imageDesc = {};
+                    if (image->GetDesc(&imageDesc) == S_OK && locked.pBits)
+                    {
+                        copied = imageDesc.Size < capacity ? imageDesc.Size : capacity;
+                        std::memcpy(destination, locked.pBits, copied);
+                    }
+                    image->UnlockRect();
+                }
+            }
+            image->Release();
+        }
+    }
+    source->Release();
+    return copied;
+}
+
 RenderSurfaceHandle Renderer::Acquire_Current_Depth_Surface()
 {
     IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
