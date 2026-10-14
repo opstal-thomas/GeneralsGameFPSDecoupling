@@ -235,6 +235,21 @@ enum RenderSamplerAddress
     RENDER_SAMPLER_CLAMP
 };
 
+// Per-field sampler updates avoid changing unrelated cached texture states.
+enum RenderSamplerFilterField
+{
+    RENDER_SAMPLER_MIN_FILTER,
+    RENDER_SAMPLER_MAG_FILTER,
+    RENDER_SAMPLER_MIP_FILTER
+};
+
+enum RenderSamplerAxis
+{
+    RENDER_SAMPLER_AXIS_U,
+    RENDER_SAMPLER_AXIS_V,
+    RENDER_SAMPLER_AXIS_W
+};
+
 struct RenderSamplerDescription
 {
     RenderSamplerDescription()
@@ -264,7 +279,9 @@ enum RenderBlendFactor
     RENDER_BLEND_INV_SRC_COLOR,
     RENDER_BLEND_SRC_ALPHA,
     RENDER_BLEND_INV_SRC_ALPHA,
-    RENDER_BLEND_DEST_COLOR
+    RENDER_BLEND_DEST_COLOR,
+    RENDER_BLEND_DEST_ALPHA,
+    RENDER_BLEND_INV_DEST_ALPHA
 };
 
 enum RenderCompareFunc
@@ -591,11 +608,21 @@ public:
     // backend-specific texture stage state, preserving DX8 state caching.
     static void Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler);
     static void Set_Texture_Max_Anisotropy(unsigned stage, unsigned level);
+    static void Set_Texture_Filter(unsigned stage, RenderSamplerFilterField field,
+                                   RenderSamplerFilter filter);
+    static void Set_Texture_Address(unsigned stage, RenderSamplerAxis axis,
+                                    RenderSamplerAddress address);
 
     // W3D material/shader state. Keep the historic SetRenderState ordering
     // and dirty-field update behavior inside the DX8 backend. Fixed-function
     // texture combiners, fog and patch factors are not migrated yet.
     static void Apply_Blend_State(const RenderBlendState & state);
+    // These granular state setters retain the DX8 shader-manager's exact
+    // ordering without applying or resetting other blend/depth fields.
+    static void Set_Source_Blend(RenderBlendFactor factor);
+    static void Set_Destination_Blend(RenderBlendFactor factor);
+    static void Set_Blending_Enabled(bool enabled);
+    static void Set_Texture_Factor(unsigned packedARGB);
     static void Set_Depth_Compare(RenderCompareFunc compare);
     static void Set_Depth_Write(bool enabled);
     static void Set_Cull_Mode(RenderCullMode cullMode);

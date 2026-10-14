@@ -678,6 +678,8 @@ static D3DBLEND To_DX8_Blend(RenderBlendFactor factor)
     case RENDER_BLEND_SRC_ALPHA: return D3DBLEND_SRCALPHA;
     case RENDER_BLEND_INV_SRC_ALPHA: return D3DBLEND_INVSRCALPHA;
     case RENDER_BLEND_DEST_COLOR: return D3DBLEND_DESTCOLOR;
+    case RENDER_BLEND_DEST_ALPHA: return D3DBLEND_DESTALPHA;
+    case RENDER_BLEND_INV_DEST_ALPHA: return D3DBLEND_INVDESTALPHA;
     case RENDER_BLEND_ONE:
     default: return D3DBLEND_ONE;
     }
@@ -886,4 +888,56 @@ void Renderer::Apply_Texture_Stage_Alpha(
 {
     Apply_DX8_Texture_Channel(stage, channel, D3DTSS_ALPHAOP,
                              D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2, uncached);
+}
+
+// Single-field texture and blend bindings preserve the existing DX8 state
+// cache and ordering. No native D3D values escape the Renderer contract.
+void Renderer::Set_Texture_Filter(unsigned stage, RenderSamplerFilterField field,
+                                  RenderSamplerFilter filter)
+{
+    D3DTEXTURESTAGESTATETYPE nativeField = D3DTSS_MINFILTER;
+    switch (field)
+    {
+    case RENDER_SAMPLER_MAG_FILTER: nativeField = D3DTSS_MAGFILTER; break;
+    case RENDER_SAMPLER_MIP_FILTER: nativeField = D3DTSS_MIPFILTER; break;
+    case RENDER_SAMPLER_MIN_FILTER:
+    default: break;
+    }
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, nativeField,
+                                             To_DX8_Sampler_Filter(filter));
+}
+
+void Renderer::Set_Texture_Address(unsigned stage, RenderSamplerAxis axis,
+                                   RenderSamplerAddress address)
+{
+    D3DTEXTURESTAGESTATETYPE nativeField = D3DTSS_ADDRESSU;
+    switch (axis)
+    {
+    case RENDER_SAMPLER_AXIS_V: nativeField = D3DTSS_ADDRESSV; break;
+    case RENDER_SAMPLER_AXIS_W: nativeField = D3DTSS_ADDRESSW; break;
+    case RENDER_SAMPLER_AXIS_U:
+    default: break;
+    }
+    DX8Wrapper::Set_DX8_Texture_Stage_State(stage, nativeField,
+        address == RENDER_SAMPLER_REPEAT ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+}
+
+void Renderer::Set_Source_Blend(RenderBlendFactor factor)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, To_DX8_Blend(factor));
+}
+
+void Renderer::Set_Destination_Blend(RenderBlendFactor factor)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, To_DX8_Blend(factor));
+}
+
+void Renderer::Set_Blending_Enabled(bool enabled)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE, enabled);
+}
+
+void Renderer::Set_Texture_Factor(unsigned packedARGB)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, packedARGB);
 }
