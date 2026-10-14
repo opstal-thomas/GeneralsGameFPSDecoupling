@@ -213,9 +213,9 @@ void Renderer::Draw_Transformed_Quad(const void * vertices, unsigned vertexStrid
 {
     const unsigned requiredStride = 20u + uvSets * 8u;
     WWASSERT(vertices && (uvSets == 1 || uvSets == 2) &&
-             vertexStride == requiredStride);
+             vertexStride >= requiredStride);
     if (!vertices || (uvSets != 1 && uvSets != 2) ||
-        vertexStride != requiredStride)
+        vertexStride < requiredStride)
         return;
 
     IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();

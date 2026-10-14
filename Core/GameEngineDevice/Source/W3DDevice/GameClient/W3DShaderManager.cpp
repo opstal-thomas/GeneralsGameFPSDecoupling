@@ -188,7 +188,7 @@ Bool ScreenDefaultFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool
 	if (!tex) return false;
 	if (!set(mode)) return false;
 
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
@@ -327,7 +327,7 @@ Bool ScreenBWFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doE
 	if (!tex) return false;
 	if (!set(mode)) return false;
 
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
@@ -521,7 +521,7 @@ Bool ScreenBWFilterDOT3::postRender(FilterModes mode, Coord2D &scrollDelta,Bool 
 	if (!tex) return false;
 	if (!set(mode)) return false;
 
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
@@ -791,7 +791,7 @@ Bool ScreenCrossFadeFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bo
 	if (!tex) return false;
 	if (!set(mode)) return false;
 
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
@@ -2822,7 +2822,7 @@ Bool W3DShaderManager::filterSetup(FilterTypes filter, FilterModes mode)
 /*Draws 2 triangles covering the viewport given the current render states*/
 void W3DShaderManager::drawViewport(Int color)
 {
-	LPDIRECT3DDEVICE8 pDev=DX8Wrapper::_Get_D3D_Device8();
+	
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
