@@ -60,3 +60,17 @@ add_test(
     COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --basic-texture
 )
 set_tests_properties(W3D_DX12_WARP_Basic_Texture_Draw PROPERTIES TIMEOUT 45)
+
+# These preserve pixel checks while specializing the combiner at shader
+# compilation time, matching the intended DX12 material-PSO approach.
+add_test(
+    NAME W3D_DX12_WARP_Static_Key_Untextured
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --static-untextured
+)
+set_tests_properties(W3D_DX12_WARP_Static_Key_Untextured PROPERTIES TIMEOUT 45)
+
+add_test(
+    NAME W3D_DX12_WARP_Static_Key_Textured
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --static-textured
+)
+set_tests_properties(W3D_DX12_WARP_Static_Key_Textured PROPERTIES TIMEOUT 45)

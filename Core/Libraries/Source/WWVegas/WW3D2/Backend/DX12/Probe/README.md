@@ -29,3 +29,11 @@ legacy DX8 renderer ships in the actual game executable.
 The probe loads shader source only in this developer test. A future
 runtime DX12 backend must embed compiled shader bytecode; this test does
 not add files to the game's deployment.
+
+## Shader permutation isolation
+
+The default and `--untextured` modes exercise dynamic combiner-key branching.
+The `--static-textured` and `--static-untextured` modes provide the same
+combinations as compile-time HLSL constants, making it possible to distinguish
+WARP's handling of the dynamically interpreted combiner from a specialized
+PSO. Both paths must pass before full pixel parity can be claimed.

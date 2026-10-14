@@ -63,10 +63,18 @@ bool W3DAlphaComparison(float alpha, uint reference, uint compare)
 
 float4 W3D_PS(W3DVertexOutput input) : SV_TARGET0
 {
-    const uint color0 = W3DGetChannel(W3D_CombinerKey, 0u, false);
-    const uint alpha0 = W3DGetChannel(W3D_CombinerKey, 0u, true);
-    const uint color1 = W3DGetChannel(W3D_CombinerKey, 1u, false);
-    const uint alpha1 = W3DGetChannel(W3D_CombinerKey, 1u, true);
+    // Runtime key support is retained for reference. A DX12 backend can
+    // specialize fixed-function material combinations while building PSOs.
+    // The probe compares that path against the runtime-key implementation.
+#ifdef W3D_STATIC_COMBINER_KEY
+    const uint combinerKey = W3D_STATIC_COMBINER_KEY;
+#else
+    const uint combinerKey = W3D_CombinerKey;
+#endif
+    const uint color0 = W3DGetChannel(combinerKey, 0u, false);
+    const uint alpha0 = W3DGetChannel(combinerKey, 0u, true);
+    const uint color1 = W3DGetChannel(combinerKey, 1u, false);
+    const uint alpha1 = W3DGetChannel(combinerKey, 1u, true);
 
     // Bump-environment map operators modify the next stage's UVs. They
     // require a separate shader path; make unsupported permutations obvious

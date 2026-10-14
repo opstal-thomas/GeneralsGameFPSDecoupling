@@ -1,7 +1,5 @@
 // Standalone W3D Direct3D 12 GPU smoke test. It deliberately does NOT
 // change the game's DX8 backend or require a dedicated physical GPU.
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <windows.h>
 #include <d3d12.h>
 #include <d3d12sdklayers.h>
@@ -95,10 +93,11 @@ D3D12_RESOURCE_BARRIER Barrier(ID3D12Resource * resource,
 }
 
 ComPtr<ID3DBlob> Compile(const wchar_t * shader, const char * entry,
-                         const char * target)
+                         const char * target,
+                         const D3D_SHADER_MACRO * defines = nullptr)
 {
     ComPtr<ID3DBlob> code, errors;
-    const HRESULT hr = D3DCompileFromFile(shader, nullptr,
+    const HRESULT hr = D3DCompileFromFile(shader, defines,
         D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, target,
         D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &errors);
     if (FAILED(hr) && errors)
@@ -162,7 +161,8 @@ void PrintDiagnostics(ID3D12Device * device)
 }
 
 void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
-         bool w3dVertexOnly, bool basicTexture)
+         bool w3dVertexOnly, bool basicTexture,
+         bool staticUntextured, bool staticTextured)
 {
     ComPtr<ID3D12Debug> debug;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
@@ -253,13 +253,21 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
                             * input.diffuse);
         }
     )";
+    const D3D_SHADER_MACRO staticUntexturedDefines[] = {
+        {"W3D_STATIC_COMBINER_KEY", "0x10101010u"}, {nullptr, nullptr}
+    };
+    const D3D_SHADER_MACRO staticTexturedDefines[] = {
+        {"W3D_STATIC_COMBINER_KEY", "0x10101193u"}, {nullptr, nullptr}
+    };
+    const D3D_SHADER_MACRO * defines = staticUntextured ? staticUntexturedDefines
+        : (staticTextured ? staticTexturedDefines : nullptr);
     auto vs = solid ? CompileSolid(minimalShader, "W3D_VS", "vs_5_1")
                     : Compile(shader, "W3D_VS", "vs_5_1");
     auto ps = (solid || w3dVertexOnly)
         ? CompileSolid(minimalShader, "W3D_PS", "ps_5_1")
         : basicTexture
         ? CompileSolid(basicTextureShader, "W3D_PS", "ps_5_1")
-        : Compile(shader, "W3D_PS", "ps_5_1");
+        : Compile(shader, "W3D_PS", "ps_5_1", defines);
 
     D3D12_INPUT_ELEMENT_DESC inputs[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
@@ -345,7 +353,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     auto transition = Barrier(texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    if (!clearOnly && !untextured && !solid && !w3dVertexOnly) {
+    if (!clearOnly && !untextured && !staticUntextured && !solid && !w3dVertexOnly) {
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         list->ResourceBarrier(1, &transition);
     }
@@ -405,7 +413,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
     Constants constants;
     constants.wvp[0] = constants.wvp[5] =
         constants.wvp[10] = constants.wvp[15] = 1.f;
-    if (untextured) {
+    if (untextured || staticUntextured) {
         // COLOROP=DISABLE on both stages: the pixel shader should return
         // interpolated diffuse vertex color without sampling the texture.
         constants.combiner = 0x10101010u;
@@ -513,7 +521,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
         : (solid || w3dVertexOnly)
         ? (closeTo(inside[0], 255) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
-        : untextured
+        : (untextured || staticUntextured)
         ? (closeTo(inside[0], 255) && closeTo(inside[1], 64) &&
            closeTo(inside[2], 128) && closeTo(inside[3], 255))
         : (closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
@@ -526,7 +534,10 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
         : (solid ? "minimal solid-color draw"
             : (w3dVertexOnly ? "W3D vertex with minimal pixel shader"
                 : (basicTexture ? "basic texture-modulated draw"
-                    : (untextured ? "untextured W3D draw" : "textured W3D draw"))));
+                    : (staticUntextured ? "static-key untextured W3D draw"
+                        : (staticTextured ? "static-key textured W3D draw"
+                            : (untextured ? "untextured W3D draw"
+                                : "textured W3D draw"))))));
     std::cout << "D3D12 WARP " << mode << ": PASS\n";
 }
 }
@@ -534,7 +545,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid,
 int wmain(int argc, wchar_t ** argv)
 {
     if (argc < 2 || argc > 3) {
-        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid|--w3d-vs|--basic-texture]\n";
+        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid|--w3d-vs|--basic-texture|--static-untextured|--static-textured]\n";
         return 2;
     }
     try {
@@ -543,9 +554,13 @@ int wmain(int argc, wchar_t ** argv)
         const bool solid = argc == 3 && std::wcscmp(argv[2], L"--solid") == 0;
         const bool w3dVertexOnly = argc == 3 && std::wcscmp(argv[2], L"--w3d-vs") == 0;
         const bool basicTexture = argc == 3 && std::wcscmp(argv[2], L"--basic-texture") == 0;
-        if (argc == 3 && !clearOnly && !untextured && !solid && !w3dVertexOnly && !basicTexture)
+        const bool staticUntextured = argc == 3 && std::wcscmp(argv[2], L"--static-untextured") == 0;
+        const bool staticTextured = argc == 3 && std::wcscmp(argv[2], L"--static-textured") == 0;
+        if (argc == 3 && !clearOnly && !untextured && !solid && !w3dVertexOnly &&
+            !basicTexture && !staticUntextured && !staticTextured)
             throw std::runtime_error("Unknown mode");
-        Run(argv[1], clearOnly, untextured, solid, w3dVertexOnly, basicTexture);
+        Run(argv[1], clearOnly, untextured, solid, w3dVertexOnly, basicTexture,
+            staticUntextured, staticTextured);
         return 0;
     } catch (const std::exception & e) {
         std::cerr << "DX12 WARP probe failure: " << e.what() << '\n';
