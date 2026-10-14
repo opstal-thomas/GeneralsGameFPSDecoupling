@@ -219,7 +219,6 @@ unsigned int SurfaceClass::Get_Bytes_Per_Pixel()
 SurfaceClass::LockedSurfacePtr SurfaceClass::Lock(int *pitch)
 {
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
 	*pitch = lock_rect.rowPitch;
 	return static_cast<LockedSurfacePtr>(lock_rect.data);
@@ -228,7 +227,6 @@ SurfaceClass::LockedSurfacePtr SurfaceClass::Lock(int *pitch)
 SurfaceClass::LockedSurfacePtr SurfaceClass::Lock(int *pitch, const Vector2i &min, const Vector2i &max)
 {
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 
 	RenderSurfaceRect rect;
 	rect.left = min.I;
@@ -270,7 +268,6 @@ void SurfaceClass::Clear()
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.data;
@@ -309,7 +306,6 @@ void SurfaceClass::Copy(const unsigned char *other)
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.data;
@@ -348,7 +344,6 @@ void SurfaceClass::Copy(const Vector2i &min, const Vector2i &max, const unsigned
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	RenderSurfaceRect rect;
 	rect.left=min.I;
 	rect.right=max.I;
@@ -399,7 +394,6 @@ unsigned char *SurfaceClass::CreateCopy(int *width,int *height,int*size,bool fli
 	unsigned char *other=W3DNEWARRAY unsigned char [sd.Height*sd.Width*mysize];
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, true);
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.data;
@@ -558,7 +552,6 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 	}
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	RenderSurfaceRect rect;
 	::ZeroMemory(&rect, sizeof(rect));
 
@@ -636,7 +629,6 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
 	RenderSurfaceMap lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 	RenderSurfaceRect rect;
 	::ZeroMemory(&rect, sizeof(rect));
 

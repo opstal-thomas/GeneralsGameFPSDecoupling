@@ -396,6 +396,31 @@ same `DX8Wrapper` calls and preserve their return codes.
 | DX8 backend | Translating Renderer operations to DX8Wrapper | Game simulation |
 | Future DX12 backend | Device/queues, resource heaps, descriptors, root signatures, PSOs, barriers, presentation | Gameplay logic |
 
+### DX8 caller migration: current boundary
+
+Recent refactoring moved the remaining texture-filter/font-atlas capability
+queries, texture-loader dimensions/aspect-ratio and render-thread checks behind
+`Renderer`. The native DX8 backend remains responsible for exposing those
+values; no texture selection or texture-upload semantics changed.
+
+`SurfaceClass` font-atlas copies, region copies, format-converting blits,
+stretch copies, and CPU surface LockRect/UnlockRect now go through neutral
+`Renderer` commands with typed surface handles and pixel-space rectangles.
+The DX8 backend still executes CopyRects/D3DXLoadSurfaceFromSurface and
+D3D8 surface locks, retaining source/destination formats and filter modes.
+
+Ring, line, point-group and streak primitives now submit triangle draws,
+dynamic VB/IB binding and packed vertex colors through `Renderer`. The
+transitional DynamicVBAccessClass/DynamicIBAccessClass objects and buffer
+cycling/sorted transparency remain DX8-oriented and are **not** a native
+DX12 mesh submission contract yet.
+
+Remaining dependencies include native D3D8 surface ownership/Attach/Detach,
+texture loader COM level/face locks and uploads, fixed-function mesh
+buffer formats, sorted dynamic geometry, plus terrain/effect/UI modules
+that still directly hold D3D8 COM objects or call DX8Wrapper. These
+must be addressed before the DX8 backend can be fully replaced.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,
