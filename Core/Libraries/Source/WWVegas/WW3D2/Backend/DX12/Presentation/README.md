@@ -23,7 +23,9 @@ ctest --test-dir build/w3d-dx12-presentation -C Release --output-on-failure
 The test creates a native Win32 window and uses WARP to clear and present six
 frames, read back a center pixel from each *swapchain buffer before presenting*,
 recycle command allocators/fences and resize from 96x96 to 128x72.
+CI tests both Win32 (the game's target architecture) and x64 on WARP.
 Use `W3DDX12PresentationSmoke --hardware` locally to test a physical GPU.
+The workflow publishes standalone Win32 and x64 smoke executables as artifacts.
 
 The standalone test and optional `w3d_dx12_presentation` library share the
 same `.cpp` implementation. The library is deliberately NOT selected as the

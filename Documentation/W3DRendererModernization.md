@@ -50,7 +50,9 @@ zero-sized minimized-window resize is safely ignored.
 
 A standalone Win32 test in `Backend/DX12/Presentation` actually presents
 multiple colored frames and verifies the swapchain's GPU pixels before
-Present. It tests buffer reuse and resize on the Windows CI WARP adapter.
+Present. It tests buffer reuse and resize on the Windows CI WARP adapter,
+both in Win32 and x64 builds. CI uploads the standalone smoke binaries for
+additional verification on physical Windows hardware.
 The main WW3D2 CMake project optionally exposes an
 `w3d_dx12_presentation` static library when
 `W3D_BUILD_DX12_PRESENTATION=ON`. That target is excluded from default builds
@@ -58,6 +60,7 @@ and does not link into the shipping game. No DX12 `Renderer::` method
 implementations, runtime backend selection, texture streaming or meshes
 are included yet. Those depend on removing the remaining DX8-only draw
 paths and should be implemented independently of the game's simulation.
+
 ### DX12 WARP device, PSO and first texture-modulated triangle
 
 The isolated `WW3D2/Backend/DX12/Probe` target creates an actual D3D12 WARP
@@ -68,19 +71,19 @@ VS/PS shader and draws a texture-modulated triangle offscreen. The test
 reads actual GPU pixels and checks that the two-stage combiner produces
 the expected color against a cleared background.
 
-The standalone probe is built separately and tested on a Windows CI runner.
-It **does not link to WW3D2 or modify the game runtime backend**. The next
-integration steps are an optional native DX12 swapchain path, persistent
-resource/descriptor management, rendering W3D mesh buffers, and an explicit
-DX8/DX12 runtime selection with safe fallback. These require additional
-validation before replacing DX8 gameplay.
+The standalone geometry probe remains separate from WW3D2 gameplay and
+tests W3D-style pixel output. The native swapchain lifecycle is implemented
+independently above. Remaining integration requires persistent texture/
+descriptor management, rendering real W3D mesh buffers and an explicit
+DX8/DX12 runtime selection with safe fallback. Visual parity and gameplay
+still need dedicated hardware validation.
 
 ### DX12 vertex/pixel shader smoke compilation
 
 A minimal W3D unlit vertex/pixel shader is available in
 `WW3D2/Backend/DX12/W3DLegacyUnlit.hlsl`. It takes a world-view-projection
 matrix, two texture/sampler pairs, interpolated vertex diffuse color and
-the packed combiner key; it invokes the reusable texture combiner and
+a compile-time-specialized combiner key; it invokes the reusable texture combiner and
 performs the legacy alpha-test comparison. A dedicated Windows Actions
 workflow compiles its VS/PS entrypoints for Shader Model 5.1 as a first
 DX12 shader compatibility check.
@@ -88,10 +91,10 @@ DX12 shader compatibility check.
 This shader **does not run in the game yet** and is not claimed as pixel-
 identical to the DX8 renderer. Lighting, specular, fog, bump maps, texture
 coordinate generation, and multisample/sRGB conventions still need
-integration. The DX12 device, PSO, descriptor heap, swapchain and command
-recording path are next. No separately shipped shader files are required
-at this stage; compiled shader bytecode will be embedded into the
-executable in the future.
+integration. The standalone geometry probe and swapchain presentation path
+are available, but their draw pipelines are not yet connected to W3D scenes.
+No separately shipped shader files are required at this stage; production
+shader bytecode can be embedded into the executable later.
 
 ### DX12 shader reference and permutation identity
 

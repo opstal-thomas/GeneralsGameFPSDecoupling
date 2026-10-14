@@ -57,14 +57,26 @@ jobs:
           ctest --test-dir $build -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw "DX12 WARP GPU pixel verification failed" }
 
-      - name: Build and execute DX12 WARP swapchain presentation smoke test
+      - name: Build and execute DX12 WARP swapchain tests (Win32 and x64)
         shell: pwsh
         run: |
           $source = "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/Presentation"
-          $build = Join-Path $env:RUNNER_TEMP "w3d-dx12-presentation"
-          cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64
-          if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain probe configuration failed" }
-          cmake --build $build --config Release --parallel 2
-          if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain probe compilation failed" }
-          ctest --test-dir $build -C Release --output-on-failure
-          if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain Present/resize/pixel test failed" }
+          $artifacts = Join-Path $env:RUNNER_TEMP "w3d-dx12-presentation-artifacts"
+          New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
+          foreach ($architecture in @("Win32", "x64")) {
+            $build = Join-Path $env:RUNNER_TEMP "w3d-dx12-presentation-$architecture"
+            cmake -S $source -B $build -G "Visual Studio 17 2022" -A $architecture
+            if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture configuration failed" }
+            cmake --build $build --config Release --parallel 2
+            if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture compilation failed" }
+            ctest --test-dir $build -C Release --output-on-failure
+            if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture rendering/present failed" }
+            Copy-Item -Path (Join-Path $build "Release/W3DDX12PresentationSmoke.exe") -Destination (Join-Path $artifacts "W3DDX12PresentationSmoke-$architecture.exe") -ErrorAction Stop
+          }
+      - name: Upload standalone DX12 presentation smoke tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3d-dx12-presentation-smoke
+          path: ${{ runner.temp }}/w3d-dx12-presentation-artifacts/*.exe
+          if-no-files-found: error
+          retention-days: 14

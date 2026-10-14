@@ -203,7 +203,10 @@ bool DX12PresentationDevice::Initialize(void * nativeWindow, unsigned width,
             for (UINT i = 0; ; ++i)
             {
                 ComPtr<IDXGIAdapter1> candidate;
-                if (state.factory->EnumAdapters1(i, &candidate) == DXGI_ERROR_NOT_FOUND)
+                const HRESULT enumerated = state.factory->EnumAdapters1(i, &candidate);
+                if (enumerated == DXGI_ERROR_NOT_FOUND)
+                    break;
+                if (!state.Check(enumerated, "IDXGIFactory::EnumAdapters1"))
                     break;
                 DXGI_ADAPTER_DESC1 desc = {};
                 if (FAILED(candidate->GetDesc1(&desc)) ||
@@ -219,7 +222,8 @@ bool DX12PresentationDevice::Initialize(void * nativeWindow, unsigned width,
             }
             if (!state.adapter)
             {
-                state.Fail("No hardware D3D12 adapter found", DXGI_ERROR_NOT_FOUND);
+                if (state.lastError.empty())
+                    state.Fail("No hardware D3D12 adapter found", DXGI_ERROR_NOT_FOUND);
                 break;
             }
         }
