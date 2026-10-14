@@ -972,17 +972,20 @@ void TextureClass::Apply(unsigned int stage)
 */
 SurfaceClass *TextureClass::Get_Surface_Level(unsigned int level)
 {
-	if (!Peek_D3D_Texture())
+	if (!Peek_Render_Texture())
 	{
-		WWASSERT_PRINT(0, "Get_Surface_Level: D3DTexture is null!");
+		WWASSERT_PRINT(0, "Get_Surface_Level: texture is null!");
 		return nullptr;
 	}
 
-	IDirect3DSurface8 *d3d_surface = nullptr;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(level, &d3d_surface));
-	SurfaceClass *surface = new SurfaceClass(d3d_surface);
-	d3d_surface->Release();
-
+	// Acquire adds a backend reference. SurfaceClass retains its own
+	// reference and we release this temporary one, matching DX8 COM lifetime.
+	RenderSurfaceHandle mipSurface = Renderer::Acquire_Texture_Surface_Level(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), level);
+	if (!mipSurface)
+		return nullptr;
+	SurfaceClass *surface = new SurfaceClass(mipSurface);
+	Renderer::Release_Surface(mipSurface);
 	return surface;
 }
 
@@ -1005,15 +1008,15 @@ void TextureClass::Get_Level_Description( SurfaceClass::SurfaceDescription & des
 */
 IDirect3DSurface8 *TextureClass::Get_D3D_Surface_Level(unsigned int level)
 {
-	if (!Peek_D3D_Texture())
+	if (!Peek_Render_Texture())
 	{
-		WWASSERT_PRINT(0, "Get_D3D_Surface_Level: D3DTexture is null!");
+		WWASSERT_PRINT(0, "Get_D3D_Surface_Level: texture is null!");
 		return nullptr;
 	}
 
-	IDirect3DSurface8 *d3d_surface = nullptr;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(level, &d3d_surface));
-	return d3d_surface;
+	// Transitional compatibility API. The backend returns a retained surface.
+	return reinterpret_cast<IDirect3DSurface8 *>(Renderer::Acquire_Texture_Surface_Level(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), level));
 }
 
 //**********************************************************************************************
@@ -1022,15 +1025,8 @@ IDirect3DSurface8 *TextureClass::Get_D3D_Surface_Level(unsigned int level)
 */
 unsigned TextureClass::Get_Texture_Memory_Usage() const
 {
-	int size=0;
-	if (!Peek_D3D_Texture()) return 0;
-	for (unsigned i=0;i<Peek_D3D_Texture()->GetLevelCount();++i)
-	{
-		D3DSURFACE_DESC desc;
-		DX8_ErrorCode(Peek_D3D_Texture()->GetLevelDesc(i,&desc));
-		size+=desc.Size;
-	}
-	return size;
+	return Renderer::Get_Texture_2D_Memory_Usage(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()));
 }
 
 
@@ -1285,15 +1281,15 @@ void ZTextureClass::Apply_New_Surface
 */
 IDirect3DSurface8* ZTextureClass::Get_D3D_Surface_Level(unsigned int level)
 {
-	if (!Peek_D3D_Texture())
+	if (!Peek_Render_Texture())
 	{
-		WWASSERT_PRINT(0, "Get_D3D_Surface_Level: D3DTexture is null!");
+		WWASSERT_PRINT(0, "Get_D3D_Surface_Level: texture is null!");
 		return nullptr;
 	}
 
-	IDirect3DSurface8 *d3d_surface = nullptr;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(level, &d3d_surface));
-	return d3d_surface;
+	// Transitional compatibility API. The backend returns a retained surface.
+	return reinterpret_cast<IDirect3DSurface8 *>(Renderer::Acquire_Texture_Surface_Level(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), level));
 }
 
 //**********************************************************************************************
@@ -1302,15 +1298,8 @@ IDirect3DSurface8* ZTextureClass::Get_D3D_Surface_Level(unsigned int level)
 */
 unsigned ZTextureClass::Get_Texture_Memory_Usage() const
 {
-	int size=0;
-	if (!Peek_D3D_Texture()) return 0;
-	for (unsigned i=0;i<Peek_D3D_Texture()->GetLevelCount();++i)
-	{
-		D3DSURFACE_DESC desc;
-		DX8_ErrorCode(Peek_D3D_Texture()->GetLevelDesc(i,&desc));
-		size+=desc.Size;
-	}
-	return size;
+	return Renderer::Get_Texture_2D_Memory_Usage(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()));
 }
 
 

@@ -74,6 +74,9 @@ class SurfaceClass : public RefCountClass
 
 		// Create the surface from a D3D pointer
 		SurfaceClass(IDirect3DSurface8 *d3d_surface);
+		// Backend-neutral surface reference; the constructor retains its
+		// borrowed argument, matching the legacy native-pointer constructor.
+		SurfaceClass(RenderSurfaceHandle surface);
 
 		virtual ~SurfaceClass() override;
 
@@ -121,13 +124,15 @@ class SurfaceClass : public RefCountClass
 		unsigned char *CreateCopy(int *width,int *height,int*size,bool flip=false);
 
 			// For use by TextureClass:
-		IDirect3DSurface8 *Peek_D3D_Surface() { return D3DSurface; }
-		RenderSurfaceHandle Peek_Render_Surface() const {
-			return reinterpret_cast<RenderSurfaceHandle>(D3DSurface);
+		// Transitional D3D8 compatibility getter for callers not yet migrated.
+		IDirect3DSurface8 *Peek_D3D_Surface() {
+			return reinterpret_cast<IDirect3DSurface8 *>(RenderSurface);
 		}
+		RenderSurfaceHandle Peek_Render_Surface() const { return RenderSurface; }
 
 		// Attaching and detaching a surface pointer
 		void	Attach (IDirect3DSurface8 *surface);
+		void	Attach_Render_Surface(RenderSurfaceHandle surface);
 		void	Detach ();
 
 		// draws a horizontal line
@@ -149,8 +154,8 @@ class SurfaceClass : public RefCountClass
 
 	private:
 
-		// Direct3D surface object
-		IDirect3DSurface8 *D3DSurface;
+		// Backend-owned surface handle, retained for the SurfaceClass lifetime.
+		RenderSurfaceHandle RenderSurface;
 
 		WW3DFormat SurfaceFormat;
 	friend class TextureClass;

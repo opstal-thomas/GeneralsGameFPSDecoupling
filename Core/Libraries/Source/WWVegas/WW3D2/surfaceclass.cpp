@@ -162,7 +162,7 @@ void Convert_Pixel(unsigned char * pixel,const SurfaceClass::SurfaceDescription 
 **                             SurfaceClass
 *************************************************************************/
 SurfaceClass::SurfaceClass(unsigned width, unsigned height, WW3DFormat format):
-	D3DSurface(nullptr),
+	RenderSurface(nullptr),
 	SurfaceFormat(format)
 {
 	WWASSERT(width);
@@ -171,20 +171,20 @@ SurfaceClass::SurfaceClass(unsigned width, unsigned height, WW3DFormat format):
 	description.width = width;
 	description.height = height;
 	description.pixelFormat = static_cast<unsigned>(format);
-	D3DSurface = reinterpret_cast<IDirect3DSurface8 *>(Renderer::Create_Surface(description));
+	RenderSurface = Renderer::Create_Surface(description);
 }
 
 SurfaceClass::SurfaceClass(const char *filename):
-	D3DSurface(nullptr)
+	RenderSurface(nullptr)
 {
-	D3DSurface = reinterpret_cast<IDirect3DSurface8 *>(Renderer::Load_Surface(filename));
+	RenderSurface = Renderer::Load_Surface(filename);
 	SurfaceDescription desc;
 	Get_Description(desc);
 	SurfaceFormat=desc.Format;
 }
 
 SurfaceClass::SurfaceClass(IDirect3DSurface8 *d3d_surface)	:
-	D3DSurface (nullptr)
+	RenderSurface (nullptr)
 {
 	Attach (d3d_surface);
 	SurfaceDescription desc;
@@ -192,18 +192,27 @@ SurfaceClass::SurfaceClass(IDirect3DSurface8 *d3d_surface)	:
 	SurfaceFormat=desc.Format;
 }
 
+SurfaceClass::SurfaceClass(RenderSurfaceHandle surface) :
+	RenderSurface(nullptr)
+{
+	Attach_Render_Surface(surface);
+	SurfaceDescription desc;
+	Get_Description(desc);
+	SurfaceFormat=desc.Format;
+}
+
 SurfaceClass::~SurfaceClass()
 {
-	if (D3DSurface) {
-		Renderer::Release_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
-		D3DSurface = nullptr;
+	if (RenderSurface) {
+		Renderer::Release_Surface(RenderSurface);
+		RenderSurface = nullptr;
 	}
 }
 
 void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)
 {
 	RenderSurfaceDescription description;
-	Renderer::Describe_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface), description);
+	Renderer::Describe_Surface(RenderSurface, description);
 	surface_desc.Format = static_cast<WW3DFormat>(description.pixelFormat);
 	surface_desc.Height = description.height;
 	surface_desc.Width = description.width;
@@ -699,17 +708,17 @@ void SurfaceClass::Get_Pixel(Vector3 &rgb, int x, int y, LockedSurfacePtr pBits,
  * HISTORY:                                                                                    *
  *   3/27/2001  pds : Created.                                                                 *
  *=============================================================================================*/
-void SurfaceClass::Attach (IDirect3DSurface8 *surface)
+void SurfaceClass::Attach(IDirect3DSurface8 *surface)
 {
-	Detach ();
-	D3DSurface = surface;
+	Attach_Render_Surface(reinterpret_cast<RenderSurfaceHandle>(surface));
+}
 
-	//
-	//	Lock a reference onto the object
-	//
-	if (D3DSurface != nullptr) {
-		Renderer::Retain_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
-	}
+void SurfaceClass::Attach_Render_Surface(RenderSurfaceHandle surface)
+{
+	Detach();
+	RenderSurface = surface;
+	if (RenderSurface)
+		Renderer::Retain_Surface(RenderSurface);
 }
 
 
@@ -733,11 +742,11 @@ void SurfaceClass::Detach ()
 	//
 	//	Release the hold we have on the D3D object
 	//
-	if (D3DSurface != nullptr) {
-		Renderer::Release_Surface(reinterpret_cast<RenderSurfaceHandle>(D3DSurface));
+	if (RenderSurface != nullptr) {
+		Renderer::Release_Surface(RenderSurface);
 	}
 
-	D3DSurface = nullptr;
+	RenderSurface = nullptr;
 }
 
 

@@ -441,6 +441,23 @@ formats, sorted dynamic geometry, plus terrain/effect/UI modules that
 still directly hold D3D8 COM objects or call DX8Wrapper. These must be
 addressed before the DX8 backend can be fully replaced.
 
+### Opaque surface storage and mip resource accounting
+
+`SurfaceClass` now stores an opaque retained `RenderSurfaceHandle` rather
+than an `IDirect3DSurface8*`. Both new and native compatibility constructors
+retain their borrowed surface, and destruction releases it through `Renderer`;
+the pre-existing native getter is retained only for unmigrated consumers.
+`TextureClass::Get_Surface_Level` now acquires backend-owned mip surfaces,
+wraps them with the same AddRef/Release balance as before, and releases its
+temporary acquisition. The transitional native mip-surface getters remain
+available but no longer invoke Direct3D8 methods themselves.
+`TextureClass` and `ZTextureClass` ask the backend to sum the native
+per-mip texture sizes. The DX8 backend still uses the original D3D8
+GetLevelCount/GetLevelDesc results and format-dependent reported byte sizes.
+Texture loader DDS conversion, priority operations, and several legacy
+resource construction/Apply_New_Surface paths still require later migration.
+The boundary audit guards the newly migrated ownership and memory-query paths.
+
 ### Sorting, mesh submission and screen-effect decoupling
 
 The sorted geometry pool no longer calls `DX8Wrapper::` directly. It

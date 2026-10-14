@@ -759,6 +759,9 @@ public:
     // Textures must stay alive and mapped levels must be unmapped before use.
     // Cube faces use the W3D +X, -X, +Y, -Y, +Z, -Z order (indices 0..5).
     static unsigned Get_Texture_Mip_Count(RenderTextureHandle texture);
+    // Sum of native texture-level storage sizes, including compressed levels.
+    // Used by the legacy W3D texture memory accounting (not a GPU budget).
+    static unsigned Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture);
     // Returns a newly retained surface level. Caller must Release_Surface().
     static RenderSurfaceHandle Acquire_Texture_Surface_Level(
         RenderTexture2DHandle texture, unsigned mipLevel);

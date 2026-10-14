@@ -859,6 +859,22 @@ unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
     return reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetLevelCount();
 }
 
+unsigned Renderer::Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture)
+{
+    if (!texture)
+        return 0;
+
+    IDirect3DTexture8 * nativeTexture = reinterpret_cast<IDirect3DTexture8 *>(texture);
+    unsigned size = 0;
+    for (unsigned level = 0; level < nativeTexture->GetLevelCount(); ++level)
+    {
+        D3DSURFACE_DESC desc = {};
+        DX8_ErrorCode(nativeTexture->GetLevelDesc(level, &desc));
+        size += desc.Size;
+    }
+    return size;
+}
+
 RenderTexture2DHandle Renderer::Create_Offscreen_Texture(const RenderSurfaceDescription & description)
 {
     // Preserve the screen-filter's original exact CreateTexture parameters.
