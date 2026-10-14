@@ -31,3 +31,28 @@ The standalone test and optional `w3d_dx12_presentation` library share the
 same `.cpp` implementation. The library is deliberately NOT selected as the
 game's `Renderer` backend. There is no mesh/material submission or shipped
 DX12 gameplay renderer yet: the DX8 backend remains authoritative.
+
+## W3D indexed mesh validation
+
+The reusable DX12IndexedMeshPass supports 16-bit indexed W3D-style vertices,
+GPU-default heap vertex/index buffers, staged RGBA8 textures, specialized
+W3D texture-combiner PSOs, two UV channels and alpha testing.
+Materials with unsupported blending/bump mapping/color-write modes fail
+explicitly rather than silently rendering with incorrect state.
+
+The WARP indexed-mesh CTest exercises two DrawIndexedInstanced submesh ranges,
+a textured single-stage pass, a two-stage pass, an untextured pass,
+alpha-test rejection, invalid index rejection and PSO/resource reuse after
+swapchain resize. CI executes both Win32 and x64 variants.
+
+The workflow artifact contains the executables plus W3DLegacyUnlit.hlsl
+and W3DLegacyTextureCombiner.hlsli. Extract them together, then invoke:
+
+~~~powershell
+.\W3DDX12PresentationSmoke-Win32.exe --mesh-hardware W3DLegacyUnlit.hlsl
+~~~
+
+This standalone test is not a DX12 gameplay mode. It compiles HLSL from
+source only in the dev probe; production would embed precompiled shader
+bytecode. Lighting, fog, depth, alpha blending, complete W3D vertex layouts
+and full asset binding are separate milestones.

@@ -73,10 +73,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture rendering/present failed" }
             Copy-Item -Path (Join-Path $build "Release/W3DDX12PresentationSmoke.exe") -Destination (Join-Path $artifacts "W3DDX12PresentationSmoke-$architecture.exe") -ErrorAction Stop
           }
+          Copy-Item -Path "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/W3DLegacyUnlit.hlsl" -Destination (Join-Path $artifacts "W3DLegacyUnlit.hlsl") -ErrorAction Stop
+          Copy-Item -Path "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/W3DLegacyTextureCombiner.hlsli" -Destination (Join-Path $artifacts "W3DLegacyTextureCombiner.hlsli") -ErrorAction Stop
       - name: Upload standalone DX12 presentation smoke tests
         uses: actions/upload-artifact@v4
         with:
           name: w3d-dx12-presentation-smoke
-          path: ${{ runner.temp }}/w3d-dx12-presentation-artifacts/*.exe
+          path: ${{ runner.temp }}/w3d-dx12-presentation-artifacts/*
           if-no-files-found: error
           retention-days: 14

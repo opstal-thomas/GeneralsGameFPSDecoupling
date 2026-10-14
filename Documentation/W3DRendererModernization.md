@@ -37,6 +37,24 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Indexed W3D mesh and specialized material milestone
+
+The DX12 backend now includes an opt-in indexed mesh pass that consumes
+RenderTextureCombinerKey and RenderBlendState from Renderer.h.
+It stages 16-bit indexed vertex/index buffers into GPU-default heaps,
+uploads RGBA8 textures, binds two SRVs and static samplers, and records
+DrawIndexedInstanced calls into the presentation device command list.
+Each supported two-stage texture-combiner key gets a compiled pixel shader
+and cached PSO. WARP tests read actual swapchain pixels to verify
+untextured and textured materials, alpha-test rejection, indexed submesh
+ranges, and reuse of resources/PSOs after ResizeBuffers.
+
+This is a deliberately narrow renderer subset: no general W3D mesh import
+or legacy vertex-layout conversion yet; no depth, fog, lighting, blending,
+or bump operators. Unsupported states return explicit errors. Shader source
+compilation and long-lived upload staging are developer-prototype choices;
+production resources and precompiled shaders still require work.
+
 ### Native DX12 device and swapchain milestone
 
 `WW3D2/Backend/DX12/DX12PresentationDevice` is a reusable device and

@@ -24,3 +24,11 @@ enable_testing()
 add_test(NAME W3D_DX12_WARP_Swapchain_Present
     COMMAND W3DDX12PresentationSmoke --warp)
 set_tests_properties(W3D_DX12_WARP_Swapchain_Present PROPERTIES TIMEOUT 90)
+
+# W3D shader/material validation using the reusable indexed mesh pass.
+add_test(
+    NAME W3D_DX12_WARP_Indexed_Mesh
+    COMMAND W3DDX12PresentationSmoke --mesh-warp
+        "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl"
+)
+set_tests_properties(W3D_DX12_WARP_Indexed_Mesh PROPERTIES TIMEOUT 90)
