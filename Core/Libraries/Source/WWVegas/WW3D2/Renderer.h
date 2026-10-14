@@ -606,7 +606,7 @@ public:
     static void Capture_Sorting_State(RenderStateStruct & state);
     static void Restore_Sorting_State(const RenderStateStruct & state);
     static void Release_Sorting_State();
-    static void Apply_Sorting_Transforms_And_Lights(const RenderStateStruct & state);
+    static void Apply_Sorting_Transforms_And_Lights(RenderStateStruct & state);
     static bool Is_Triangle_Draw_Enabled();
     static void Set_Triangle_Draw_Enabled(bool enabled);
     static void Unbind_Sorting_Geometry();

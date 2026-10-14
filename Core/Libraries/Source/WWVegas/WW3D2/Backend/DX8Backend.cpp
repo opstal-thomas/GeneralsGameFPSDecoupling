@@ -156,7 +156,7 @@ void Renderer::Release_Sorting_State()
     DX8Wrapper::Release_Render_State();
 }
 
-void Renderer::Apply_Sorting_Transforms_And_Lights(const RenderStateStruct & render_state)
+void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_state)
 {
     DX8Wrapper::_Set_DX8_Transform(D3DTS_WORLD,render_state.world);
     DX8Wrapper::_Set_DX8_Transform(D3DTS_VIEW,render_state.view);
