@@ -42,3 +42,12 @@ add_test(
     COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --solid
 )
 set_tests_properties(W3D_DX12_WARP_Offscreen_Solid PROPERTIES TIMEOUT 45)
+
+# Validate W3D vertex shader, constant buffer, and vertex signature while
+# using the known-good minimal solid pixel shader. Failure isolated here
+# points to W3D vertex shader constants or signature rather than combiner.
+add_test(
+    NAME W3D_DX12_WARP_W3D_Vertex_Shader
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --w3d-vs
+)
+set_tests_properties(W3D_DX12_WARP_W3D_Vertex_Shader PROPERTIES TIMEOUT 45)

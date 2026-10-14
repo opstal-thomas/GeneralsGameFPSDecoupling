@@ -161,7 +161,7 @@ void PrintDiagnostics(ID3D12Device * device)
     }
 }
 
-void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
+void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid, bool w3dVertexOnly)
 {
     ComPtr<ID3D12Debug> debug;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
@@ -238,8 +238,9 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
     )";
     auto vs = solid ? CompileSolid(minimalShader, "W3D_VS", "vs_5_1")
                     : Compile(shader, "W3D_VS", "vs_5_1");
-    auto ps = solid ? CompileSolid(minimalShader, "W3D_PS", "ps_5_1")
-                    : Compile(shader, "W3D_PS", "ps_5_1");
+    auto ps = (solid || w3dVertexOnly)
+        ? CompileSolid(minimalShader, "W3D_PS", "ps_5_1")
+        : Compile(shader, "W3D_PS", "ps_5_1");
 
     D3D12_INPUT_ELEMENT_DESC inputs[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
@@ -325,7 +326,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     auto transition = Barrier(texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    if (!clearOnly && !untextured && !solid) {
+    if (!clearOnly && !untextured && !solid && !w3dVertexOnly) {
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         list->ResourceBarrier(1, &transition);
     }
@@ -490,7 +491,7 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
     const bool insideMatches = clearOnly
         ? (closeTo(inside[0], 0) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
-        : solid
+        : (solid || w3dVertexOnly)
         ? (closeTo(inside[0], 255) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
         : untextured
@@ -504,7 +505,8 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
         throw std::runtime_error("D3D12 WARP pixel verification failed");
     const char * mode = clearOnly ? "clear/readback"
         : (solid ? "minimal solid-color draw"
-            : (untextured ? "untextured W3D draw" : "textured W3D draw"));
+            : (w3dVertexOnly ? "W3D vertex with minimal pixel shader"
+                : (untextured ? "untextured W3D draw" : "textured W3D draw")));
     std::cout << "D3D12 WARP " << mode << ": PASS\n";
 }
 }
@@ -512,16 +514,17 @@ void Run(const wchar_t * shader, bool clearOnly, bool untextured, bool solid)
 int wmain(int argc, wchar_t ** argv)
 {
     if (argc < 2 || argc > 3) {
-        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid]\n";
+        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured|--solid|--w3d-vs]\n";
         return 2;
     }
     try {
         const bool clearOnly = argc == 3 && std::wcscmp(argv[2], L"--clear-only") == 0;
         const bool untextured = argc == 3 && std::wcscmp(argv[2], L"--untextured") == 0;
         const bool solid = argc == 3 && std::wcscmp(argv[2], L"--solid") == 0;
-        if (argc == 3 && !clearOnly && !untextured && !solid)
+        const bool w3dVertexOnly = argc == 3 && std::wcscmp(argv[2], L"--w3d-vs") == 0;
+        if (argc == 3 && !clearOnly && !untextured && !solid && !w3dVertexOnly)
             throw std::runtime_error("Unknown mode");
-        Run(argv[1], clearOnly, untextured, solid);
+        Run(argv[1], clearOnly, untextured, solid, w3dVertexOnly);
         return 0;
     } catch (const std::exception & e) {
         std::cerr << "DX12 WARP probe failure: " << e.what() << '\n';
