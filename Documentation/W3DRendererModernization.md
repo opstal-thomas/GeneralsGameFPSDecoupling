@@ -441,6 +441,17 @@ formats, sorted dynamic geometry, plus terrain/effect/UI modules that
 still directly hold D3D8 COM objects or call DX8Wrapper. These must be
 addressed before the DX8 backend can be fully replaced.
 
+### DDS parser independence from DX8 and DirectDraw
+
+Both DDS decoder variants now interpret the five supported compressed
+DXT FourCC identifiers and their legacy cube/volume header flags as
+on-disk file-format values rather than including Direct3D8/DirectDraw
+interfaces. The mapping is identical for the supported DXT1-DXT5
+formats (including the original DDS assertion for unsupported formats).
+Texture pixel conversion, mip layout, upload pitch and file structures
+remain unchanged. Both decoder translation units no longer include
+`dx8wrapper.h`, `formconv.h` or `ddraw.h`.
+
 ### DDS mip-copy API decoupling
 
 The Generals and Zero Hour DDS decoders now receive an opaque, borrowed

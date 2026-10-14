@@ -87,6 +87,9 @@ def main() -> int:
             r"\bIDirect3DSurface8\b",
             r"\bD3DSURFACE_DESC\b",
             r"\bD3DLOCKED_RECT\b",
+            r"\bD3DFORMAT\b",
+            r"\bD3DFormat_To_WW3DFormat\s*\(",
+            r"\bDX8Wrapper::",
         ]))
     errors.extend(check(WW3D / "surfaceclass.h", [
         r"\bIDirect3DSurface8\s*\*\s*D3DSurface\b",

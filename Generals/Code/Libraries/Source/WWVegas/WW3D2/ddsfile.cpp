@@ -21,11 +21,9 @@
 #include "ddsfile.h"
 #include "WWLib/ffactory.h"
 #include "WWLib/bufffile.h"
-#include "formconv.h"
-#include "dx8wrapper.h"
 #include "bitmaphandler.h"
 #include "colorspace.h"
-#include <ddraw.h>
+// All DDS header flags and FourCC values below are file-format constants.
 
 // ----------------------------------------------------------------------------
 
@@ -87,7 +85,18 @@ DDSFileClass::DDSFileClass(const char* name,unsigned reduction_factor)
 		return;
 	}
 
-	Format=D3DFormat_To_WW3DFormat((D3DFORMAT)SurfaceDesc.PixelFormat.FourCC);
+	// The old D3D8 conversion recognized these five compressed DDS FourCCs.
+	// Keeping this interpretation in the DDS parser avoids a graphics API
+	// dependency when preloading textures for another renderer.
+	switch (SurfaceDesc.PixelFormat.FourCC)
+	{
+	case 0x31545844u: Format = WW3D_FORMAT_DXT1; break; // "DXT1"
+	case 0x32545844u: Format = WW3D_FORMAT_DXT2; break; // "DXT2"
+	case 0x33545844u: Format = WW3D_FORMAT_DXT3; break; // "DXT3"
+	case 0x34545844u: Format = WW3D_FORMAT_DXT4; break; // "DXT4"
+	case 0x35545844u: Format = WW3D_FORMAT_DXT5; break; // "DXT5"
+	default: Format = WW3D_FORMAT_UNKNOWN; break;
+	}
 	WWASSERT(
 		Format==WW3D_FORMAT_DXT1 ||
 		Format==WW3D_FORMAT_DXT2 ||
@@ -110,11 +119,11 @@ DDSFileClass::DDSFileClass(const char* name,unsigned reduction_factor)
 	else MipLevels=1;
 
 	// check texture type, normal, cube or volume
-	if (SurfaceDesc.Caps.Caps2&DDSCAPS2_CUBEMAP)
+	if (SurfaceDesc.Caps.Caps2&0x00000200u)
 	{
 		Type=DDS_CUBEMAP;
 	}
-	else if (SurfaceDesc.Caps.Caps2&DDSCAPS2_VOLUME)
+	else if (SurfaceDesc.Caps.Caps2&0x00200000u)
 	{
 		Type=DDS_VOLUME;
 	}
