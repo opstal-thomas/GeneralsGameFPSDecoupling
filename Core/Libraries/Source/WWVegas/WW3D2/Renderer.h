@@ -92,7 +92,9 @@ struct RenderCapabilities
           textureCompression(false), anisotropicFiltering(false),
           cubeTextures(false), bumpEnvironmentMapping(false),
           pointSprites(false), maxSimultaneousTextures(0),
-          maxTexturesPerPass(0)
+          maxTexturesPerPass(0), maxTextureWidth(0), maxTextureHeight(0),
+          linearMinFilter(false), linearMagFilter(false), linearMipFilter(false),
+          anisotropicMinFilter(false), anisotropicMagFilter(false)
     {
     }
 
@@ -105,6 +107,13 @@ struct RenderCapabilities
     bool pointSprites;
     unsigned maxSimultaneousTextures;
     unsigned maxTexturesPerPass;
+    unsigned maxTextureWidth;
+    unsigned maxTextureHeight;
+    bool linearMinFilter;
+    bool linearMagFilter;
+    bool linearMipFilter;
+    bool anisotropicMinFilter;
+    bool anisotropicMagFilter;
 };
 
 // Transitional descriptions for legacy W3D geometry allocations. They

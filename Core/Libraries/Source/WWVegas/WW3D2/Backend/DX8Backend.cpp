@@ -301,6 +301,14 @@ RenderCapabilities Renderer::Get_Capabilities()
     out.pointSprites = caps->Support_PointSprites();
     out.maxSimultaneousTextures = static_cast<unsigned>(caps->Get_Max_Simultaneous_Textures());
     out.maxTexturesPerPass = static_cast<unsigned>(caps->Get_Max_Textures_Per_Pass());
+    const D3DCAPS8 & native = caps->Get_DX8_Caps();
+    out.maxTextureWidth = native.MaxTextureWidth;
+    out.maxTextureHeight = native.MaxTextureHeight;
+    out.linearMinFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MINFLINEAR) != 0;
+    out.linearMagFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MAGFLINEAR) != 0;
+    out.linearMipFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MIPFLINEAR) != 0;
+    out.anisotropicMinFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MINFANISOTROPIC) != 0;
+    out.anisotropicMagFilter = (native.TextureFilterCaps & D3DPTFILTERCAPS_MAGFANISOTROPIC) != 0;
     return out;
 }
 
