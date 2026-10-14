@@ -77,6 +77,17 @@ def main() -> int:
         r"\bD3DCURSOR_IMMEDIATE_UPDATE\b",
         r"\bPeek_D3D_Surface\s*\(",
     ]))
+    for dds_path in (
+        Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/ddsfile.cpp"),
+        Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/ddsfile.cpp"),
+        Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/ddsfile.h"),
+        Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/ddsfile.h"),
+    ):
+        errors.extend(check(dds_path, [
+            r"\bIDirect3DSurface8\b",
+            r"\bD3DSURFACE_DESC\b",
+            r"\bD3DLOCKED_RECT\b",
+        ]))
     errors.extend(check(WW3D / "surfaceclass.h", [
         r"\bIDirect3DSurface8\s*\*\s*D3DSurface\b",
     ]))

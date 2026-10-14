@@ -318,8 +318,7 @@ IDirect3DTexture8* Load_Compressed_Texture(
 		RenderSurfaceHandle levelSurface = Renderer::Acquire_Texture_Surface_Level(
 			reinterpret_cast<RenderTexture2DHandle>(d3d_texture), level/*-reduction_factor*/);
 		WWASSERT(levelSurface);
-		dds_file.Copy_Level_To_Surface(
-			level, reinterpret_cast<IDirect3DSurface8 *>(levelSurface));
+		dds_file.Copy_Level_To_Surface(level, levelSurface);
 		Renderer::Release_Surface(levelSurface);
 	}
 	return d3d_texture;

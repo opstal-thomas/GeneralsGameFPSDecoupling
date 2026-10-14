@@ -349,28 +349,31 @@ WWINLINE static unsigned short ARGB8888_To_RGB565(unsigned argb_)
 //
 // ----------------------------------------------------------------------------
 
-void DDSFileClass::Copy_Level_To_Surface(unsigned level,IDirect3DSurface8* d3d_surface,const Vector3& hsv_shift)
+void DDSFileClass::Copy_Level_To_Surface(unsigned level,RenderSurfaceHandle surface,const Vector3& hsv_shift)
 {
-	WWASSERT(d3d_surface);
-	// Verify that the destination surface size matches the source surface size
-	D3DSURFACE_DESC surface_desc;
-	DX8_ErrorCode(d3d_surface->GetDesc(&surface_desc));
+	WWASSERT(surface);
+	if (!surface)
+		return;
 
-	// First lock the surface
-	D3DLOCKED_RECT locked_rect;
-	DX8_ErrorCode(d3d_surface->LockRect(&locked_rect,nullptr,0));
+	// The DDS decoder consumes a W3D surface description and CPU map.
+	// DX8-specific GetDesc/LockRect/UnlockRect remain in the active backend.
+	RenderSurfaceDescription description;
+	Renderer::Describe_Surface(surface, description);
+	RenderSurfaceMap mapped;
+	Renderer::Lock_Surface(surface, mapped);
+	if (!mapped.data)
+		return;
 
 	Copy_Level_To_Surface(
 		level,
-		D3DFormat_To_WW3DFormat(surface_desc.Format),
-		surface_desc.Width,
-		surface_desc.Height,
-		reinterpret_cast<unsigned char*>(locked_rect.pBits),
-		locked_rect.Pitch,
+		static_cast<WW3DFormat>(description.pixelFormat),
+		description.width,
+		description.height,
+		static_cast<unsigned char*>(mapped.data),
+		mapped.rowPitch,
 		hsv_shift);
 
-	// Finally, unlock the surface
-	DX8_ErrorCode(d3d_surface->UnlockRect());
+	Renderer::Unlock_Surface(surface);
 }
 
 // ----------------------------------------------------------------------------

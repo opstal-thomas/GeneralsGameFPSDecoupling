@@ -441,6 +441,18 @@ formats, sorted dynamic geometry, plus terrain/effect/UI modules that
 still directly hold D3D8 COM objects or call DX8Wrapper. These must be
 addressed before the DX8 backend can be fully replaced.
 
+### DDS mip-copy API decoupling
+
+The Generals and Zero Hour DDS decoders now receive an opaque, borrowed
+`RenderSurfaceHandle` instead of an `IDirect3DSurface8*`. Their existing
+CPU-side format conversion, mip selection and pitch handling are unchanged.
+The decoder queries width, height and W3D pixel format through Renderer and
+maps/unmaps the destination using Renderer surface operations. Native DX8
+GetDesc/LockRect/UnlockRect remains confined to the active backend. The DDS
+file header's legacy on-disk structures are preserved exactly; FourCC parsing
+and the texture loader's legacy COM-return interfaces are separate remaining
+migration tasks. The boundary check guards both game variants.
+
 ### Opaque surface storage and mip resource accounting
 
 `SurfaceClass` now stores an opaque retained `RenderSurfaceHandle` rather
