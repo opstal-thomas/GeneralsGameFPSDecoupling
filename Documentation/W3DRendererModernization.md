@@ -36,6 +36,19 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Eleventh milestone: vertex lighting, material color sources and UV stages
+
+Both Generals and Zero Hour now route vertex lighting selection, ambient/
+diffuse/emissive material-color source selection, and default UV passthrough
+through Renderer. These semantics are independent of D3DMATERIALCOLORSOURCE
+and legacy texture-stage constants. The DX8 backend issues the same
+render-state calls in the same order as the original implementation.
+
+The W3D vertex-material values and custom texture mapper paths remain on
+their original representation. Native D3DMATERIAL8 upload and mapper
+transform logic have not been ported; the next modern backend must still
+reproduce those vertex input semantics before full visual parity.
+
 ### Tenth milestone: depth, blending, raster and alpha state
 
 The two game-specific ShaderClass implementations (Generals and Zero Hour)

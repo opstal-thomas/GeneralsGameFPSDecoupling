@@ -692,3 +692,39 @@ void Renderer::Set_Alpha_Test_Enabled(bool enabled)
 {
     DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE, enabled);
 }
+
+
+static D3DMATERIALCOLORSOURCE To_DX8_Material_Source(RenderMaterialColorSource source)
+{
+    switch (source)
+    {
+    case RENDER_VERTEX_COLOR_1: return D3DMCS_COLOR1;
+    case RENDER_VERTEX_COLOR_2: return D3DMCS_COLOR2;
+    case RENDER_MATERIAL_COLOR:
+    default: return D3DMCS_MATERIAL;
+    }
+}
+
+void Renderer::Set_Vertex_Lighting(bool enabled)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING, enabled);
+}
+
+void Renderer::Set_Vertex_Color_Sources(const RenderMaterialColorSources & sources)
+{
+    // Preserve the original per-field update order in VertexMaterialClass.
+    DX8Wrapper::Set_DX8_Render_State(
+        D3DRS_AMBIENTMATERIALSOURCE, To_DX8_Material_Source(sources.ambient));
+    DX8Wrapper::Set_DX8_Render_State(
+        D3DRS_DIFFUSEMATERIALSOURCE, To_DX8_Material_Source(sources.diffuse));
+    DX8Wrapper::Set_DX8_Render_State(
+        D3DRS_EMISSIVEMATERIALSOURCE, To_DX8_Material_Source(sources.emissive));
+}
+
+void Renderer::Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex)
+{
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_PASSTHRU | uvIndex);
+    DX8Wrapper::Set_DX8_Texture_Stage_State(
+        stage, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+}

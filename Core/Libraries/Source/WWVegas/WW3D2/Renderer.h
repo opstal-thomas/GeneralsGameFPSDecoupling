@@ -296,6 +296,29 @@ struct RenderBlendState
     bool Is_Opaque() const { return !blendEnabled && !alphaTestEnabled; }
 };
 
+// Vertex materials are still loaded from W3D's original format. Color
+// sources describe lighting input selection, not native Direct3D state.
+enum RenderMaterialColorSource
+{
+    RENDER_MATERIAL_COLOR,
+    RENDER_VERTEX_COLOR_1,
+    RENDER_VERTEX_COLOR_2
+};
+
+struct RenderMaterialColorSources
+{
+    RenderMaterialColorSources()
+        : ambient(RENDER_MATERIAL_COLOR),
+          diffuse(RENDER_MATERIAL_COLOR),
+          emissive(RENDER_MATERIAL_COLOR)
+    {
+    }
+
+    RenderMaterialColorSource ambient;
+    RenderMaterialColorSource diffuse;
+    RenderMaterialColorSource emissive;
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -442,6 +465,12 @@ public:
     static void Set_Depth_Write(bool enabled);
     static void Set_Cull_Mode(RenderCullMode cullMode);
     static void Set_Alpha_Test_Enabled(bool enabled);
+
+    // W3D vertex-material state; keep the native material colors and
+    // texture mapper algorithms on the legacy path until converted.
+    static void Set_Vertex_Lighting(bool enabled);
+    static void Set_Vertex_Color_Sources(const RenderMaterialColorSources & sources);
+    static void Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

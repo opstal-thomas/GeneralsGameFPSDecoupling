@@ -15,6 +15,25 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, VertexMaterialColorSourcesAreApiIndependent)
+{
+    RenderMaterialColorSources defaults;
+    EXPECT_EQ(RENDER_MATERIAL_COLOR, defaults.ambient);
+    EXPECT_EQ(RENDER_MATERIAL_COLOR, defaults.diffuse);
+    EXPECT_EQ(RENDER_MATERIAL_COLOR, defaults.emissive);
+
+    RenderMaterialColorSources lit;
+    lit.ambient = RENDER_VERTEX_COLOR_1;
+    lit.diffuse = RENDER_VERTEX_COLOR_2;
+    EXPECT_NE(lit.ambient, lit.diffuse);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Vertex_Lighting),
+                                 void (*)(bool)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Vertex_Color_Sources),
+                                 void (*)(const RenderMaterialColorSources &)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Set_Texture_UV_Passthrough),
+                                 void (*)(unsigned, unsigned)>);
+}
+
 TEST(RendererBackend, BlendStateDescribesOpaqueAndTransparentMaterials)
 {
     const RenderBlendState opaque;
