@@ -459,7 +459,11 @@ strips through `Renderer::Draw_Transformed_Quad`, with the original XYZRHW,
 diffuse ARGB and one/two UV layout. Explicit render-texture bindings use an
 immediate method that deliberately bypasses the deferred DX8 texture cache,
 preserving previous behavior. Driver vendor/device identification and shader
-capability queries now have backend-neutral results.
+capability queries now have backend-neutral results. Its legacy direct
+`Set_DX8_Texture` calls now use the existing backend texture-binding method;
+RGB-only/alpha-only mask operations use `Set_Color_Write_Mask`. The
+fixed-function stage combiners and render-target lifetime code are still
+native DX8-dependent.
 
 **Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
 matrix types; dynamic buffers and polygon renderers are still legacy-owned;

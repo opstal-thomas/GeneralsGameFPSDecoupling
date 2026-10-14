@@ -1288,6 +1288,16 @@ void Renderer::Set_Texture_Factor(unsigned packedARGB)
     DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, packedARGB);
 }
 
+void Renderer::Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled)
+{
+    unsigned mask = 0;
+    if (rgbEnabled)
+        mask |= D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE;
+    if (alphaEnabled)
+        mask |= D3DCOLORWRITEENABLE_ALPHA;
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, mask);
+}
+
 bool Renderer::Supports_Texture_Format(unsigned w3dPixelFormat)
 {
     const DX8Caps * caps = DX8Wrapper::Is_Initted() ? DX8Wrapper::Get_Current_Caps() : nullptr;

@@ -782,6 +782,9 @@ public:
     static void Set_Destination_Blend(RenderBlendFactor factor);
     static void Set_Blending_Enabled(bool enabled);
     static void Set_Texture_Factor(unsigned packedARGB);
+    // Select whether the render target writes RGB channels and alpha.
+    // Supports the legacy effects' alpha-only and RGB-only passes.
+    static void Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled);
     static void Set_Depth_Compare(RenderCompareFunc compare);
     static void Set_Depth_Write(bool enabled);
     static void Set_Cull_Mode(RenderCullMode cullMode);
