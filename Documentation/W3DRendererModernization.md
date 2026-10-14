@@ -471,9 +471,10 @@ render-target device operations are now routed through the neutral offscreen-tar
 API, preserving the original one-mip allocation and MSAA failure behavior.
 The shader manager now stores retained offscreen color/depth surfaces and
 textures as opaque renderer handles, with explicit renderer-managed release
-paths. Legacy raw-pointer return methods remain for compatibility with older
-effect callers; those public getters still need migration before eliminating
-all Direct3D8 types from application code. Original DX8 shader-token assets
+paths. The screen-filter texture getters now return opaque `RenderTextureHandle`
+values; effect callers bind them directly, without native `IDirect3DTexture8`
+pointers. Shader-stage textures likewise use `TextureBaseClass::Peek_Render_Texture`
+instead of `Peek_D3D_Texture`, retaining the same backend texture identity. Original DX8 shader-token assets
 also still require a modern programmable replacement.
 Shader creation, selection, constants, deletion and immediate alpha-blend
 writes are now dispatched through Renderer, without changing DX8 behavior.
@@ -504,8 +505,9 @@ overlays remain to be audited and migrated before the renderer cutover.
   terrain, water, shadows and several effects.
 - Mesh submission, flush and invalidation in WW3D now go through
   `Renderer`, while lower-level mesh and geometry classes still use DX8 types.
-- `W3DShaderManager` owns `IDirect3DTexture8`/`IDirect3DSurface8`
-  and uses the legacy fixed-function texture-stage API.
+- `W3DShaderManager` uses opaque screen-filter texture/surface handles and
+  renderer-level texture-stage operations, but legacy D3DX math, shader-token
+  declarations and fixed-function emulation remain to be modernized.
 - `RenderDeviceDescClass` exposes D3D8-specific adapter structures.
 - DX8 reset still owns legacy resource recreation. A modern renderer will
   need explicit ownership, barriers, lifetime tracking and swap-chain handling.

@@ -53,7 +53,6 @@
 //
 //-----------------------------------------------------------------------------
 
-#include "WW3D2/dx8wrapper.h"
 #include "WW3D2/Renderer.h"
 #include "WW3D2/assetmgr.h"
 #include "Lib/BaseType.h"
@@ -72,7 +71,6 @@
 #include "Common/GlobalData.h"
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
-#include "WW3D2/dx8caps.h"
 
 
 // Turn this on to turn off pixel shaders. jba[4/3/2003]
@@ -203,7 +201,7 @@ Bool ScreenDefaultFilter::preRender(Bool &skipRender, CustomScenePassModes &scen
 
 Bool ScreenDefaultFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doExtraRender)
 {
-	IDirect3DTexture8 * tex =	W3DShaderManager::endRenderToTexture();
+	RenderTextureHandle tex =	W3DShaderManager::endRenderToTexture();
 	DEBUG_ASSERTCRASH(tex, ("Require rendered texture."));
 	if (!tex) return false;
 	if (!set(mode)) return false;
@@ -219,7 +217,7 @@ Bool ScreenDefaultFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool
 
 	Int xpos, ypos, width, height;
 
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(tex));	//previously rendered frame inside this texture
+	Renderer::Bind_Immediate_Texture(0, tex);	//previously rendered frame inside this texture
 	TheTacticalView->getOrigin(&xpos,&ypos);
 	width=TheTacticalView->getWidth();
 	height=TheTacticalView->getHeight();
@@ -342,7 +340,7 @@ Bool ScreenBWFilter::preRender(Bool &skipRender, CustomScenePassModes &scenePass
 
 Bool ScreenBWFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doExtraRender)
 {
-	IDirect3DTexture8 * tex =	W3DShaderManager::endRenderToTexture();
+	RenderTextureHandle tex =	W3DShaderManager::endRenderToTexture();
 	DEBUG_ASSERTCRASH(tex, ("Require rendered texture."));
 	if (!tex) return false;
 	if (!set(mode)) return false;
@@ -358,7 +356,7 @@ Bool ScreenBWFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doE
 
 	Int xpos, ypos, width, height;
 
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(tex));	//previously rendered frame inside this texture
+	Renderer::Bind_Immediate_Texture(0, tex);	//previously rendered frame inside this texture
 	TheTacticalView->getOrigin(&xpos,&ypos);
 	width=TheTacticalView->getWidth();
 	height=TheTacticalView->getHeight();
@@ -530,7 +528,7 @@ Bool ScreenBWFilterDOT3::preRender(Bool &skipRender, CustomScenePassModes &scene
 
 Bool ScreenBWFilterDOT3::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doExtraRender)
 {
-	IDirect3DTexture8 * tex =	W3DShaderManager::endRenderToTexture();
+	RenderTextureHandle tex =	W3DShaderManager::endRenderToTexture();
 	DEBUG_ASSERTCRASH(tex, ("Require rendered texture."));
 	if (!tex) return false;
 	if (!set(mode)) return false;
@@ -596,7 +594,7 @@ Bool ScreenBWFilterDOT3::postRender(FilterModes mode, Coord2D &scrollDelta,Bool 
 		Renderer::Set_Fixed_Stage_Operation(0, false, RENDER_FIXED_STAGE_MODULATE);
 	}
 
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(tex));	//previously rendered frame inside this texture
+	Renderer::Bind_Immediate_Texture(0, tex);	//previously rendered frame inside this texture
 
 	Renderer::Draw_Transformed_Quad(v, sizeof(_TRANS_LIT_TEX_VERTEX), 1);
 
@@ -787,7 +785,7 @@ Bool ScreenCrossFadeFilter::preRender(Bool &skipRender, CustomScenePassModes &sc
 
 Bool ScreenCrossFadeFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doExtraRender)
 {
-	IDirect3DTexture8 * tex;
+	RenderTextureHandle tex;
 
 	if (m_skipRender)
 	{
@@ -819,9 +817,9 @@ Bool ScreenCrossFadeFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bo
 	Int xpos, ypos, width, height;
 	Real radius = 0.0f;
 
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(tex));	//previously rendered frame inside this texture
+	Renderer::Bind_Immediate_Texture(0, tex);	//previously rendered frame inside this texture
 	if (mode == FM_VIEW_CROSSFADE_CIRCLE)
-	{	Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(m_fadePatternTexture->Peek_D3D_Texture()));
+	{	Renderer::Bind_Immediate_Texture(1, m_fadePatternTexture->Peek_Render_Texture());
 		//Use the current fade level to scale the mask texture, for other modes the texture
 		//comes pre-scaled so doesn't require uv scaling.
 		radius = (1.0f-m_curFadeValue)*2.0f;
@@ -971,7 +969,7 @@ Bool ScreenMotionBlurFilter::preRender(Bool &skipRender, CustomScenePassModes &s
 
 Bool ScreenMotionBlurFilter::postRender(FilterModes mode, Coord2D &scrollDelta,Bool &doExtraRender)
 {
-	IDirect3DTexture8 * tex =	W3DShaderManager::endRenderToTexture();
+	RenderTextureHandle tex =	W3DShaderManager::endRenderToTexture();
 	DEBUG_ASSERTCRASH(tex, ("Require rendered texture."));
 	if (!tex) return false;
 	if (!set(mode)) return false;
@@ -988,7 +986,7 @@ Bool ScreenMotionBlurFilter::postRender(FilterModes mode, Coord2D &scrollDelta,B
 
 	Int xpos, ypos, width, height;
 
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(tex));	//previously rendered frame inside this texture
+	Renderer::Bind_Immediate_Texture(0, tex);	//previously rendered frame inside this texture
 	TheTacticalView->getOrigin(&xpos,&ypos);
 	width=TheTacticalView->getWidth();
 	height=TheTacticalView->getHeight();
@@ -1336,8 +1334,7 @@ Int FlatShroudTextureShader::set(Int stage)
 	if (stage < 2)
 		Renderer::Set_Texture(stage, W3DShaderManager::getShaderTexture(stage));
 	else	//stages larger than 1 are not supported by W3D so set them directly
-		Renderer::Bind_Texture(stage, reinterpret_cast<RenderTextureHandle>(
-        W3DShaderManager::getShaderTexture(stage)->Peek_D3D_Texture()));
+		Renderer::Bind_Texture(stage, W3DShaderManager::getShaderTexture(stage)->Peek_Render_Texture());
 
 	Renderer::Set_Fixed_Stage_Argument(stage, false, 1, RENDER_TEXARG_TEXTURE, false, false);
 	Renderer::Set_Fixed_Stage_Argument(stage, false, 2, RENDER_TEXARG_CURRENT, false, false);
@@ -1690,7 +1687,7 @@ Int TerrainShader2Stage::set(Int pass)
 	switch (pass)
 	{
 		case 0:
-			Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(0)->Peek_D3D_Texture()));
+			Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(0)->Peek_Render_Texture());
 			Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
 			Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
 
@@ -1705,7 +1702,7 @@ Int TerrainShader2Stage::set(Int pass)
 			Renderer::Set_Blending_Enabled(false);
 			break;
 		case 1:
-			Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(1)->Peek_D3D_Texture()));
+			Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(1)->Peek_Render_Texture());
 			Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
 			Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
 
@@ -1752,7 +1749,7 @@ Int TerrainShader2Stage::set(Int pass)
 			if (W3DShaderManager::getCurrentShader() == W3DShaderManager::ST_TERRAIN_BASE_NOISE12)
 			{
 				//setup cloud pass
-				Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 
 				updateNoise1(&curView,&inv);	//update curView with texture matrix
 				Renderer::Set_Texture_Transform(0, &curView._11);
@@ -1761,7 +1758,7 @@ Int TerrainShader2Stage::set(Int pass)
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
 
 				//setup noise pass
-				Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(1, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 
 				updateNoise2(&curView,&inv);
 				Renderer::Set_Texture_Transform(1, &curView._11);
@@ -1787,7 +1784,7 @@ Int TerrainShader2Stage::set(Int pass)
 				if (W3DShaderManager::getCurrentShader() == W3DShaderManager::ST_TERRAIN_BASE_NOISE1)
 				{
 					//setup cloud pass
-					Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+					Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 					updateNoise1(&curView,&inv);	//update curView with texture matrix
 					Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 					Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -1795,7 +1792,7 @@ Int TerrainShader2Stage::set(Int pass)
 				else
 				{
 					//setup noise pass
-					Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+					Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 					updateNoise2(&curView,&inv);	//update curView with texture matrix
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -1863,8 +1860,8 @@ Int TerrainShader8Stage::set(Int pass)
 			Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIP_FILTER, RENDER_SAMPLER_LINEAR);
 		}
 
-		Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(0)->Peek_D3D_Texture()));
-		Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(1)->Peek_D3D_Texture()));
+		Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(0)->Peek_Render_Texture());
+		Renderer::Bind_Immediate_Texture(1, W3DShaderManager::getShaderTexture(1)->Peek_Render_Texture());
 
 		Renderer::Set_Fixed_Stage_Operation(0, false, RENDER_FIXED_STAGE_MODULATE);
 		Renderer::Set_Texture_Coordinate_Source(0, 0, false);
@@ -2040,8 +2037,8 @@ Int TerrainShaderPixelShader::set(Int pass)
 	Renderer::Apply_Pending_State_Changes();
 
 	//setup base pass
-	Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(0)->Peek_D3D_Texture()));
-	Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(1)->Peek_D3D_Texture()));
+	Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(0)->Peek_Render_Texture());
+	Renderer::Bind_Immediate_Texture(1, W3DShaderManager::getShaderTexture(1)->Peek_Render_Texture());
 
 	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
 	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
@@ -2092,8 +2089,8 @@ Int TerrainShaderPixelShader::set(Int pass)
 			//full shader
 			Renderer::Set_Texture_Address(3, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
 			Renderer::Set_Texture_Address(3, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
-			Renderer::Bind_Immediate_Texture(2, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
-			Renderer::Bind_Immediate_Texture(3, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+			Renderer::Bind_Immediate_Texture(2, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
+			Renderer::Bind_Immediate_Texture(3, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 			Renderer::Select_Legacy_Pixel_Shader(m_dwBaseNoise2PixelShader);
 
 			Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
@@ -2120,7 +2117,7 @@ Int TerrainShaderPixelShader::set(Int pass)
 			if (W3DShaderManager::getCurrentShader() == W3DShaderManager::ST_TERRAIN_BASE_NOISE1)
 			{
 				//cloud map
-				Renderer::Bind_Immediate_Texture(2, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(2, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 				terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -2128,7 +2125,7 @@ Int TerrainShaderPixelShader::set(Int pass)
 			else
 			{
 				//light map
-				Renderer::Bind_Immediate_Texture(2, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(2, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 				terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 				Renderer::Set_Texture_Filter(2, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -2224,7 +2221,7 @@ Int CloudTextureShader::set(Int stage)
 	Renderer::Set_Fixed_Stage_Argument(stage, true, 2, RENDER_TEXARG_CURRENT, false, false);
 	Renderer::Set_Fixed_Stage_Operation(stage, true, RENDER_FIXED_STAGE_MODULATE);
 
-	Renderer::Bind_Immediate_Texture(stage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(stage)->Peek_D3D_Texture()));
+	Renderer::Bind_Immediate_Texture(stage, W3DShaderManager::getShaderTexture(stage)->Peek_Render_Texture());
 
 	m_stageOfSet=stage;
 	return TRUE;
@@ -2932,7 +2929,7 @@ void W3DShaderManager::startRenderToTexture()
 /** Ends rendering to a texture.
  */
 //=============================================================================
-IDirect3DTexture8 *W3DShaderManager::endRenderToTexture()
+RenderTextureHandle W3DShaderManager::endRenderToTexture()
 {
 	DEBUG_ASSERTCRASH(m_renderingToTexture, ("Not rendering to texture."));
 	if (!m_renderingToTexture) return nullptr;
@@ -2953,15 +2950,15 @@ IDirect3DTexture8 *W3DShaderManager::endRenderToTexture()
 
 		m_renderingToTexture = false;
 	}
-	return reinterpret_cast<IDirect3DTexture8 *>(m_renderTexture);
+	return reinterpret_cast<RenderTextureHandle>(m_renderTexture);
 }
 
 /**Returns texture containing the image that was last rendered using any of the effects requiring render target
 textures.  Used mostly for cross-fading effects that need an unmodified version of the view before the effect
 was applied.  NOTE: This texture does not survive device reset.. so quit effect on reset!*/
-IDirect3DTexture8 *W3DShaderManager::getRenderTexture()
+RenderTextureHandle W3DShaderManager::getRenderTexture()
 {
-	return reinterpret_cast<IDirect3DTexture8 *>(m_renderTexture);
+	return reinterpret_cast<RenderTextureHandle>(m_renderTexture);
 }
 
 enum GraphicsVenderID CPP_11(: Int)
@@ -3370,7 +3367,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 			Renderer::Set_Fixed_Stage_Argument(0, false, 1, RENDER_TEXARG_TEXTURE, false, false);
 			Renderer::Set_Fixed_Stage_Argument(0, false, 2, RENDER_TEXARG_DIFFUSE, false, false);
 			if (W3DShaderManager::getShaderTexture(0)) {
-				Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(0)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(0)->Peek_Render_Texture());
 				Renderer::Set_Fixed_Stage_Argument(0, false, 1, RENDER_TEXARG_TEXTURE, false, false);
 				Renderer::Set_Fixed_Stage_Argument(0, false, 2, RENDER_TEXARG_CURRENT, false, false);
 				Renderer::Set_Fixed_Stage_Operation(0, false, RENDER_FIXED_STAGE_MODULATE);
@@ -3470,7 +3467,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				//clouds always need bilinear filtering
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 				Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
-				Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 
 				//setup noise pass
 
@@ -3490,7 +3487,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 
 				Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
 				Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
-				Renderer::Bind_Immediate_Texture(1, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+				Renderer::Bind_Immediate_Texture(1, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 			}
 			else
 			{
@@ -3499,7 +3496,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				if (W3DShaderManager::getCurrentShader() == W3DShaderManager::ST_FLAT_TERRAIN_BASE_NOISE1)
 				{
 					//setup cloud pass
-					Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+					Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 					terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
 					Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 					Renderer::Set_Texture_Filter(0, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3507,7 +3504,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 				else
 				{
 					//setup noise pass
-					Renderer::Bind_Immediate_Texture(0, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+					Renderer::Bind_Immediate_Texture(0, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 					terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
 					Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3691,7 +3688,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_LINEAR);
-		Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(shroud->getShroudTexture()->Peek_D3D_Texture()));
+		Renderer::Bind_Immediate_Texture(curStage, shroud->getShroudTexture()->Peek_Render_Texture());
 		curStage++;
 		if (curStage==1) curStage++;
 	}
@@ -3713,7 +3710,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
-		Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(2)->Peek_D3D_Texture()));
+		Renderer::Bind_Immediate_Texture(curStage, W3DShaderManager::getShaderTexture(2)->Peek_Render_Texture());
 		terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
 		Renderer::Set_Texture_Transform(curStage, &curView._11);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3740,7 +3737,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
 		Renderer::Set_Texture_Address(curStage, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
-		Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+		Renderer::Bind_Immediate_Texture(curStage, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 		terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
 		Renderer::Set_Texture_Transform(curStage, &curView._11);
 		Renderer::Set_Texture_Filter(curStage, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_LINEAR);
@@ -3760,7 +3757,7 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 	}
 	Renderer::Set_Immediate_Alpha_Blending(false);
 	Renderer::Apply_Pending_State_Changes();
-	Renderer::Bind_Immediate_Texture(curStage, reinterpret_cast<RenderTextureHandle>(W3DShaderManager::getShaderTexture(3)->Peek_D3D_Texture()));
+	Renderer::Bind_Immediate_Texture(curStage, W3DShaderManager::getShaderTexture(3)->Peek_Render_Texture());
 	return TRUE;
 }
 

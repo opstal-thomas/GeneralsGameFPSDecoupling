@@ -109,8 +109,8 @@ public:
 	// Support routines for filter methods.
 	static Bool canRenderToTexture() { return (m_oldRenderSurface && m_newRenderSurface);}
 	static void startRenderToTexture(); ///< Sets render target to texture.
-	static IDirect3DTexture8 * endRenderToTexture(); ///< Ends render to texture, & returns texture.
-	static IDirect3DTexture8 * getRenderTexture();	///< returns last used render target texture
+	static RenderTextureHandle endRenderToTexture(); ///< Ends render to texture, & returns texture.
+	static RenderTextureHandle getRenderTexture();	///< returns last used render target texture
 	static Bool isRenderingToTexture() {return m_renderingToTexture; }
 	static void drawViewport(Int color);	///<draws 2 triangles covering the current tactical viewport
 

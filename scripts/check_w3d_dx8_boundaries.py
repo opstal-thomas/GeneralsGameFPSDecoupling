@@ -68,10 +68,14 @@ def main() -> int:
     errors = []
     for path in FULLY_ROUTED:
         errors.extend(check(path, [r"\bDX8Wrapper::"]))
-    errors.extend(check(CUSTOM_SHADER, SHADER_MIGRATED_PATTERNS))
+    errors.extend(check(CUSTOM_SHADER, SHADER_MIGRATED_PATTERNS + [
+        r"\bIDirect3D(?:Texture|Surface|BaseTexture|Device)8\b",
+        r"\bPeek_D3D_Texture\s*\(",
+    ]))
     errors.extend(check(CUSTOM_SHADER_HEADER, [
         r"\bIDirect3DSurface8\s*\*\s*m_(oldRenderSurface|newRenderSurface|oldDepthSurface)",
         r"\bIDirect3DTexture8\s*\*\s*m_renderTexture",
+        r"\bIDirect3D(?:Texture|Surface|BaseTexture|Device)8\b",
     ]))
     if errors:
         print("\n".join(errors), file=sys.stderr)
