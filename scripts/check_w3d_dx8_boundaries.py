@@ -34,6 +34,8 @@ SHADER_MIGRATED_PATTERNS = [
     r"\bDX8Wrapper::Set_DX8_Texture\s*\(",
     r"\bDX8Wrapper::Set_DX8_Render_State\s*\(",
     r"\bDX8Wrapper::Set_DX8_Texture_Stage_State\s*\(",
+    r"\bDX8Wrapper::_Set_DX8_Transform\s*\(",
+    r"\bDX8Wrapper::_Get_DX8_Transform\s*\(",
 ]
 
 def executable_source(content: str) -> str:

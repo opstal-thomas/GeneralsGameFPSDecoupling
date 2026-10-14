@@ -294,6 +294,17 @@ void Renderer::Get_Transform(RenderTransform transform, Matrix4x4 & matrix)
     DX8Wrapper::Get_Transform(To_DX8_Transform(transform), matrix);
 }
 
+void Renderer::Set_Texture_Transform(unsigned stage, const Matrix4x4 & matrix)
+{
+    // D3D8 texture transform ordinals are contiguous by texture stage;
+    // preserve the exact projection matrix produced by W3DShaderManager.
+    WWASSERT(stage < 8);
+    if (stage >= 8)
+        return;
+    DX8Wrapper::_Set_DX8_Transform(
+        static_cast<D3DTRANSFORMSTATETYPE>(D3DTS_TEXTURE0 + stage), matrix);
+}
+
 void Renderer::Set_World_Identity()
 {
     DX8Wrapper::Set_World_Identity();

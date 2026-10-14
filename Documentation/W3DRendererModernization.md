@@ -466,8 +466,8 @@ fixed-function stage updates now pass semantic operation, argument and texture
 coordinate descriptions to `Renderer`; all 268 direct texture-stage state
 writes previously in `W3DShaderManager.cpp` now belong to the DX8 backend.
 The original state-write order and its cache remain unchanged. Stage
-texture transforms, render-target ownership and native pixel shader handles
-are still DX8-dependent.
+texture transform operations now use the neutral indexed transform API;
+render-target ownership and native pixel shader handles remain DX8-dependent.
 
 **Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
 matrix types; dynamic buffers and polygon renderers are still legacy-owned;

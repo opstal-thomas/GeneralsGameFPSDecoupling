@@ -664,6 +664,9 @@ public:
     static void Set_Transform(RenderTransform transform, const Matrix3D & matrix);
     static void Set_Transform(RenderTransform transform, const Matrix4x4 & matrix);
     static void Get_Transform(RenderTransform transform, Matrix4x4 & matrix);
+    // Projected material UV transforms are indexed texture transforms,
+    // not DX8 transform-state ordinals.
+    static void Set_Texture_Transform(unsigned stage, const Matrix4x4 & matrix);
     static void Set_World_Identity();
 
     // The high-level W3D scene submits geometry using these methods, rather
