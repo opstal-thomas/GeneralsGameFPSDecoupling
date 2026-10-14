@@ -3,6 +3,7 @@
 // resizing. A copy before Present verifies the clear on an actual GPU buffer.
 
 #include "../DX12PresentationDevice.h"
+#include "../DX12IndexedMeshPass.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -18,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <iostream>
 
 using Microsoft::WRL::ComPtr;
@@ -94,7 +96,9 @@ namespace
     }
 
     bool PresentAndVerify(DX12PresentationDevice & device,
-                          const std::array<float, 4> & color)
+                          const std::array<float, 4> & color,
+                          const std::function<bool()> & recordDraw = {},
+                          const std::array<float, 4> * expectedInside = nullptr)
     {
         const UINT width = device.Width();
         const UINT height = device.Height();
@@ -128,7 +132,7 @@ namespace
         }
         auto * list = device.ActiveCommandList();
         auto * target = device.CurrentBackBuffer();
-        if (!list || !target)
+        if (!list || !target || (recordDraw && !recordDraw()))
             return false;
 
         const auto toCopy = Transition(target, D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -165,9 +169,10 @@ namespace
         std::array<unsigned char, 4> actual = {center[0], center[1], center[2], center[3]};
         readback->Unmap(0, nullptr);
 
+        const auto & expectedColor = expectedInside ? *expectedInside : color;
         for (unsigned i = 0; i < 4; ++i)
         {
-            const int expected = static_cast<int>(std::lround(color[i] * 255.0f));
+            const int expected = static_cast<int>(std::lround(expectedColor[i] * 255.0f));
             if (std::abs(int(actual[i]) - expected) > 2)
             {
                 std::cerr << "Swapchain pixel " << i << ": expected " << expected
@@ -177,15 +182,151 @@ namespace
         }
         return true;
     }
+
+    bool TestIndexedMesh(DX12PresentationDevice & device, TestWindow & window,
+                         const wchar_t * shaderSource)
+    {
+        DX12W3DIndexedMeshPass pass;
+        if (!pass.Initialize(device, shaderSource))
+        {
+            std::cerr << "W3D mesh pass: " << pass.LastError() << "\n";
+            return false;
+        }
+
+        DX12W3DIndexedMesh mesh;
+        const DX12W3DVertex vertices[] = {
+            {{-0.8f, -0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
+            {{-0.8f,  0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
+            {{ 0.8f, -0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
+            {{ 0.8f,  0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}}
+        };
+        const std::uint16_t indices[] = {0, 1, 2, 2, 1, 3};
+        const std::uint8_t texel0[] = {128, 255, 255, 255};
+        const std::uint8_t texel1[] = {128, 255, 255, 255};
+        unsigned texture0 = 0, texture1 = 0;
+        bool uploaded = false;
+        const float identity[] = {
+            1.f, 0.f, 0.f, 0.f,
+            0.f, 1.f, 0.f, 0.f,
+            0.f, 0.f, 1.f, 0.f,
+            0.f, 0.f, 0.f, 1.f
+        };
+
+        const auto uploadOnce = [&]() -> bool
+        {
+            if (uploaded)
+                return true;
+            // Validate index bounds before recording any GPU copy commands.
+            DX12W3DIndexedMesh invalid;
+            const std::uint16_t badIndices[] = {0, 1, 99};
+            if (invalid.Upload(device, vertices, 4, badIndices, 3))
+            {
+                std::cerr << "W3D indexed mesh accepted an invalid index\n";
+                return false;
+            }
+            if (!mesh.Upload(device, vertices, 4, indices, 6))
+            {
+                std::cerr << "W3D mesh upload: " << mesh.LastError() << "\n";
+                return false;
+            }
+            if (!pass.UploadTextureRGBA8(texel0, 1, 1, texture0) ||
+                !pass.UploadTextureRGBA8(texel1, 1, 1, texture1))
+            {
+                std::cerr << "W3D texture upload: " << pass.LastError() << "\n";
+                return false;
+            }
+            uploaded = true;
+            return true;
+        };
+
+        RenderTextureCombinerKey untextured;
+        RenderTextureCombinerKey singleStage;
+        singleStage.color[0] = RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+        singleStage.alpha[0] = RenderTextureStageChannel(
+            RENDER_TEXOP_SELECT_ARG1, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_CURRENT);
+        RenderTextureCombinerKey twoStage = singleStage;
+        twoStage.color[1] = RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_CURRENT, RENDER_TEXARG_TEXTURE);
+        if (untextured.Encode() != 0x10101010u ||
+            singleStage.Encode() != 0x10101193u ||
+            twoStage.Encode() != 0x10431193u)
+        {
+            std::cerr << "W3D CPU material key does not match HLSL encoding\n";
+            return false;
+        }
+
+        RenderBlendState normal;
+        RenderBlendState rejected;
+        rejected.alphaTestEnabled = true;
+        rejected.alphaCompare = RENDER_COMPARE_GREATER;
+        rejected.alphaReference = 255;
+        const std::array<float, 4> clear = {{0.f, 0.f, 0.f, 1.f}};
+        const std::array<float, 4> singlePixel = {{128.f / 255.f, 0.25f, 0.5f, 1.f}};
+        const std::array<float, 4> doublePixel = {{(128.f / 255.f) * (128.f / 255.f), 0.25f, 0.5f, 1.f}};
+        const std::array<float, 4> plainPixel = {{1.f, 0.25f, 0.5f, 1.f}};
+
+        const auto runMaterial = [&](const RenderTextureCombinerKey & combiner,
+                                     const RenderBlendState & state,
+                                     const std::array<float, 4> & expected) -> bool
+        {
+            window.Pump();
+            const auto draw = [&]() -> bool
+            {
+                if (!uploadOnce())
+                    return false;
+                // Two indexed submesh draws compose one rectangle; the same
+                // PSO is reused with different DrawIndexedInstanced offsets.
+                for (unsigned indexStart = 0; indexStart < 6; indexStart += 3)
+                {
+                    if (!pass.Draw(mesh, indexStart, 3, combiner, state,
+                                   identity, texture0, texture1))
+                    {
+                        std::cerr << "W3D indexed draw: " << pass.LastError() << "\n";
+                        return false;
+                    }
+                }
+                return true;
+            };
+            return PresentAndVerify(device, clear, draw, &expected);
+        };
+
+        if (!runMaterial(singleStage, normal, singlePixel) ||
+            !runMaterial(twoStage, normal, doublePixel) ||
+            !runMaterial(untextured, normal, plainPixel) ||
+            !runMaterial(singleStage, rejected, clear))
+            return false;
+
+        // The same default-heap geometry and textures survive ResizeBuffers.
+        if (!device.Resize(160, 90) || !runMaterial(singleStage, normal, singlePixel))
+        {
+            std::cerr << "Indexed mesh after resize: " << device.LastError() << "\n";
+            return false;
+        }
+        if (pass.PipelineCount() != 3)
+        {
+            std::cerr << "Unexpected material PSO count: " << pass.PipelineCount() << "\n";
+            return false;
+        }
+        if (!device.WaitForIdle())
+            return false;
+        mesh.Reset();
+        pass.Shutdown();
+        std::cout << "DX12 indexed W3D geometry, textured PSOs, alpha test and resize: PASS\n";
+        return true;
+    }
 }
 
 int wmain(int argc, wchar_t ** argv)
 {
-    const bool warp = argc == 2 && std::wcscmp(argv[1], L"--warp") == 0;
-    const bool hardware = argc == 2 && std::wcscmp(argv[1], L"--hardware") == 0;
+    const bool meshWarp = argc == 3 && std::wcscmp(argv[1], L"--mesh-warp") == 0;
+    const bool meshHardware = argc == 3 && std::wcscmp(argv[1], L"--mesh-hardware") == 0;
+    const bool warp = (argc == 2 && std::wcscmp(argv[1], L"--warp") == 0) || meshWarp;
+    const bool hardware = (argc == 2 && std::wcscmp(argv[1], L"--hardware") == 0) || meshHardware;
     if (!warp && !hardware)
     {
-        std::cerr << "Usage: W3DDX12PresentationSmoke --warp|--hardware\n";
+        std::cerr << "Usage: W3DDX12PresentationSmoke --warp|--hardware"
+                     "|--mesh-warp shader.hlsl|--mesh-hardware shader.hlsl\n";
         return 2;
     }
 
@@ -232,6 +373,8 @@ int wmain(int argc, wchar_t ** argv)
             return 1;
     }
 
+    if ((meshWarp || meshHardware) && !TestIndexedMesh(device, window, argv[2]))
+        return 1;
     device.Shutdown();
     if (device.IsReady())
         return 1;
