@@ -77,6 +77,14 @@ struct RenderSurfacePoint
     int x, y;
 };
 
+// Mapped CPU-visible image data, including its potentially padded row pitch.
+struct RenderSurfaceMap
+{
+    RenderSurfaceMap() : data(nullptr), rowPitch(0) {}
+    void * data;
+    int rowPitch;
+};
+
 enum RenderSurfaceBlitFilter
 {
     RENDER_SURFACE_BLIT_NONE,
@@ -646,6 +654,9 @@ public:
     static void Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description);
     static void Retain_Surface(RenderSurfaceHandle surface);
     static void Release_Surface(RenderSurfaceHandle surface);
+    static void Lock_Surface(RenderSurfaceHandle surface, RenderSurfaceMap & map,
+                             const RenderSurfaceRect * region = nullptr, bool readOnly = false);
+    static void Unlock_Surface(RenderSurfaceHandle surface);
 
     // Source/destination resources are borrowed; no ownership changes.
     // Null rectangles/points select the full-surface copy used by text atlases.

@@ -218,32 +218,32 @@ unsigned int SurfaceClass::Get_Bytes_Per_Pixel()
 
 SurfaceClass::LockedSurfacePtr SurfaceClass::Lock(int *pitch)
 {
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, nullptr, 0));
-	*pitch = lock_rect.Pitch;
-	return static_cast<LockedSurfacePtr>(lock_rect.pBits);
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
+	*pitch = lock_rect.rowPitch;
+	return static_cast<LockedSurfacePtr>(lock_rect.data);
 }
 
 SurfaceClass::LockedSurfacePtr SurfaceClass::Lock(int *pitch, const Vector2i &min, const Vector2i &max)
 {
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
 
-	RECT rect;
+	RenderSurfaceRect rect;
 	rect.left = min.I;
 	rect.top = min.J;
 	rect.right = max.I;
 	rect.bottom = max.J;
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, &rect, 0));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, &rect, false);
 
-	*pitch = lock_rect.Pitch;
-	return static_cast<LockedSurfacePtr>(lock_rect.pBits);
+	*pitch = lock_rect.rowPitch;
+	return static_cast<LockedSurfacePtr>(lock_rect.data);
 }
 
 void SurfaceClass::Unlock()
 {
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 }
 
 /***********************************************************************************************
@@ -269,19 +269,19 @@ void SurfaceClass::Clear()
 	// size of each pixel in bytes
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,nullptr,0));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
 	unsigned int i;
-	unsigned char *mem=(unsigned char *) lock_rect.pBits;
+	unsigned char *mem=(unsigned char *) lock_rect.data;
 
 	for (i=0; i<sd.Height; i++)
 	{
 		memset(mem,0,size*sd.Width);
-		mem+=lock_rect.Pitch;
+		mem+=lock_rect.rowPitch;
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 }
 
 
@@ -308,19 +308,19 @@ void SurfaceClass::Copy(const unsigned char *other)
 	// size of each pixel in bytes
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,nullptr,0));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, false);
 	unsigned int i;
-	unsigned char *mem=(unsigned char *) lock_rect.pBits;
+	unsigned char *mem=(unsigned char *) lock_rect.data;
 
 	for (i=0; i<sd.Height; i++)
 	{
 		memcpy(mem,&other[i*sd.Width*size],size*sd.Width);
-		mem+=lock_rect.Pitch;
+		mem+=lock_rect.rowPitch;
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 }
 
 
@@ -347,25 +347,25 @@ void SurfaceClass::Copy(const Vector2i &min, const Vector2i &max, const unsigned
 	// size of each pixel in bytes
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	RenderSurfaceRect rect;
 	rect.left=min.I;
 	rect.right=max.I;
 	rect.top=min.J;
 	rect.bottom=max.J;
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,&rect,0));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, &rect, false);
 	int i;
-	unsigned char *mem=(unsigned char *) lock_rect.pBits;
+	unsigned char *mem=(unsigned char *) lock_rect.data;
 	int dx=max.I-min.I;
 
 	for (i=min.J; i<max.J; i++)
 	{
 		memcpy(mem,&other[(i*sd.Width+min.I)*size],size*dx);
-		mem+=lock_rect.Pitch;
+		mem+=lock_rect.rowPitch;
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 }
 
 
@@ -398,11 +398,11 @@ unsigned char *SurfaceClass::CreateCopy(int *width,int *height,int*size,bool fli
 
 	unsigned char *other=W3DNEWARRAY unsigned char [sd.Height*sd.Width*mysize];
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,nullptr,D3DLOCK_READONLY));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, nullptr, true);
 	unsigned int i;
-	unsigned char *mem=(unsigned char *) lock_rect.pBits;
+	unsigned char *mem=(unsigned char *) lock_rect.data;
 
 	for (i=0; i<sd.Height; i++)
 	{
@@ -413,10 +413,10 @@ unsigned char *SurfaceClass::CreateCopy(int *width,int *height,int*size,bool fli
 		{
 			memcpy(&other[i*sd.Width*mysize],mem,mysize*sd.Width);
 		}
-		mem+=lock_rect.Pitch;
+		mem+=lock_rect.rowPitch;
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 
 	return other;
 }
@@ -557,17 +557,17 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 		break;
 	}
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	RenderSurfaceRect rect;
+	::ZeroMemory(&rect, sizeof(rect));
 
 	rect.bottom=max->J;
 	rect.top=min->J;
 	rect.left=min->I;
 	rect.right=max->I;
 
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,&rect,D3DLOCK_READONLY));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, &rect, true);
 
 	int x,y;
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
@@ -579,7 +579,7 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 		for (x = min->I; x < max->I; x++) {
 
 			// HY - this is not endian safe
-			unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.pBits+(y-min->J)*lock_rect.Pitch+(x-min->I)*size);
+			unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.data+(y-min->J)*lock_rect.rowPitch+(x-min->I)*size);
 			unsigned char myalpha=alpha[size-1];
 			myalpha=(myalpha>>(8-alphabits)) & mask;
 			if (myalpha) {
@@ -591,7 +591,7 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 		}
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 
 	*max=realmax;
 	*min=realmin;
@@ -635,17 +635,17 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 
 	unsigned int size=::Get_Bytes_Per_Pixel(sd.Format);
 
-	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderSurfaceMap lock_rect;
+	::ZeroMemory(&lock_rect, sizeof(lock_rect));
+	RenderSurfaceRect rect;
+	::ZeroMemory(&rect, sizeof(rect));
 
 	rect.bottom=sd.Height;
 	rect.top=0;
 	rect.left=column;
 	rect.right=column+1;
 
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,&rect,D3DLOCK_READONLY));
+	Renderer::Lock_Surface(Peek_Render_Surface(), lock_rect, &rect, true);
 
 	int y;
 
@@ -653,16 +653,16 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 	for (y = 0; y < (int) sd.Height; y++)
 	{
 		// HY - this is not endian safe
-		unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.pBits+y*lock_rect.Pitch);
+		unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.data+y*lock_rect.rowPitch);
 		unsigned char myalpha=alpha[size-1];
 		myalpha=(myalpha>>(8-alphabits)) & mask;
 		if (myalpha) {
-			DX8_ErrorCode(D3DSurface->UnlockRect());
+			Renderer::Unlock_Surface(Peek_Render_Surface());
 			return false;
 		}
 	}
 
-	DX8_ErrorCode(D3DSurface->UnlockRect());
+	Renderer::Unlock_Surface(Peek_Render_Surface());
 	return true;
 }
 

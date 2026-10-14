@@ -672,6 +672,33 @@ void Renderer::Release_Surface(RenderSurfaceHandle surface)
         reinterpret_cast<IDirect3DSurface8 *>(surface)->Release();
 }
 
+void Renderer::Lock_Surface(RenderSurfaceHandle surface, RenderSurfaceMap & map,
+                            const RenderSurfaceRect * region, bool readOnly)
+{
+    map.data = nullptr;
+    map.rowPitch = 0;
+    RECT nativeRegion = {};
+    RECT * nativeRect = nullptr;
+    if (region)
+    {
+        nativeRegion.left = region->left;
+        nativeRegion.top = region->top;
+        nativeRegion.right = region->right;
+        nativeRegion.bottom = region->bottom;
+        nativeRect = &nativeRegion;
+    }
+    D3DLOCKED_RECT locked = {};
+    DX8_ErrorCode(reinterpret_cast<IDirect3DSurface8 *>(surface)->LockRect(
+        &locked, nativeRect, readOnly ? D3DLOCK_READONLY : 0));
+    map.data = locked.pBits;
+    map.rowPitch = locked.Pitch;
+}
+
+void Renderer::Unlock_Surface(RenderSurfaceHandle surface)
+{
+    DX8_ErrorCode(reinterpret_cast<IDirect3DSurface8 *>(surface)->UnlockRect());
+}
+
 // Preserve DX8 CopyRects semantics, including the full-surface/null-region
 // path used by font atlas upload.
 void Renderer::Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect * sourceRect,
