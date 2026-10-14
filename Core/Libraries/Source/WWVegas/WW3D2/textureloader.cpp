@@ -314,11 +314,13 @@ IDirect3DTexture8* Load_Compressed_Texture(
 	);
 
 	for (unsigned level=0;level<mips;++level) {
-		IDirect3DSurface8* d3d_surface=nullptr;
 		WWASSERT(d3d_texture);
-		DX8_ErrorCode(d3d_texture->GetSurfaceLevel(level/*-reduction_factor*/,&d3d_surface));
-		dds_file.Copy_Level_To_Surface(level,d3d_surface);
-		d3d_surface->Release();
+		RenderSurfaceHandle levelSurface = Renderer::Acquire_Texture_Surface_Level(
+			reinterpret_cast<RenderTexture2DHandle>(d3d_texture), level/*-reduction_factor*/);
+		WWASSERT(levelSurface);
+		dds_file.Copy_Level_To_Surface(
+			level, reinterpret_cast<IDirect3DSurface8 *>(levelSurface));
+		Renderer::Release_Surface(levelSurface);
 	}
 	return d3d_texture;
 }
@@ -548,8 +550,9 @@ IDirect3DTexture8* TextureLoader::Load_Thumbnail(const StringClass& filename, co
 		dest_format,
 		TextureBaseClass::MIP_LEVELS_ALL,
 		RENDER_TEXTURE_DEFAULT);
-	DX8CALL(UpdateTexture(sysmem_texture,d3d_texture));
-	sysmem_texture->Release();
+	Renderer::Update_Texture(reinterpret_cast<RenderTextureHandle>(sysmem_texture),
+		reinterpret_cast<RenderTextureHandle>(d3d_texture));
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(sysmem_texture));
 
 	WWDEBUG_SAY(("Created non-managed texture (%s)",filename));
 	return d3d_texture;
@@ -576,10 +579,10 @@ IDirect3DSurface8* TextureLoader::Load_Surface_Immediate(
 	if (compressed) {
 		IDirect3DTexture8* comp_tex=Load_Compressed_Texture(filename,0,MIP_LEVELS_1,WW3D_FORMAT_UNKNOWN);
 		if (comp_tex) {
-			IDirect3DSurface8* d3d_surface=nullptr;
-			DX8_ErrorCode(comp_tex->GetSurfaceLevel(0,&d3d_surface));
-			comp_tex->Release();
-			return d3d_surface;
+			RenderSurfaceHandle surface = Renderer::Acquire_Texture_Surface_Level(
+				reinterpret_cast<RenderTexture2DHandle>(comp_tex), 0);
+			Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(comp_tex));
+			return reinterpret_cast<IDirect3DSurface8 *>(surface);
 		}
 	}
 
@@ -1010,7 +1013,7 @@ void TextureLoader::Load_Thumbnail(TextureBaseClass *tc)
 	}
 
 	// release our reference to thumbnail texture
-	d3d_texture->Release();
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
 	d3d_texture = nullptr;
 }
 
@@ -1340,7 +1343,7 @@ void TextureLoadTaskClass::Apply(bool initialize)
 
 	Texture->Apply_New_Surface(D3DTexture, initialize);
 
-	D3DTexture->Release();
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(D3DTexture));
 	D3DTexture = nullptr;
 }
 
@@ -1703,8 +1706,9 @@ void TextureLoadTaskClass::Unlock_Surfaces()
 
 #ifndef USE_MANAGED_TEXTURES
 	IDirect3DTexture8* tex = Create_Loader_Texture_2D(Width, Height, Format, Texture->MipLevelCount,RENDER_TEXTURE_DEFAULT);
-	DX8CALL(UpdateTexture(Peek_D3D_Texture(),tex));
-	Peek_D3D_Texture()->Release();
+	Renderer::Update_Texture(reinterpret_cast<RenderTextureHandle>(Peek_D3D_Texture()),
+		reinterpret_cast<RenderTextureHandle>(tex));
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(Peek_D3D_Texture()));
 	D3DTexture=tex;
 	WWDEBUG_SAY(("Created non-managed texture (%s)",Texture->Get_Full_Path()));
 #endif
@@ -2081,8 +2085,10 @@ void CubeTextureLoadTaskClass::Unlock_Surfaces()
 		Texture->MipLevelCount,
 		RENDER_TEXTURE_DEFAULT
 	);
-	DX8CALL(UpdateTexture(Peek_D3D_Volume_Texture(),tex));
-	Peek_D3D_Volume_Texture()->Release();
+	Renderer::Update_Texture(
+		reinterpret_cast<RenderTextureHandle>(Peek_D3D_Volume_Texture()),
+		reinterpret_cast<RenderTextureHandle>(tex));
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(Peek_D3D_Volume_Texture()));
 	D3DTexture=tex;
 	WWDEBUG_SAY(("Created non-managed texture (%s)",Texture->Get_Full_Path()));
 #endif
@@ -2378,8 +2384,10 @@ void VolumeTextureLoadTaskClass::Unlock_Surfaces()
 
 #ifndef USE_MANAGED_TEXTURES
 	IDirect3DVolumeTexture8* tex = Create_Loader_Texture_Volume(Width, Height, Depth, Format, Texture->MipLevelCount,RENDER_TEXTURE_DEFAULT);
-	DX8CALL(UpdateTexture(Peek_D3D_Volume_Texture(),tex));
-	Peek_D3D_Volume_Texture()->Release();
+	Renderer::Update_Texture(
+		reinterpret_cast<RenderTextureHandle>(Peek_D3D_Volume_Texture()),
+		reinterpret_cast<RenderTextureHandle>(tex));
+	Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(Peek_D3D_Volume_Texture()));
 	D3DTexture=tex;
 	WWDEBUG_SAY(("Created non-managed texture (%s)",Texture->Get_Full_Path()));
 #endif

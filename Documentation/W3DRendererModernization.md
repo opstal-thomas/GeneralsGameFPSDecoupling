@@ -428,12 +428,18 @@ pitch semantics. The texture loader still temporarily stores COM pointers
 because its DDS surface-access and texture lifetime code is not yet
 converted. The new allocation helpers are an explicit transitional boundary.
 
-Remaining dependencies include native D3D8 surface ownership/Attach/Detach,
-DDS mip-surface acquisition and COM resource lifetimes, inactive legacy
-UpdateTexture branches, fixed-function mesh buffer formats, sorted dynamic
-geometry, plus terrain/effect/UI modules that still directly hold D3D8
-COM objects or call DX8Wrapper. These must be addressed before the DX8
-backend can be fully replaced.
+Mip-surface acquisition now returns an owned `RenderSurfaceHandle`;
+callers release it using `Renderer::Release_Surface`. The loader releases
+native texture references through `Renderer::Release_Texture`, while
+legacy system-to-default texture copies use `Renderer::Update_Texture`.
+Both remain the exact DX8 resource operations in the active backend.
+
+Remaining dependencies include native D3D8 surface storage/Attach/Detach,
+DDSFileClass's native surface-copy interface, COM-typed texture references
+and level processing in other WW3D2 systems, fixed-function mesh buffer
+formats, sorted dynamic geometry, plus terrain/effect/UI modules that
+still directly hold D3D8 COM objects or call DX8Wrapper. These must be
+addressed before the DX8 backend can be fully replaced.
 
 ### Known remaining Direct3D 8 dependencies
 

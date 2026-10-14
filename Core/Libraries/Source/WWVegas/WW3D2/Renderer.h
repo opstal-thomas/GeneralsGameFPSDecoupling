@@ -674,6 +674,12 @@ public:
     // Textures must stay alive and mapped levels must be unmapped before use.
     // Cube faces use the W3D +X, -X, +Y, -Y, +Z, -Z order (indices 0..5).
     static unsigned Get_Texture_Mip_Count(RenderTextureHandle texture);
+    // Returns a newly retained surface level. Caller must Release_Surface().
+    static RenderSurfaceHandle Acquire_Texture_Surface_Level(
+        RenderTexture2DHandle texture, unsigned mipLevel);
+    // Copy between compatible texture allocations, preserving DX8's managed
+    // to default memory-pool UpdateTexture behavior during transition.
+    static void Update_Texture(RenderTextureHandle source, RenderTextureHandle destination);
     static void Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
                                RenderSurfaceMap & mapped);
     static void Unmap_Texture_2D(RenderTexture2DHandle texture, unsigned level);

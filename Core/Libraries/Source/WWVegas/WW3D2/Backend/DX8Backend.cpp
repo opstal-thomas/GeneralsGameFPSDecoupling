@@ -592,6 +592,24 @@ unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
     return reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetLevelCount();
 }
 
+RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level(
+    RenderTexture2DHandle texture, unsigned mipLevel)
+{
+    if (!texture)
+        return nullptr;
+    IDirect3DSurface8 * surface = nullptr;
+    DX8_ErrorCode(reinterpret_cast<IDirect3DTexture8 *>(texture)->GetSurfaceLevel(
+        mipLevel, &surface));
+    return reinterpret_cast<RenderSurfaceHandle>(surface);
+}
+
+void Renderer::Update_Texture(RenderTextureHandle source, RenderTextureHandle destination)
+{
+    DX8CALL(UpdateTexture(
+        reinterpret_cast<IDirect3DBaseTexture8 *>(source),
+        reinterpret_cast<IDirect3DBaseTexture8 *>(destination)));
+}
+
 void Renderer::Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
                               RenderSurfaceMap & mapped)
 {
