@@ -25,6 +25,9 @@ FULLY_ROUTED = [
 CUSTOM_SHADER = Path(
     "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DShaderManager.cpp"
 )
+CUSTOM_SHADER_HEADER = Path(
+    "Core/GameEngineDevice/Include/W3DDevice/GameClient/W3DShaderManager.h"
+)
 SHADER_MIGRATED_PATTERNS = [
     r"DX8Wrapper::_Get_D3D_Device8\s*\(\s*\)\s*->\s*SetTexture\s*\(",
     r"\bpDev\s*->\s*DrawPrimitiveUP\s*\(",
@@ -62,6 +65,10 @@ def main() -> int:
     for path in FULLY_ROUTED:
         errors.extend(check(path, [r"\bDX8Wrapper::"]))
     errors.extend(check(CUSTOM_SHADER, SHADER_MIGRATED_PATTERNS))
+    errors.extend(check(CUSTOM_SHADER_HEADER, [
+        r"\bIDirect3DSurface8\s*\*\s*m_(oldRenderSurface|newRenderSurface|oldDepthSurface)",
+        r"\bIDirect3DTexture8\s*\*\s*m_renderTexture",
+    ]))
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1

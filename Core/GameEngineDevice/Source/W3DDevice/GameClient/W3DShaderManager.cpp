@@ -110,10 +110,30 @@ GraphicsVenderID W3DShaderManager::m_currentVendor;
 __int64 W3DShaderManager::m_driverVersion;
 
 Bool W3DShaderManager::m_renderingToTexture = false;
-IDirect3DSurface8 *W3DShaderManager::m_oldRenderSurface=nullptr;	///<previous render target
-IDirect3DTexture8 *W3DShaderManager::m_renderTexture=nullptr;		///<texture into which rendering will be redirected.
-IDirect3DSurface8 *W3DShaderManager::m_newRenderSurface=nullptr;	///<new render target inside m_renderTexture
-IDirect3DSurface8 *W3DShaderManager::m_oldDepthSurface=nullptr;	///<previous depth buffer surface
+RenderSurfaceHandle W3DShaderManager::m_oldRenderSurface=nullptr;	///<previous render target
+RenderTexture2DHandle W3DShaderManager::m_renderTexture=nullptr;		///<texture into which rendering will be redirected.
+RenderSurfaceHandle W3DShaderManager::m_newRenderSurface=nullptr;	///<new render target inside m_renderTexture
+RenderSurfaceHandle W3DShaderManager::m_oldDepthSurface=nullptr;	///<previous depth buffer surface
+
+// These acquired surface/texture handles are backend owned. Keep the original
+// reference-release order, but leave COM ownership rules inside Renderer.
+static void Release_Screen_Filter_Surface(RenderSurfaceHandle & surface)
+{
+    if (surface)
+    {
+        Renderer::Release_Surface(surface);
+        surface = nullptr;
+    }
+}
+
+static void Release_Screen_Filter_Texture(RenderTexture2DHandle & texture)
+{
+    if (texture)
+    {
+        Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(texture));
+        texture = nullptr;
+    }
+}
 /*===========================================================================================*/
 /*=========      Screen Shaders	=============================================================*/
 /*===========================================================================================*/
@@ -2630,19 +2650,17 @@ void W3DShaderManager::init()
 		m_currentChipset = res;	//cache the current chipset.
 
 		// Keep the legacy RTT fallback on unsupported MSAA/target combinations.
-		m_oldRenderSurface = reinterpret_cast<IDirect3DSurface8 *>(
-			Renderer::Acquire_Current_Color_Surface());
+		m_oldRenderSurface = Renderer::Acquire_Current_Color_Surface();
 		if (!m_oldRenderSurface)
 			return;
 
 		Renderer::Describe_Surface(
-			reinterpret_cast<RenderSurfaceHandle>(m_oldRenderSurface), desc);
+			m_oldRenderSurface, desc);
 
 		// Non-MSAA color textures cannot be bound with an MSAA depth surface in DX8.
 		if (!desc.multisampled)
 		{
-			m_renderTexture = reinterpret_cast<IDirect3DTexture8 *>(
-				Renderer::Create_Offscreen_Texture(desc));
+			m_renderTexture = Renderer::Create_Offscreen_Texture(desc);
 		}
 		else
 		{
@@ -2651,27 +2669,24 @@ void W3DShaderManager::init()
 
 		if (!m_renderTexture)
 		{
-			SAFE_RELEASE(m_oldRenderSurface);
+			Release_Screen_Filter_Surface(m_oldRenderSurface);
 			m_renderTexture = nullptr;
 		}
 		else
 		{
-			m_newRenderSurface = reinterpret_cast<IDirect3DSurface8 *>(
-				Renderer::Acquire_Texture_Surface_Level(
-					reinterpret_cast<RenderTexture2DHandle>(m_renderTexture), 0));
+			m_newRenderSurface = Renderer::Acquire_Texture_Surface_Level(m_renderTexture, 0);
 			if (!m_newRenderSurface)
 			{
-				SAFE_RELEASE(m_renderTexture);
+				Release_Screen_Filter_Texture(m_renderTexture);
 				m_newRenderSurface = nullptr;
 			}
 			else
 			{
-				m_oldDepthSurface = reinterpret_cast<IDirect3DSurface8 *>(
-					Renderer::Acquire_Current_Depth_Surface());
+				m_oldDepthSurface = Renderer::Acquire_Current_Depth_Surface();
 				if (!m_oldDepthSurface)
 				{
-					SAFE_RELEASE(m_newRenderSurface);
-					SAFE_RELEASE(m_renderTexture);
+					Release_Screen_Filter_Surface(m_newRenderSurface);
+					Release_Screen_Filter_Texture(m_renderTexture);
 					m_oldDepthSurface = nullptr;
 				}
 			}
@@ -2709,10 +2724,10 @@ void W3DShaderManager::init()
 //=============================================================================
 void W3DShaderManager::shutdown()
 {
-	SAFE_RELEASE(m_newRenderSurface);
-	SAFE_RELEASE(m_renderTexture);
-	SAFE_RELEASE(m_oldRenderSurface);
-	SAFE_RELEASE(m_oldDepthSurface);
+	Release_Screen_Filter_Surface(m_newRenderSurface);
+	Release_Screen_Filter_Texture(m_renderTexture);
+	Release_Screen_Filter_Surface(m_oldRenderSurface);
+	Release_Screen_Filter_Surface(m_oldDepthSurface);
 	m_currentShader = ST_INVALID;
 	m_currentFilter = FT_NULL_FILTER;
 	//release any assets associated with a shader (vertex/pixel shaders, textures, etc.)
@@ -2871,8 +2886,8 @@ void W3DShaderManager::startRenderToTexture()
 
 	if (m_renderingToTexture || m_newRenderSurface==nullptr || m_oldDepthSurface==nullptr) return;
 	const bool targetBound = Renderer::Set_Render_Target_Surfaces(
-		reinterpret_cast<RenderSurfaceHandle>(m_newRenderSurface),
-		reinterpret_cast<RenderSurfaceHandle>(m_oldDepthSurface));
+		m_newRenderSurface,
+		m_oldDepthSurface);
 
 	// TheSuperHackers @bugfix If SetRenderTarget fails (e.g. due to MSAA forced by driver
 	// profile causing a depth buffer mismatch that D3DSURFACE_DESC doesn't report), permanently
@@ -2880,10 +2895,10 @@ void W3DShaderManager::startRenderToTexture()
 	if (!targetBound)
 	{
 		// Permanently disable RTT
-		SAFE_RELEASE(m_newRenderSurface);
-		SAFE_RELEASE(m_renderTexture);
-		SAFE_RELEASE(m_oldRenderSurface);
-		SAFE_RELEASE(m_oldDepthSurface);
+		Release_Screen_Filter_Surface(m_newRenderSurface);
+		Release_Screen_Filter_Texture(m_renderTexture);
+		Release_Screen_Filter_Surface(m_oldRenderSurface);
+		Release_Screen_Filter_Surface(m_oldDepthSurface);
 		return;
 	}
 
@@ -2922,8 +2937,8 @@ IDirect3DTexture8 *W3DShaderManager::endRenderToTexture()
 	DEBUG_ASSERTCRASH(m_renderingToTexture, ("Not rendering to texture."));
 	if (!m_renderingToTexture) return nullptr;
 	const bool restored = Renderer::Set_Render_Target_Surfaces(
-		reinterpret_cast<RenderSurfaceHandle>(m_oldRenderSurface),
-		reinterpret_cast<RenderSurfaceHandle>(m_oldDepthSurface));
+		m_oldRenderSurface,
+		m_oldDepthSurface);
 	DEBUG_ASSERTCRASH(restored, ("Set target failed unexpectedly."));
 	if (restored)
 	{
@@ -2938,7 +2953,7 @@ IDirect3DTexture8 *W3DShaderManager::endRenderToTexture()
 
 		m_renderingToTexture = false;
 	}
-	return m_renderTexture;
+	return reinterpret_cast<IDirect3DTexture8 *>(m_renderTexture);
 }
 
 /**Returns texture containing the image that was last rendered using any of the effects requiring render target
@@ -2946,7 +2961,7 @@ textures.  Used mostly for cross-fading effects that need an unmodified version 
 was applied.  NOTE: This texture does not survive device reset.. so quit effect on reset!*/
 IDirect3DTexture8 *W3DShaderManager::getRenderTexture()
 {
-	return m_renderTexture;
+	return reinterpret_cast<IDirect3DTexture8 *>(m_renderTexture);
 }
 
 enum GraphicsVenderID CPP_11(: Int)

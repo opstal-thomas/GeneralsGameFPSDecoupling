@@ -34,6 +34,7 @@
 #pragma once
 
 #include "WW3D2/texture.h"
+#include "WW3D2/Renderer.h"
 enum FilterTypes CPP_11(: Int);
 enum FilterModes CPP_11(: Int);
 enum CustomScenePassModes CPP_11(: Int);
@@ -125,10 +126,10 @@ protected:
 	static FilterTypes m_currentFilter; ///< Last filter that was set.
 	// Info for a render to texture surface for special effects.
 	static Bool m_renderingToTexture;
-	static IDirect3DSurface8 *m_oldRenderSurface;	///<previous render target
-	static IDirect3DTexture8 *m_renderTexture;		///<texture into which rendering will be redirected.
-	static IDirect3DSurface8 *m_newRenderSurface;	///<new render target inside m_renderTexture
-	static IDirect3DSurface8 *m_oldDepthSurface;	///<previous depth buffer surface
+	static RenderSurfaceHandle m_oldRenderSurface;	///<previous render target
+	static RenderTexture2DHandle m_renderTexture;		///<texture into which rendering will be redirected.
+	static RenderSurfaceHandle m_newRenderSurface;	///<new render target inside m_renderTexture
+	static RenderSurfaceHandle m_oldDepthSurface;	///<previous depth buffer surface
 
 
 };

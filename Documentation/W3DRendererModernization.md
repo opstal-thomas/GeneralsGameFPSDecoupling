@@ -469,8 +469,12 @@ The original state-write order and its cache remain unchanged. Stage
 texture transform operations now use the neutral indexed transform API;
 render-target device operations are now routed through the neutral offscreen-target
 API, preserving the original one-mip allocation and MSAA failure behavior.
-Surface and texture ownership in the shader-manager class, and the original
-DX8 shader-token assets, still require a modern programmable replacement.
+The shader manager now stores retained offscreen color/depth surfaces and
+textures as opaque renderer handles, with explicit renderer-managed release
+paths. Legacy raw-pointer return methods remain for compatibility with older
+effect callers; those public getters still need migration before eliminating
+all Direct3D8 types from application code. Original DX8 shader-token assets
+also still require a modern programmable replacement.
 Shader creation, selection, constants, deletion and immediate alpha-blend
 writes are now dispatched through Renderer, without changing DX8 behavior.
 
