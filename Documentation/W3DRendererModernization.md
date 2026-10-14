@@ -7,9 +7,9 @@ without changing gameplay, simulation timing, W3D assets, maps or the art style.
 Preserve the legacy Direct3D 8 backend as the reference image while creating a
 path toward an optional Direct3D 12 backend and new rendering features.
 
-**This branch does not implement Direct3D 12 or change image quality.** It
-strengthens the existing backend boundary so that later work can change the
-graphics implementation without changing game logic.
+**The game still runs with Direct3D 8.** An isolated DX12 WARP proof now
+exercises real device, pipeline and geometry draw calls; no DX12 game
+backend or image-quality change is active.
 
 ## Existing architecture
 
@@ -35,6 +35,23 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                        |
                     Direct3D 8
 ```
+
+### DX12 WARP device, PSO and first texture-modulated triangle
+
+The isolated `WW3D2/Backend/DX12/Probe` target creates an actual D3D12 WARP
+software device, direct command queue and command list, root signature,
+graphics pipeline state, RGBA8 texture and render target, shader descriptor
+heaps, and an upload/readback path. It compiles the existing W3D unlit
+VS/PS shader and draws a texture-modulated triangle offscreen. The test
+reads actual GPU pixels and checks that the two-stage combiner produces
+the expected color against a cleared background.
+
+The standalone probe is built separately and tested on a Windows CI runner.
+It **does not link to WW3D2 or modify the game runtime backend**. The next
+integration steps are an optional native DX12 swapchain path, persistent
+resource/descriptor management, rendering W3D mesh buffers, and an explicit
+DX8/DX12 runtime selection with safe fallback. These require additional
+validation before replacing DX8 gameplay.
 
 ### DX12 vertex/pixel shader smoke compilation
 

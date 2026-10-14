@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.20)
+project(W3DDX12Probe LANGUAGES CXX)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "W3D DX12 smoke probe requires Windows")
+endif()
+
+# This standalone opt-in target is NOT linked into Generals or Zero Hour.
+# The original DX8 backend remains the only game runtime backend.
+add_executable(W3DDX12Probe DX12DrawProbe.cpp)
+target_compile_features(W3DDX12Probe PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12Probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12Probe PRIVATE d3d12 dxgi dxguid d3dcompiler)
+
+enable_testing()
+add_test(
+    NAME W3D_DX12_WARP_Offscreen_Triangle
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl"
+)
+set_tests_properties(W3D_DX12_WARP_Offscreen_Triangle PROPERTIES TIMEOUT 45)

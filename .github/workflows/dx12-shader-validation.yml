@@ -39,3 +39,20 @@ jobs:
             throw "DX12 shader compilation produced empty bytecode"
           }
           Write-Host "W3D DX12 reference VS and PS compiled as Shader Model 5.1"
+
+  warp-render-probe:
+    name: W3D DX12 WARP offscreen draw
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and execute DX12 WARP geometry smoke probe
+        shell: pwsh
+        run: |
+          $source = "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/Probe"
+          $build = Join-Path $env:RUNNER_TEMP "w3d-dx12-warp-probe"
+          cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE -ne 0) { throw "DX12 WARP probe configuration failed" }
+          cmake --build $build --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "DX12 WARP probe compilation failed" }
+          ctest --test-dir $build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "DX12 WARP GPU pixel verification failed" }
