@@ -88,6 +88,15 @@ struct RenderSurfaceMap
     int rowPitch;
 };
 
+// Three-dimensional texture mapping includes the pitch between depth slices.
+struct RenderVolumeMap
+{
+    RenderVolumeMap() : data(nullptr), rowPitch(0), slicePitch(0) {}
+    void * data;
+    int rowPitch;
+    int slicePitch;
+};
+
 enum RenderSurfaceBlitFilter
 {
     RENDER_SURFACE_BLIT_NONE,
@@ -660,6 +669,20 @@ public:
     // allocation remain inside the backend.
     static RenderTexture2DHandle Create_Texture_From_Surface(
         RenderSurfaceHandle surface, unsigned mipLevels);
+
+    // Level/face mapping retains legacy in-place CPU upload semantics.
+    // Textures must stay alive and mapped levels must be unmapped before use.
+    // Cube faces use the W3D +X, -X, +Y, -Y, +Z, -Z order (indices 0..5).
+    static unsigned Get_Texture_Mip_Count(RenderTextureHandle texture);
+    static void Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
+                               RenderSurfaceMap & mapped);
+    static void Unmap_Texture_2D(RenderTexture2DHandle texture, unsigned level);
+    static void Map_Texture_Cube(RenderTextureCubeHandle texture, unsigned face,
+                                 unsigned level, RenderSurfaceMap & mapped);
+    static void Unmap_Texture_Cube(RenderTextureCubeHandle texture, unsigned face, unsigned level);
+    static void Map_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                   RenderVolumeMap & mapped);
+    static void Unmap_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level);
     static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
     static RenderTextureCubeHandle Create_Texture_Cube(const RenderTextureCubeDescription & description);
     static RenderTextureVolumeHandle Create_Texture_Volume(const RenderTextureVolumeDescription & description);

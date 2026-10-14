@@ -415,11 +415,25 @@ transitional DynamicVBAccessClass/DynamicIBAccessClass objects and buffer
 cycling/sorted transparency remain DX8-oriented and are **not** a native
 DX12 mesh submission contract yet.
 
+The texture loader now creates 2D, cube and volume textures through the
+backend-neutral `Renderer::Create_Texture_*` APIs (including managed,
+system-memory and default memory choices). The active procedural texture
+constructor also creates surface-backed textures through `Renderer`.
+The DDS/TGA/thumbnail format and mip selection algorithms are unchanged.
+
+Mip counts and the CPU mapping of 2D levels, cube faces and volume levels
+are also dispatched through `Renderer`. The DX8 backend retains its native
+LockRect/UnlockRect and LockBox/UnlockBox calls and the original row/slice
+pitch semantics. The texture loader still temporarily stores COM pointers
+because its DDS surface-access and texture lifetime code is not yet
+converted. The new allocation helpers are an explicit transitional boundary.
+
 Remaining dependencies include native D3D8 surface ownership/Attach/Detach,
-texture loader COM level/face locks and uploads, fixed-function mesh
-buffer formats, sorted dynamic geometry, plus terrain/effect/UI modules
-that still directly hold D3D8 COM objects or call DX8Wrapper. These
-must be addressed before the DX8 backend can be fully replaced.
+DDS mip-surface acquisition and COM resource lifetimes, inactive legacy
+UpdateTexture branches, fixed-function mesh buffer formats, sorted dynamic
+geometry, plus terrain/effect/UI modules that still directly hold D3D8
+COM objects or call DX8Wrapper. These must be addressed before the DX8
+backend can be fully replaced.
 
 ### Known remaining Direct3D 8 dependencies
 

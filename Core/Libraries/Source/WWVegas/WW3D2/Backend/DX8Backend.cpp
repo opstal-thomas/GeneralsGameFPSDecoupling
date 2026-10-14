@@ -585,6 +585,64 @@ RenderTexture2DHandle Renderer::Create_Texture_From_Surface(
     return reinterpret_cast<RenderTexture2DHandle>(texture);
 }
 
+unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
+{
+    if (!texture)
+        return 0;
+    return reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetLevelCount();
+}
+
+void Renderer::Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
+                              RenderSurfaceMap & mapped)
+{
+    mapped = RenderSurfaceMap();
+    D3DLOCKED_RECT lock = {};
+    DX8_ErrorCode(reinterpret_cast<IDirect3DTexture8 *>(texture)->LockRect(
+        level, &lock, nullptr, 0));
+    mapped.data = lock.pBits;
+    mapped.rowPitch = lock.Pitch;
+}
+
+void Renderer::Unmap_Texture_2D(RenderTexture2DHandle texture, unsigned level)
+{
+    DX8_ErrorCode(reinterpret_cast<IDirect3DTexture8 *>(texture)->UnlockRect(level));
+}
+
+void Renderer::Map_Texture_Cube(RenderTextureCubeHandle texture, unsigned face,
+                                unsigned level, RenderSurfaceMap & mapped)
+{
+    mapped = RenderSurfaceMap();
+    D3DLOCKED_RECT lock = {};
+    DX8_ErrorCode(reinterpret_cast<IDirect3DCubeTexture8 *>(texture)->LockRect(
+        static_cast<D3DCUBEMAP_FACES>(face), level, &lock, nullptr, 0));
+    mapped.data = lock.pBits;
+    mapped.rowPitch = lock.Pitch;
+}
+
+void Renderer::Unmap_Texture_Cube(RenderTextureCubeHandle texture, unsigned face,
+                                  unsigned level)
+{
+    DX8_ErrorCode(reinterpret_cast<IDirect3DCubeTexture8 *>(texture)->UnlockRect(
+        static_cast<D3DCUBEMAP_FACES>(face), level));
+}
+
+void Renderer::Map_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                  RenderVolumeMap & mapped)
+{
+    mapped = RenderVolumeMap();
+    D3DLOCKED_BOX lock = {};
+    DX8_ErrorCode(reinterpret_cast<IDirect3DVolumeTexture8 *>(texture)->LockBox(
+        level, &lock, nullptr, 0));
+    mapped.data = lock.pBits;
+    mapped.rowPitch = lock.RowPitch;
+    mapped.slicePitch = lock.SlicePitch;
+}
+
+void Renderer::Unmap_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level)
+{
+    DX8_ErrorCode(reinterpret_cast<IDirect3DVolumeTexture8 *>(texture)->UnlockBox(level));
+}
+
 RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDescription & description)
 {
     DX8_THREAD_ASSERT();

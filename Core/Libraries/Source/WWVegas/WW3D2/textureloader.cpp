@@ -496,17 +496,15 @@ IDirect3DTexture8* TextureLoader::Load_Thumbnail(const StringClass& filename, co
 #endif
 
 	unsigned level=0;
-	D3DLOCKED_RECT locked_rects[12]={0};
-	WWASSERT(sysmem_texture->GetLevelCount()<=12);
+	RenderSurfaceMap locked_rects[12];
+	const RenderTexture2DHandle sysmemHandle = reinterpret_cast<RenderTexture2DHandle>(sysmem_texture);
+	const unsigned levelCount = Renderer::Get_Texture_Mip_Count(
+		reinterpret_cast<RenderTextureHandle>(sysmem_texture));
+	WWASSERT(levelCount<=12);
 
 	// Lock all surfaces
-	for (level=0;level<sysmem_texture->GetLevelCount();++level) {
-		DX8_ErrorCode(
-			sysmem_texture->LockRect(
-				level,
-				&locked_rects[level],
-				nullptr,
-				0));
+	for (level=0;level<levelCount;++level) {
+		Renderer::Map_Texture_2D(sysmemHandle, level, locked_rects[level]);
 	}
 
 	unsigned char* src_surface=thumb->Peek_Bitmap();
@@ -515,31 +513,31 @@ IDirect3DTexture8* TextureLoader::Load_Thumbnail(const StringClass& filename, co
 	unsigned height=thumb->Get_Height();
 
 	Vector3 hsv=hsv_shift;
-	for (level=0;level<sysmem_texture->GetLevelCount()-1;++level) {
+	for (level=0;level<levelCount-1;++level) {
 		BitmapHandlerClass::Copy_Image_Generate_Mipmap(
 			width,
 			height,
-			(unsigned char*)locked_rects[level].pBits,
-			locked_rects[level].Pitch,
+			(unsigned char*)locked_rects[level].data,
+			locked_rects[level].rowPitch,
 			dest_format,
 			src_surface,
 			src_pitch,
 			src_format,
-			(unsigned char*)locked_rects[level+1].pBits,	// mipmap
-			locked_rects[level+1].Pitch,
+			(unsigned char*)locked_rects[level+1].data,	// mipmap
+			locked_rects[level+1].rowPitch,
 			hsv);
 		hsv=Vector3(0.0f,0.0f,0.0f);	// Only do the shift for the first level, as the mipmaps are based on it.
 
 		src_format=dest_format;
-		src_surface=(unsigned char*)locked_rects[level].pBits;
-		src_pitch=locked_rects[level].Pitch;
+		src_surface=(unsigned char*)locked_rects[level].data;
+		src_pitch=locked_rects[level].rowPitch;
 		width>>=1;
 		height>>=1;
 	}
 
 	// Unlock all surfaces
-	for (level=0;level<sysmem_texture->GetLevelCount();++level) {
-		DX8_ErrorCode(sysmem_texture->UnlockRect(level));
+	for (level=0;level<levelCount;++level) {
+		Renderer::Unmap_Texture_2D(sysmemHandle, level);
 	}
 #ifdef USE_MANAGED_TEXTURES
 	return sysmem_texture;
@@ -1676,23 +1674,16 @@ bool TextureLoadTaskClass::Begin_Uncompressed_Load()
 
 void TextureLoadTaskClass::Lock_Surfaces()
 {
-	MipLevelCount = D3DTexture->GetLevelCount();
+	MipLevelCount = Renderer::Get_Texture_Mip_Count(
+		reinterpret_cast<RenderTextureHandle>(D3DTexture));
 
 	for (unsigned int i = 0; i < MipLevelCount; ++i)
 	{
-		D3DLOCKED_RECT locked_rect;
-		DX8_ErrorCode
-		(
-			Peek_D3D_Texture()->LockRect
-			(
-				i,
-				&locked_rect,
-				nullptr,
-				0
-			)
-		);
-		LockedSurfacePtr[i]		= (unsigned char *)locked_rect.pBits;
-		LockedSurfacePitch[i]	= locked_rect.Pitch;
+		RenderSurfaceMap locked_rect;
+		Renderer::Map_Texture_2D(
+			reinterpret_cast<RenderTexture2DHandle>(Peek_D3D_Texture()), i, locked_rect);
+		LockedSurfacePtr[i]		= (unsigned char *)locked_rect.data;
+		LockedSurfacePitch[i]	= locked_rect.rowPitch;
 	}
 }
 
@@ -1704,7 +1695,8 @@ void TextureLoadTaskClass::Unlock_Surfaces()
 		if (LockedSurfacePtr[i])
 		{
 			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
-			DX8_ErrorCode(Peek_D3D_Texture()->UnlockRect(i));
+			Renderer::Unmap_Texture_2D(
+				reinterpret_cast<RenderTexture2DHandle>(Peek_D3D_Texture()), i);
 		}
 		LockedSurfacePtr[i] = nullptr;
 	}
@@ -2054,20 +2046,12 @@ void CubeTextureLoadTaskClass::Lock_Surfaces()
 	{
 		for (unsigned int i=0; i<MipLevelCount; i++)
 		{
-			D3DLOCKED_RECT locked_rect;
-			DX8_ErrorCode
-			(
-				Peek_D3D_Cube_Texture()->LockRect
-				(
-					(D3DCUBEMAP_FACES)f,
-					i,
-					&locked_rect,
-					nullptr,
-					0
-				)
-			);
-			LockedCubeSurfacePtr[f][i]	 = (unsigned char *)locked_rect.pBits;
-			LockedCubeSurfacePitch[f][i]= locked_rect.Pitch;
+			RenderSurfaceMap locked_rect;
+			Renderer::Map_Texture_Cube(
+				reinterpret_cast<RenderTextureCubeHandle>(Peek_D3D_Cube_Texture()),
+				f, i, locked_rect);
+			LockedCubeSurfacePtr[f][i]	 = (unsigned char *)locked_rect.data;
+			LockedCubeSurfacePitch[f][i]= locked_rect.rowPitch;
 		}
 	}
 }
@@ -2081,10 +2065,8 @@ void CubeTextureLoadTaskClass::Unlock_Surfaces()
 			if (LockedCubeSurfacePtr[f][i])
 			{
 				WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
-				DX8_ErrorCode
-				(
-					Peek_D3D_Cube_Texture()->UnlockRect((D3DCUBEMAP_FACES)f,i)
-				);
+				Renderer::Unmap_Texture_Cube(
+					reinterpret_cast<RenderTextureCubeHandle>(Peek_D3D_Cube_Texture()), f, i);
 			}
 			LockedCubeSurfacePtr[f][i] = nullptr;
 		}
@@ -2370,20 +2352,13 @@ void VolumeTextureLoadTaskClass::Lock_Surfaces()
 {
 	for (unsigned int i=0; i<MipLevelCount; i++)
 	{
-		D3DLOCKED_BOX locked_box;
-		DX8_ErrorCode
-		(
-			Peek_D3D_Volume_Texture()->LockBox
-			(
-				i,
-				&locked_box,
-				nullptr,
-				0
-			)
-		);
-		LockedSurfacePtr[i]			= (unsigned char *)locked_box.pBits;
-		LockedSurfacePitch[i]		= locked_box.RowPitch;
-		LockedSurfaceSlicePitch[i]	= locked_box.SlicePitch;
+		RenderVolumeMap locked_box;
+		Renderer::Map_Texture_Volume(
+			reinterpret_cast<RenderTextureVolumeHandle>(Peek_D3D_Volume_Texture()), i,
+			locked_box);
+		LockedSurfacePtr[i]			= (unsigned char *)locked_box.data;
+		LockedSurfacePitch[i]		= locked_box.rowPitch;
+		LockedSurfaceSlicePitch[i]	= locked_box.slicePitch;
 	}
 }
 
@@ -2395,10 +2370,8 @@ void VolumeTextureLoadTaskClass::Unlock_Surfaces()
 		if (LockedSurfacePtr[i])
 		{
 			WWASSERT(ThreadClass::_Get_Current_Thread_ID() == Renderer::Get_Render_Thread_ID());
-			DX8_ErrorCode
-			(
-				Peek_D3D_Volume_Texture()->UnlockBox(i)
-			);
+			Renderer::Unmap_Texture_Volume(
+				reinterpret_cast<RenderTextureVolumeHandle>(Peek_D3D_Volume_Texture()), i);
 		}
 		LockedSurfacePtr[i] = nullptr;
 	}
