@@ -148,7 +148,7 @@ void PrintDiagnostics(ID3D12Device * device)
     }
 }
 
-void Run(const wchar_t * shader, bool clearOnly)
+void Run(const wchar_t * shader, bool clearOnly, bool untextured)
 {
     ComPtr<ID3D12Debug> debug;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
@@ -300,7 +300,7 @@ void Run(const wchar_t * shader, bool clearOnly)
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     auto transition = Barrier(texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    if (!clearOnly) {
+    if (!clearOnly && !untextured) {
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         list->ResourceBarrier(1, &transition);
     }
@@ -360,6 +360,12 @@ void Run(const wchar_t * shader, bool clearOnly)
     Constants constants;
     constants.wvp[0] = constants.wvp[5] =
         constants.wvp[10] = constants.wvp[15] = 1.f;
+    if (untextured) {
+        // COLOROP=DISABLE on both stages: the pixel shader should return
+        // interpolated diffuse vertex color without sampling the texture.
+        constants.combiner = 0x10101010u;
+        constants.alphaTest = 0;
+    }
     auto cbv = Resource(device.Get(), D3D12_HEAP_TYPE_UPLOAD,
         Buffer(sizeof(constants)), D3D12_RESOURCE_STATE_GENERIC_READ);
     Check(cbv->Map(0, nullptr, &mapped), "Map constant buffer");
@@ -459,26 +465,33 @@ void Run(const wchar_t * shader, bool clearOnly)
     const bool insideMatches = clearOnly
         ? (closeTo(inside[0], 0) && closeTo(inside[1], 0) &&
            closeTo(inside[2], 0) && closeTo(inside[3], 255))
+        : untextured
+        ? (closeTo(inside[0], 255) && closeTo(inside[1], 64) &&
+           closeTo(inside[2], 128) && closeTo(inside[3], 255))
         : (closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
            closeTo(inside[2], 128) && closeTo(inside[3], 255));
     if (!(insideMatches && closeTo(outside[0], 0) &&
           closeTo(outside[1], 0) && closeTo(outside[2], 0) &&
           closeTo(outside[3], 255)))
         throw std::runtime_error("D3D12 WARP pixel verification failed");
-    std::cout << (clearOnly ? "D3D12 WARP clear/readback" : "D3D12 WARP textured draw")
-              << ": PASS\n";
+    const char * mode = clearOnly ? "clear/readback"
+        : (untextured ? "untextured draw" : "textured draw");
+    std::cout << "D3D12 WARP " << mode << ": PASS\n";
 }
 }
 
 int wmain(int argc, wchar_t ** argv)
 {
     if (argc < 2 || argc > 3) {
-        std::cerr << "Usage: W3DDX12Probe <path-to-W3DLegacyUnlit.hlsl> [--clear-only]\n";
+        std::cerr << "Usage: W3DDX12Probe <shader.hlsl> [--clear-only|--untextured]\n";
         return 2;
     }
     try {
         const bool clearOnly = argc == 3 && std::wcscmp(argv[2], L"--clear-only") == 0;
-        Run(argv[1], clearOnly);
+        const bool untextured = argc == 3 && std::wcscmp(argv[2], L"--untextured") == 0;
+        if (argc == 3 && !clearOnly && !untextured)
+            throw std::runtime_error("Unknown mode");
+        Run(argv[1], clearOnly, untextured);
         return 0;
     } catch (const std::exception & e) {
         std::cerr << "DX12 WARP probe failure: " << e.what() << '\n';
