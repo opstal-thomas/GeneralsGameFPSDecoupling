@@ -3291,7 +3291,7 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 	setupFlatWaterShader();// lorenzen sez use the alpha shader
 
 	//If video card supports it and it's enabled, feather the water edge using destination alpha
-	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8 && TheGlobalData->m_showSoftWaterEdge && TheWaterTransparency->m_transparentWaterDepth !=0)
+	if (static_cast<WW3DFormat>(Renderer::Get_Back_Buffer_Format()) == WW3D_FORMAT_A8R8G8B8 && TheGlobalData->m_showSoftWaterEdge && TheWaterTransparency->m_transparentWaterDepth !=0)
 	{		Renderer::Set_Source_Blend(RENDER_BLEND_DEST_ALPHA);
 			if (!TheWaterTransparency->m_additiveBlend)
 				Renderer::Set_Destination_Blend(RENDER_BLEND_INV_DEST_ALPHA);
