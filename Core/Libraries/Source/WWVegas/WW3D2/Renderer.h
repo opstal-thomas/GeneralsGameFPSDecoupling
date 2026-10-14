@@ -273,6 +273,18 @@ struct RenderTextureVolumeDescription
     bool Is_Valid() const { return width > 0 && height > 0 && depth > 0; }
 };
 
+// Mip-level metadata always uses W3D pixel-format identifiers.
+struct RenderTextureLevelDescription
+{
+    RenderTextureLevelDescription()
+        : width(0), height(0), depth(0), pixelFormat(0) {}
+    unsigned width;
+    unsigned height;
+    unsigned depth;
+    unsigned pixelFormat; // WW3DFormat; WW3DZFormat for depth textures.
+    bool Is_Valid() const { return width > 0 && height > 0 && depth > 0; }
+};
+
 // Uncompressed WW3D image surfaces (including file-backed images) remain
 // distinct from GPU textures and render targets. This description has no
 // platform-native graphics types and can also report an existing surface.
@@ -769,6 +781,14 @@ public:
     // Textures must stay alive and mapped levels must be unmapped before use.
     // Cube faces use the W3D +X, -X, +Y, -Y, +Z, -Z order (indices 0..5).
     static unsigned Get_Texture_Mip_Count(RenderTextureHandle texture);
+    static void Describe_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                           RenderTextureLevelDescription & description);
+    static void Describe_Depth_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                                 RenderTextureLevelDescription & description);
+    static void Describe_Texture_Level_Cube(RenderTextureCubeHandle texture, unsigned level,
+                                             RenderTextureLevelDescription & description);
+    static void Describe_Texture_Level_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                               RenderTextureLevelDescription & description);
     // Sum of native texture-level storage sizes, including compressed levels.
     // Used by the legacy W3D texture memory accounting (not a GPU budget).
     static unsigned Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture);

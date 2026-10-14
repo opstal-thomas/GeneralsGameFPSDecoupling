@@ -453,6 +453,17 @@ file header's legacy on-disk structures are preserved exactly; FourCC parsing
 and the texture loader's legacy COM-return interfaces are separate remaining
 migration tasks. The boundary check guards both game variants.
 
+### Backend-neutral texture mip metadata
+
+The DX8 backend translates native 2D, depth, cube and volume level
+descriptions into W3D format IDs and dimensions. Texture construction and
+resource replacement now read `RenderTextureLevelDescription` instead
+of querying D3D8 levels from active W3D code. The active native-pointer
+texture constructor also uses Renderer to query mip counts, avoiding a
+leaked level-0 native surface reference. Disabled historical constructors
+remain outside this change. Asset decoding and texture task scheduling
+are unchanged.
+
 ### Opaque texture storage and legacy compatibility
 
 The base W3D texture class now stores an opaque `RenderTextureHandle`

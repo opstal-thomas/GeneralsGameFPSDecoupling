@@ -97,6 +97,7 @@ def main() -> int:
     errors.extend(check(WW3D / "texture.cpp", [
         r"\bPeek_D3D_Texture\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",
         r"\bD3DTexture\s*->\s*(?:GetPriority|SetPriority)\s*\(",
+        r"\bPeek_D3D_(?:CubeTexture|VolumeTexture)\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",
         r"\bd3d_texture\s*->\s*AddRef\s*\(",
         r"\bd3d_tex\s*->\s*Release\s*\(",
     ]))

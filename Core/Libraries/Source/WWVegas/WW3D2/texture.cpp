@@ -802,23 +802,21 @@ TextureClass::TextureClass(IDirect3DBaseTexture8* d3d_texture)
 	(
 		0,
 		0,
-		((MipCountType)d3d_texture->GetLevelCount())
+		((MipCountType)Renderer::Get_Texture_Mip_Count(reinterpret_cast<RenderTextureHandle>(d3d_texture)))
 	),
-	Filter((MipCountType)d3d_texture->GetLevelCount())
+	Filter((MipCountType)Renderer::Get_Texture_Mip_Count(reinterpret_cast<RenderTextureHandle>(d3d_texture)))
 {
 	Initialized=true;
 	IsProcedural=true;
 	IsReducible=false;
 
 	Set_D3D_Base_Texture(d3d_texture);
-	IDirect3DSurface8* surface;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(0,&surface));
-	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(surface->GetDesc(&d3d_desc));
-	Width=d3d_desc.Width;
-	Height=d3d_desc.Height;
-	TextureFormat=D3DFormat_To_WW3DFormat(d3d_desc.Format);
+	RenderTextureLevelDescription desc;
+	Renderer::Describe_Texture_Level_2D(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), 0, desc);
+	Width=desc.width;
+	Height=desc.height;
+	TextureFormat=static_cast<WW3DFormat>(desc.pixelFormat);
 	switch (TextureFormat)
 	{
 	case WW3D_FORMAT_DXT1:
@@ -902,18 +900,15 @@ void TextureClass::Apply_New_Surface
 	if (disable_auto_invalidation) InactivationTime = 0;
 
 	WWASSERT(d3d_texture);
-	IDirect3DSurface8* surface;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(0,&surface));
-	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(surface->GetDesc(&d3d_desc));
+	RenderTextureLevelDescription desc;
+	Renderer::Describe_Texture_Level_2D(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), 0, desc);
 	if (initialized)
 	{
-		TextureFormat=D3DFormat_To_WW3DFormat(d3d_desc.Format);
-		Width=d3d_desc.Width;
-		Height=d3d_desc.Height;
+		TextureFormat=static_cast<WW3DFormat>(desc.pixelFormat);
+		Width=desc.width;
+		Height=desc.height;
 	}
-	surface->Release();
 
 }
 
@@ -1267,18 +1262,15 @@ void ZTextureClass::Apply_New_Surface
 	if (disable_auto_invalidation) InactivationTime = 0;
 
 	WWASSERT(Peek_D3D_Texture());
-	IDirect3DSurface8* surface;
-	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(0,&surface));
-	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(surface->GetDesc(&d3d_desc));
+	RenderTextureLevelDescription desc;
+	Renderer::Describe_Depth_Texture_Level_2D(
+		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), 0, desc);
 	if (initialized)
 	{
-		DepthStencilTextureFormat=D3DFormat_To_WW3DZFormat(d3d_desc.Format);
-		Width=d3d_desc.Width;
-		Height=d3d_desc.Height;
+		DepthStencilTextureFormat=static_cast<WW3DZFormat>(desc.pixelFormat);
+		Width=desc.width;
+		Height=desc.height;
 	}
-	surface->Release();
 }
 
 //**********************************************************************************************
@@ -1567,15 +1559,14 @@ void CubeTextureClass::Apply_New_Surface
 	if (disable_auto_invalidation) InactivationTime = 0;
 
 	WWASSERT(d3d_texture);
-	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(Peek_D3D_CubeTexture()->GetLevelDesc(0,&d3d_desc));
-
+	RenderTextureLevelDescription desc;
+	Renderer::Describe_Texture_Level_Cube(
+		reinterpret_cast<RenderTextureCubeHandle>(Peek_Render_Texture()), 0, desc);
 	if (initialized)
 	{
-		TextureFormat=D3DFormat_To_WW3DFormat(d3d_desc.Format);
-		Width=d3d_desc.Width;
-		Height=d3d_desc.Height;
+		TextureFormat=static_cast<WW3DFormat>(desc.pixelFormat);
+		Width=desc.width;
+		Height=desc.height;
 	}
 }
 
@@ -1845,16 +1836,14 @@ void VolumeTextureClass::Apply_New_Surface
 	if (disable_auto_invalidation) InactivationTime = 0;
 
 	WWASSERT(d3d_texture);
-	D3DVOLUME_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DVOLUME_DESC));
-
-	DX8_ErrorCode(Peek_D3D_VolumeTexture()->GetLevelDesc(0,&d3d_desc));
-
+	RenderTextureLevelDescription desc;
+	Renderer::Describe_Texture_Level_Volume(
+		reinterpret_cast<RenderTextureVolumeHandle>(Peek_Render_Texture()), 0, desc);
 	if (initialized)
 	{
-		TextureFormat=D3DFormat_To_WW3DFormat(d3d_desc.Format);
-		Width=d3d_desc.Width;
-		Height=d3d_desc.Height;
-		Depth=d3d_desc.Depth;
+		TextureFormat=static_cast<WW3DFormat>(desc.pixelFormat);
+		Width=desc.width;
+		Height=desc.height;
+		Depth=desc.depth;
 	}
 }

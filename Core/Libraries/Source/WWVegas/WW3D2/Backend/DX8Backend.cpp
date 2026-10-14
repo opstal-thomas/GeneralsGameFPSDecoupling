@@ -886,6 +886,72 @@ unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
     return reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetLevelCount();
 }
 
+// Only the backend interprets D3D8 resource descriptions.
+static void Describe_DX8_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                          bool depthFormat, RenderTextureLevelDescription & description)
+{
+    description = RenderTextureLevelDescription();
+    if (!texture)
+        return;
+    D3DSURFACE_DESC native = {};
+    const HRESULT result = reinterpret_cast<IDirect3DTexture8 *>(texture)->GetLevelDesc(level, &native);
+    DX8_ErrorCode(result);
+    if (FAILED(result))
+        return;
+    description.width = native.Width;
+    description.height = native.Height;
+    description.depth = 1;
+    description.pixelFormat = depthFormat
+        ? static_cast<unsigned>(D3DFormat_To_WW3DZFormat(native.Format))
+        : static_cast<unsigned>(D3DFormat_To_WW3DFormat(native.Format));
+}
+
+void Renderer::Describe_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                         RenderTextureLevelDescription & description)
+{
+    Describe_DX8_Texture_Level_2D(texture, level, false, description);
+}
+
+void Renderer::Describe_Depth_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                               RenderTextureLevelDescription & description)
+{
+    Describe_DX8_Texture_Level_2D(texture, level, true, description);
+}
+
+void Renderer::Describe_Texture_Level_Cube(RenderTextureCubeHandle texture, unsigned level,
+                                           RenderTextureLevelDescription & description)
+{
+    description = RenderTextureLevelDescription();
+    if (!texture)
+        return;
+    D3DSURFACE_DESC native = {};
+    const HRESULT result = reinterpret_cast<IDirect3DCubeTexture8 *>(texture)->GetLevelDesc(level, &native);
+    DX8_ErrorCode(result);
+    if (FAILED(result))
+        return;
+    description.width = native.Width;
+    description.height = native.Height;
+    description.depth = 1;
+    description.pixelFormat = static_cast<unsigned>(D3DFormat_To_WW3DFormat(native.Format));
+}
+
+void Renderer::Describe_Texture_Level_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                             RenderTextureLevelDescription & description)
+{
+    description = RenderTextureLevelDescription();
+    if (!texture)
+        return;
+    D3DVOLUME_DESC native = {};
+    const HRESULT result = reinterpret_cast<IDirect3DVolumeTexture8 *>(texture)->GetLevelDesc(level, &native);
+    DX8_ErrorCode(result);
+    if (FAILED(result))
+        return;
+    description.width = native.Width;
+    description.height = native.Height;
+    description.depth = native.Depth;
+    description.pixelFormat = static_cast<unsigned>(D3DFormat_To_WW3DFormat(native.Format));
+}
+
 unsigned Renderer::Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture)
 {
     if (!texture)
