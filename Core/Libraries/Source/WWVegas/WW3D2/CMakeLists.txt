@@ -254,3 +254,21 @@ target_link_libraries(corei_ww3d2 INTERFACE
     core_wwlib
     core_wwmath
 )
+
+
+# Experimental D3D12 device/swap-chain implementation in WW3D2.
+# EXCLUDE_FROM_ALL and OFF by default: existing Generals/Zero Hour binaries
+# still compile and link exactly the legacy DX8 Renderer implementation.
+option(W3D_BUILD_DX12_PRESENTATION "Expose opt-in DX12 presentation library target" OFF)
+if(W3D_BUILD_DX12_PRESENTATION)
+    if(NOT WIN32 OR IS_VS6_BUILD)
+        message(FATAL_ERROR "Experimental DX12 presentation requires modern MSVC on Windows")
+    endif()
+    add_library(w3d_dx12_presentation STATIC EXCLUDE_FROM_ALL
+        Backend/DX12/DX12PresentationDevice.h
+        Backend/DX12/DX12PresentationDevice.cpp
+    )
+    target_compile_features(w3d_dx12_presentation PUBLIC cxx_std_17)
+    target_compile_definitions(w3d_dx12_presentation PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(w3d_dx12_presentation PUBLIC d3d12 dxgi dxguid)
+endif()

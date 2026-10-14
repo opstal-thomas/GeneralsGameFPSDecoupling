@@ -7,9 +7,10 @@ without changing gameplay, simulation timing, W3D assets, maps or the art style.
 Preserve the legacy Direct3D 8 backend as the reference image while creating a
 path toward an optional Direct3D 12 backend and new rendering features.
 
-**The game still runs with Direct3D 8.** An isolated DX12 WARP proof now
-exercises real device, pipeline and geometry draw calls; no DX12 game
-backend or image-quality change is active.
+**The game still runs with Direct3D 8.** DX12 now has an isolated WARP
+geometry probe and a reusable, opt-in WW3D2 device/presentation module
+that creates and presents to an actual Windows swapchain. Neither is a
+DX12 gameplay backend or changes the game's image quality.
 
 ## Existing architecture
 
@@ -36,6 +37,27 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Native DX12 device and swapchain milestone
+
+`WW3D2/Backend/DX12/DX12PresentationDevice` is a reusable device and
+presentation component (not a second renderer contract). It initializes
+a hardware or WARP adapter, direct command queue, flip-discard HWND
+swapchain, two back-buffer RTVs, per-buffer allocators, command list and
+fences. Its frame lifecycle transitions PRESENT -> RENDER_TARGET ->
+PRESENT and offers native command-list access for future W3D draws.
+`Resize` waits for GPU completion, releases and recreates swapchain buffers;
+zero-sized minimized-window resize is safely ignored.
+
+A standalone Win32 test in `Backend/DX12/Presentation` actually presents
+multiple colored frames and verifies the swapchain's GPU pixels before
+Present. It tests buffer reuse and resize on the Windows CI WARP adapter.
+The main WW3D2 CMake project optionally exposes an
+`w3d_dx12_presentation` static library when
+`W3D_BUILD_DX12_PRESENTATION=ON`. That target is excluded from default builds
+and does not link into the shipping game. No DX12 `Renderer::` method
+implementations, runtime backend selection, texture streaming or meshes
+are included yet. Those depend on removing the remaining DX8-only draw
+paths and should be implemented independently of the game's simulation.
 ### DX12 WARP device, PSO and first texture-modulated triangle
 
 The isolated `WW3D2/Backend/DX12/Probe` target creates an actual D3D12 WARP
