@@ -30,6 +30,7 @@ class LightEnvironmentClass;
 class CameraClass;
 class DynamicVBAccessClass;
 class DynamicIBAccessClass;
+struct RenderStateStruct;
 class IndexBufferClass;
 class Vector3;
 class Vector4;
@@ -598,6 +599,17 @@ public:
     // dynamic sorting remain separate from this draw command for now.
     static void Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,
                                unsigned short minVertexIndex, unsigned short vertexCount);
+
+    // The W3D sorting pool still stores legacy render-state snapshots.
+    // Keep capture, temporary restoration, and engine-owned buffer refs
+    // backend-private until the state snapshot becomes fully semantic.
+    static void Capture_Sorting_State(RenderStateStruct & state);
+    static void Restore_Sorting_State(const RenderStateStruct & state);
+    static void Release_Sorting_State();
+    static void Apply_Sorting_Transforms_And_Lights(const RenderStateStruct & state);
+    static bool Is_Triangle_Draw_Enabled();
+    static void Set_Triangle_Draw_Enabled(bool enabled);
+    static void Unbind_Sorting_Geometry();
 
     // W3D-owned material, shader and texture selections. The original DX8
     // backend preserves its deferred state cache and reference ownership.

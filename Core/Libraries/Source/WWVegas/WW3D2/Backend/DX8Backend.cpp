@@ -23,6 +23,7 @@
 #include "WW3D2/Renderer.h"
 
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/vertmaterial.h"
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/dx8caps.h"
 #include "WW3D2/dx8texman.h"
@@ -138,6 +139,73 @@ void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangle
                               unsigned short minVertexIndex, unsigned short vertexCount)
 {
     DX8Wrapper::Draw_Triangles(startIndex, triangleCount, minVertexIndex, vertexCount);
+}
+
+void Renderer::Capture_Sorting_State(RenderStateStruct & state)
+{
+    DX8Wrapper::Get_Render_State(state);
+}
+
+void Renderer::Restore_Sorting_State(const RenderStateStruct & state)
+{
+    DX8Wrapper::Set_Render_State(state);
+}
+
+void Renderer::Release_Sorting_State()
+{
+    DX8Wrapper::Release_Render_State();
+}
+
+void Renderer::Apply_Sorting_Transforms_And_Lights(const RenderStateStruct & render_state)
+{
+    DX8Wrapper::_Set_DX8_Transform(D3DTS_WORLD,render_state.world);
+    DX8Wrapper::_Set_DX8_Transform(D3DTS_VIEW,render_state.view);
+
+
+    if (!render_state.material->Get_Lighting())
+    	return;	//no point changing lights if they are ignored.
+  //prevLight = render_state.lightsHash;
+
+    if (render_state.LightEnable[0]) {
+    	DX8Wrapper::Set_DX8_Light(0,&render_state.Lights[0]);
+    	if (render_state.LightEnable[1]) {
+    		DX8Wrapper::Set_DX8_Light(1,&render_state.Lights[1]);
+    		if (render_state.LightEnable[2]) {
+    			DX8Wrapper::Set_DX8_Light(2,&render_state.Lights[2]);
+    			if (render_state.LightEnable[3]) {
+    				DX8Wrapper::Set_DX8_Light(3,&render_state.Lights[3]);
+    			}
+    			else {
+    				DX8Wrapper::Set_DX8_Light(3,nullptr);
+    			}
+    		}
+    		else {
+    			DX8Wrapper::Set_DX8_Light(2,nullptr);
+    		}
+    	}
+    	else {
+    		DX8Wrapper::Set_DX8_Light(1,nullptr);
+    	}
+    }
+    else {
+    	DX8Wrapper::Set_DX8_Light(0,nullptr);
+    }
+}
+
+bool Renderer::Is_Triangle_Draw_Enabled()
+{
+    return DX8Wrapper::_Is_Triangle_Draw_Enabled();
+}
+
+void Renderer::Set_Triangle_Draw_Enabled(bool enabled)
+{
+    DX8Wrapper::_Enable_Triangle_Draw(enabled);
+}
+
+void Renderer::Unbind_Sorting_Geometry()
+{
+    DX8Wrapper::Set_Index_Buffer(nullptr, 0);
+    DX8Wrapper::Set_Vertex_Buffer(nullptr);
 }
 
 void Renderer::Set_Shader(const ShaderClass & shader)
