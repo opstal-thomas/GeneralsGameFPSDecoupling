@@ -36,6 +36,24 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### Thirteenth milestone: fixed-function texture combiner stage boundary
+
+W3D material pixel combiners describe color and alpha operations separately
+for each stage. Renderer now defines their operators (modulate, add, blend,
+subtract, bump environment map, etc.) and four input sources using typed
+RenderTextureStageChannel values. Direct3D texture-stage numeric constants
+are translated only in the DX8 backend.
+
+The two ShaderClass variants retain their hardware capability fallback
+logic and dirty-mask ordering. Generals submits stage 0/1 through the
+typed interface, and Zero Hour follows the same path while retaining its
+special Voodoo3 stage 2 compatibility behavior. Stage 2 can bypass the
+legacy two-stage DX8 cache using the uncached parameter.
+
+These operator descriptions can become the inputs to DX12 pixel-shader
+variants and their PSO keys. No new HLSL shader or graphics API is active
+yet; fixed-function DX8 remains the only running backend.
+
 ### Twelfth milestone: native-independent vertex-material values
 
 VertexMaterialClass now submits full ambient, diffuse, specular and emissive

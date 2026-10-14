@@ -343,6 +343,50 @@ struct RenderVertexMaterialDescription
     float power;
 };
 
+// The W3D fixed-function pixel pipeline consists of separate color and
+// alpha combiners per texture stage. Operations and inputs are semantic,
+// rather than the numeric values used by Direct3D 8 texture-stage states.
+// A DX12 backend can implement these with generated pixel shaders.
+enum RenderTextureOperation
+{
+    RENDER_TEXOP_DISABLE,
+    RENDER_TEXOP_SELECT_ARG1,
+    RENDER_TEXOP_SELECT_ARG2,
+    RENDER_TEXOP_MODULATE,
+    RENDER_TEXOP_MODULATE2X,
+    RENDER_TEXOP_ADD,
+    RENDER_TEXOP_ADD_SMOOTH,
+    RENDER_TEXOP_SUBTRACT,
+    RENDER_TEXOP_BLEND_TEXTURE_ALPHA,
+    RENDER_TEXOP_BLEND_CURRENT_ALPHA,
+    RENDER_TEXOP_ADD_SIGNED,
+    RENDER_TEXOP_ADD_SIGNED2X,
+    RENDER_TEXOP_MODULATE_ALPHA_ADD_COLOR,
+    RENDER_TEXOP_BUMP_ENV_MAP,
+    RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE
+};
+
+enum RenderTextureArgument
+{
+    RENDER_TEXARG_CURRENT,
+    RENDER_TEXARG_TEXTURE,
+    RENDER_TEXARG_DIFFUSE,
+    RENDER_TEXARG_TEXTURE_FACTOR
+};
+
+struct RenderTextureStageChannel
+{
+    RenderTextureStageChannel(
+        RenderTextureOperation op = RENDER_TEXOP_DISABLE,
+        RenderTextureArgument first = RENDER_TEXARG_TEXTURE,
+        RenderTextureArgument second = RENDER_TEXARG_CURRENT)
+        : operation(op), argument1(first), argument2(second) {}
+
+    RenderTextureOperation operation;
+    RenderTextureArgument argument1;
+    RenderTextureArgument argument2;
+};
+
 // A method appears here once a caller routes through it, not in anticipation of
 // one. The set below is what current callers route through; the rest of the
 // DX8Wrapper API stays reachable through DX8Wrapper's static methods until a
@@ -499,6 +543,15 @@ public:
     // Submit the actual material colors and specular exponent without
     // exposing the D3D8 material binary layout.
     static void Set_Vertex_Material(const RenderVertexMaterialDescription & material);
+
+    // Submit the legacy pixel-combiner stage independently for color and
+    // alpha, preserving ShaderClass dirty masks and state-write order.
+    // uncached is a legacy escape hatch for Zero Hour's Voodoo3 stage 2;
+    // new backends may ignore this implementation detail.
+    static void Apply_Texture_Stage_Color(unsigned stage, const RenderTextureStageChannel & channel,
+                                          bool uncached = false);
+    static void Apply_Texture_Stage_Alpha(unsigned stage, const RenderTextureStageChannel & channel,
+                                          bool uncached = false);
 
     static void Set_Ambient(const Vector3 & color);
     static void Set_Light_Environment(LightEnvironmentClass * light_env);

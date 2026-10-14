@@ -753,3 +753,86 @@ void Renderer::Set_Vertex_Material(const RenderVertexMaterialDescription & mater
     nativeMaterial.Power = material.power;
     DX8Wrapper::Set_DX8_Material(&nativeMaterial);
 }
+
+
+static D3DTEXTUREOP To_DX8_Texture_Operation(RenderTextureOperation operation)
+{
+    switch (operation)
+    {
+    case RENDER_TEXOP_DISABLE: return D3DTOP_DISABLE;
+    case RENDER_TEXOP_SELECT_ARG1: return D3DTOP_SELECTARG1;
+    case RENDER_TEXOP_SELECT_ARG2: return D3DTOP_SELECTARG2;
+    case RENDER_TEXOP_MODULATE: return D3DTOP_MODULATE;
+    case RENDER_TEXOP_MODULATE2X: return D3DTOP_MODULATE2X;
+    case RENDER_TEXOP_ADD: return D3DTOP_ADD;
+    case RENDER_TEXOP_ADD_SMOOTH: return D3DTOP_ADDSMOOTH;
+    case RENDER_TEXOP_SUBTRACT: return D3DTOP_SUBTRACT;
+    case RENDER_TEXOP_BLEND_TEXTURE_ALPHA: return D3DTOP_BLENDTEXTUREALPHA;
+    case RENDER_TEXOP_BLEND_CURRENT_ALPHA: return D3DTOP_BLENDCURRENTALPHA;
+    case RENDER_TEXOP_ADD_SIGNED: return D3DTOP_ADDSIGNED;
+    case RENDER_TEXOP_ADD_SIGNED2X: return D3DTOP_ADDSIGNED2X;
+    case RENDER_TEXOP_MODULATE_ALPHA_ADD_COLOR: return D3DTOP_MODULATEALPHA_ADDCOLOR;
+    case RENDER_TEXOP_BUMP_ENV_MAP: return D3DTOP_BUMPENVMAP;
+    case RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE: return D3DTOP_BUMPENVMAPLUMINANCE;
+    default:
+        WWASSERT(0);
+        return D3DTOP_DISABLE;
+    }
+}
+
+static DWORD To_DX8_Texture_Argument(RenderTextureArgument argument)
+{
+    switch (argument)
+    {
+    case RENDER_TEXARG_CURRENT: return D3DTA_CURRENT;
+    case RENDER_TEXARG_TEXTURE: return D3DTA_TEXTURE;
+    case RENDER_TEXARG_DIFFUSE: return D3DTA_DIFFUSE;
+    case RENDER_TEXARG_TEXTURE_FACTOR: return D3DTA_TFACTOR;
+    default:
+        WWASSERT(0);
+        return D3DTA_CURRENT;
+    }
+}
+
+static void Apply_DX8_Texture_Channel(
+    unsigned stage,
+    const RenderTextureStageChannel & channel,
+    D3DTEXTURESTAGESTATETYPE opState,
+    D3DTEXTURESTAGESTATETYPE arg1State,
+    D3DTEXTURESTAGESTATETYPE arg2State,
+    bool uncached)
+{
+    const D3DTEXTUREOP operation = To_DX8_Texture_Operation(channel.operation);
+    const DWORD arg1 = To_DX8_Texture_Argument(channel.argument1);
+    const DWORD arg2 = To_DX8_Texture_Argument(channel.argument2);
+
+    // The original shader modifies states in operation, arg1, arg2 order.
+    // Stage 2 on Voodoo3 intentionally bypasses DX8Wrapper's two-stage
+    // cache; preserve the direct calls for that legacy hardware only.
+    if (uncached)
+    {
+        DX8CALL(SetTextureStageState(stage, opState, operation));
+        DX8CALL(SetTextureStageState(stage, arg1State, arg1));
+        DX8CALL(SetTextureStageState(stage, arg2State, arg2));
+    }
+    else
+    {
+        DX8Wrapper::Set_DX8_Texture_Stage_State(stage, opState, operation);
+        DX8Wrapper::Set_DX8_Texture_Stage_State(stage, arg1State, arg1);
+        DX8Wrapper::Set_DX8_Texture_Stage_State(stage, arg2State, arg2);
+    }
+}
+
+void Renderer::Apply_Texture_Stage_Color(
+    unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+{
+    Apply_DX8_Texture_Channel(stage, channel, D3DTSS_COLOROP,
+                             D3DTSS_COLORARG1, D3DTSS_COLORARG2, uncached);
+}
+
+void Renderer::Apply_Texture_Stage_Alpha(
+    unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+{
+    Apply_DX8_Texture_Channel(stage, channel, D3DTSS_ALPHAOP,
+                             D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2, uncached);
+}

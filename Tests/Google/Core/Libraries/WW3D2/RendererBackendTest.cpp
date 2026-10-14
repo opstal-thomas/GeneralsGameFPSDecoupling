@@ -15,6 +15,31 @@
 // verifies the DX8 implementation and real device-loss behavior.
 #include "WW3D2/Renderer.h"
 
+TEST(RendererBackend, FixedFunctionTextureStageIsApiNeutral)
+{
+    const RenderTextureStageChannel disabled;
+    EXPECT_EQ(RENDER_TEXOP_DISABLE, disabled.operation);
+    EXPECT_EQ(RENDER_TEXARG_TEXTURE, disabled.argument1);
+    EXPECT_EQ(RENDER_TEXARG_CURRENT, disabled.argument2);
+
+    const RenderTextureStageChannel modulate(
+        RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+    EXPECT_EQ(RENDER_TEXOP_MODULATE, modulate.operation);
+    EXPECT_EQ(RENDER_TEXARG_DIFFUSE, modulate.argument2);
+
+    const RenderTextureStageChannel bump(
+        RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE,
+        RENDER_TEXARG_TEXTURE, RENDER_TEXARG_CURRENT);
+    EXPECT_NE(bump.operation, modulate.operation);
+    EXPECT_NE(RENDER_TEXOP_ADD_SIGNED2X, RENDER_TEXOP_ADD_SIGNED);
+    EXPECT_NE(RENDER_TEXARG_TEXTURE_FACTOR, RENDER_TEXARG_CURRENT);
+
+    static_assert(std::is_same_v<decltype(&Renderer::Apply_Texture_Stage_Color),
+        void (*)(unsigned, const RenderTextureStageChannel &, bool)>);
+    static_assert(std::is_same_v<decltype(&Renderer::Apply_Texture_Stage_Alpha),
+        void (*)(unsigned, const RenderTextureStageChannel &, bool)>);
+}
+
 TEST(RendererBackend, VertexMaterialDescriptionPreservesColorAndSpecularPower)
 {
     const RenderVertexMaterialDescription defaults;
