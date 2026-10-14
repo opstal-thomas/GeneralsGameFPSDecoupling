@@ -42,7 +42,7 @@ jobs:
 
   warp-render-probe:
     name: W3D DX12 WARP offscreen draw
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - name: Build and execute DX12 WARP geometry smoke probe
