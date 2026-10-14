@@ -36,6 +36,9 @@
 #include "GameClient/Display.h"
 #include "WW3D2/texture.h"
 #include "WW3D2/dx8indexbuffer.h"
+// Transitional dynamic vertex-buffer type and vertex layout definitions still
+// live with the DX8 wrapper; no device dispatch is done by this caller.
+#include "WW3D2/dx8wrapper.h"
 #include "WW3D2/Renderer.h"
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
