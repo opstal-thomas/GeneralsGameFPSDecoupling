@@ -602,6 +602,18 @@ texture/surface reference-counting model. This is backend presentation
 preparation only: a future DX12 backend may prefer operating-system cursors
 or a compositor rather than exposing D3D8 cursor surfaces.
 
+### Neutral texture replacement lifecycle
+
+The 2D, depth, cube and volume texture classes now implement a shared
+backend-neutral `Apply_New_Render_Texture` replacement interface. Their
+texture references are carried as opaque `RenderTextureHandle` values;
+the original background loader and other native compatibility callers
+still enter through `TextureBaseClass::Apply_New_Surface`, which converts
+the borrowed D3D8 pointer before dispatch. Resource replacement still
+releases the old reference, assigns the incoming one, and retains it.
+Format and mip description remain backend queries. This migrates the
+virtual resource replacement contract without changing loader order.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

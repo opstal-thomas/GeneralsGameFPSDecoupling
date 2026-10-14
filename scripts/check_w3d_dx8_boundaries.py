@@ -98,6 +98,8 @@ def main() -> int:
         r"\bIDirect3DBaseTexture8\s*\*\s*D3DTexture\b",
     ]))
     errors.extend(check(WW3D / "texture.cpp", [
+        r"\b(?:TextureClass|ZTextureClass|CubeTextureClass|VolumeTextureClass)::Apply_New_Surface\b",
+        r"\bd3d_texture\s*->\s*(?:AddRef|Release)\s*\(",
         r"\bPeek_D3D_Texture\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",
         r"\bD3DTexture\s*->\s*(?:GetPriority|SetPriority)\s*\(",
         r"\bPeek_D3D_(?:CubeTexture|VolumeTexture)\s*\(\s*\)\s*->\s*GetLevelDesc\s*\(",

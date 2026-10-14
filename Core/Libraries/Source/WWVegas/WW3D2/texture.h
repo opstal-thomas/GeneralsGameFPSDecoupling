@@ -182,7 +182,11 @@ public:
 	unsigned Get_Reduction() const;
 
 	// Background texture loader will call this when texture has been loaded
-	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false)=0;	// If the parameter is true, the texture will be flagged as initialised
+	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false);
+	// Native compatibility entrypoint above forwards to the backend-neutral
+	// resource replacement hook. Both use borrowed input with one retained ref.
+	virtual void Apply_New_Render_Texture(RenderTextureHandle texture, bool initialized,
+		bool disable_auto_invalidation = false)=0;	// If the parameter is true, the texture will be flagged as initialised
 
 	MipCountType MipLevelCount;
 
@@ -331,7 +335,8 @@ public:
 	virtual void Init() override;
 
 	// Background texture loader will call this when texture has been loaded
-	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
+	virtual void Apply_New_Render_Texture(RenderTextureHandle texture, bool initialized,
+		bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
 
 	// Get the surface of one of the mipmap levels (defaults to highest-resolution one)
 	SurfaceClass *Get_Surface_Level(unsigned int level = 0);
@@ -376,7 +381,8 @@ public:
 	virtual void Init() override {}
 
 	// Background texture loader will call this when texture has been loaded
-	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
+	virtual void Apply_New_Render_Texture(RenderTextureHandle texture, bool initialized,
+		bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
 
 	virtual void Apply(unsigned int stage) override;
 
@@ -425,7 +431,8 @@ public:
 
 	CubeTextureClass(IDirect3DBaseTexture8* d3d_texture);
 
-	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
+	virtual void Apply_New_Render_Texture(RenderTextureHandle texture, bool initialized,
+		bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
 
 	virtual TexAssetType Get_Asset_Type() const override { return TEX_CUBEMAP; }
 
@@ -471,7 +478,8 @@ public:
 
 	VolumeTextureClass(IDirect3DBaseTexture8* d3d_texture);
 
-	virtual void Apply_New_Surface(IDirect3DBaseTexture8* tex, bool initialized, bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
+	virtual void Apply_New_Render_Texture(RenderTextureHandle texture, bool initialized,
+		bool disable_auto_invalidation = false) override;	// If the parameter is true, the texture will be flagged as initialised
 
 	virtual TexAssetType Get_Asset_Type() const override { return TEX_VOLUME; }
 

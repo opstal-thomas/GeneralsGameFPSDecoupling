@@ -248,6 +248,15 @@ void TextureBaseClass::Invalidate()
 	LastAccessed=WW3D::Get_Sync_Time();*/
 }
 
+// Native texture-loader callers retain their historical signature; WW3D
+// resource classes only receive the backend-neutral ownership handle.
+void TextureBaseClass::Apply_New_Surface(IDirect3DBaseTexture8 * texture,
+	bool initialized, bool disable_auto_invalidation)
+{
+	Apply_New_Render_Texture(reinterpret_cast<RenderTextureHandle>(texture),
+		initialized, disable_auto_invalidation);
+}
+
 //**********************************************************************************************
 //! Returns a pointer to the d3d texture
 /*!
@@ -882,24 +891,24 @@ void TextureClass::Init()
 //! Apply new surface to texture
 /*!
 */
-void TextureClass::Apply_New_Surface
+void TextureClass::Apply_New_Render_Texture
 (
-	IDirect3DBaseTexture8* d3d_texture,
+	RenderTextureHandle texture,
 	bool initialized,
 	bool disable_auto_invalidation
 )
 {
-	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
+	RenderTextureHandle previous = Peek_Render_Texture();
 
-	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
+	if (previous) Renderer::Release_Texture(previous);
 
-	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
-	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
+	Poke_Render_Texture(texture);
+	Renderer::Retain_Texture(texture);
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
 
-	WWASSERT(d3d_texture);
+	WWASSERT(texture);
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_2D(
 		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), 0, desc);
@@ -1244,24 +1253,24 @@ void ZTextureClass::Apply(unsigned int stage)
 //! Apply new surface to texture
 /*! KM
 */
-void ZTextureClass::Apply_New_Surface
+void ZTextureClass::Apply_New_Render_Texture
 (
-	IDirect3DBaseTexture8* d3d_texture,
+	RenderTextureHandle texture,
 	bool initialized,
 	bool disable_auto_invalidation
 )
 {
-	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
+	RenderTextureHandle previous = Peek_Render_Texture();
 
-	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
+	if (previous) Renderer::Release_Texture(previous);
 
-	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
-	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
+	Poke_Render_Texture(texture);
+	Renderer::Retain_Texture(texture);
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
 
-	WWASSERT(Peek_D3D_Texture());
+	WWASSERT(texture);
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Depth_Texture_Level_2D(
 		reinterpret_cast<RenderTexture2DHandle>(Peek_Render_Texture()), 0, desc);
@@ -1541,24 +1550,24 @@ CubeTextureClass::CubeTextureClass(IDirect3DBaseTexture8* d3d_texture)
 //! Apply new surface to texture
 /*!
 */
-void CubeTextureClass::Apply_New_Surface
+void CubeTextureClass::Apply_New_Render_Texture
 (
-	IDirect3DBaseTexture8* d3d_texture,
+	RenderTextureHandle texture,
 	bool initialized,
 	bool disable_auto_invalidation
 )
 {
-	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
+	RenderTextureHandle previous = Peek_Render_Texture();
 
-	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
+	if (previous) Renderer::Release_Texture(previous);
 
-	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
-	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
+	Poke_Render_Texture(texture);
+	Renderer::Retain_Texture(texture);
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
 
-	WWASSERT(d3d_texture);
+	WWASSERT(texture);
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_Cube(
 		reinterpret_cast<RenderTextureCubeHandle>(Peek_Render_Texture()), 0, desc);
@@ -1818,24 +1827,24 @@ CubeTextureClass::CubeTextureClass(IDirect3DBaseTexture8* d3d_texture)
 //! Apply new surface to texture
 /*!
 */
-void VolumeTextureClass::Apply_New_Surface
+void VolumeTextureClass::Apply_New_Render_Texture
 (
-	IDirect3DBaseTexture8* d3d_texture,
+	RenderTextureHandle texture,
 	bool initialized,
 	bool disable_auto_invalidation
 )
 {
-	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
+	RenderTextureHandle previous = Peek_Render_Texture();
 
-	if (d3d_tex) Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(d3d_tex));
+	if (previous) Renderer::Release_Texture(previous);
 
-	Poke_Render_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
-	Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(d3d_texture));
+	Poke_Render_Texture(texture);
+	Renderer::Retain_Texture(texture);
 
 	if (initialized) Initialized=true;
 	if (disable_auto_invalidation) InactivationTime = 0;
 
-	WWASSERT(d3d_texture);
+	WWASSERT(texture);
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_Volume(
 		reinterpret_cast<RenderTextureVolumeHandle>(Peek_Render_Texture()), 0, desc);
