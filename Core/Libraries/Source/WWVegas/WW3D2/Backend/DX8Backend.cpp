@@ -747,6 +747,16 @@ void Renderer::Draw_Point_List(unsigned firstVertex, unsigned pointCount)
         device->DrawPrimitive(D3DPT_POINTLIST, firstVertex, pointCount);
 }
 
+// DX8 floating-point point-sprite states are bit-cast into DWORD slots.
+// Keep the original value bits without introducing a platform type upstream.
+static DWORD Point_Sprite_Float_Bits(float value)
+{
+    DWORD bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "Expected 32-bit float render state");
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
 void Renderer::Set_Point_Sprite_Rendering(bool enabled, float size, float minSize, float maxSize)
 {
     DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSPRITEENABLE, enabled ? TRUE : FALSE);
@@ -754,12 +764,12 @@ void Renderer::Set_Point_Sprite_Rendering(bool enabled, float size, float minSiz
     if (!enabled)
         return;
 
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE, FtoDW(size));
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MIN, FtoDW(minSize));
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MAX, FtoDW(maxSize));
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_A, FtoDW(0.00f));
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_B, FtoDW(0.00f));
-    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_C, FtoDW(1.00f));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE, Point_Sprite_Float_Bits(size));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MIN, Point_Sprite_Float_Bits(minSize));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSIZE_MAX, Point_Sprite_Float_Bits(maxSize));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_A, Point_Sprite_Float_Bits(0.00f));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_B, Point_Sprite_Float_Bits(0.00f));
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_POINTSCALE_C, Point_Sprite_Float_Bits(1.00f));
 }
 
 void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex)
