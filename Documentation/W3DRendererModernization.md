@@ -36,6 +36,24 @@ GameEngine / GameEngineDevice (drawables, views, terrain, UI)
                     Direct3D 8
 ```
 
+### DX12 vertex/pixel shader smoke compilation
+
+A minimal W3D unlit vertex/pixel shader is available in
+`WW3D2/Backend/DX12/W3DLegacyUnlit.hlsl`. It takes a world-view-projection
+matrix, two texture/sampler pairs, interpolated vertex diffuse color and
+the packed combiner key; it invokes the reusable texture combiner and
+performs the legacy alpha-test comparison. A dedicated Windows Actions
+workflow compiles its VS/PS entrypoints for Shader Model 5.1 as a first
+DX12 shader compatibility check.
+
+This shader **does not run in the game yet** and is not claimed as pixel-
+identical to the DX8 renderer. Lighting, specular, fog, bump maps, texture
+coordinate generation, and multisample/sRGB conventions still need
+integration. The DX12 device, PSO, descriptor heap, swapchain and command
+recording path are next. No separately shipped shader files are required
+at this stage; compiled shader bytecode will be embedded into the
+executable in the future.
+
 ### DX12 shader reference and permutation identity
 
 The backend-neutral texture operation and argument IDs are now encoded into

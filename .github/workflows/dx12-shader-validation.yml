@@ -1,0 +1,41 @@
+name: DX12 W3D Shader Validation
+
+on:
+  push:
+    branches:
+      - feature/w3d-renderer-backend-foundation
+    paths:
+      - 'Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/**'
+      - '.github/workflows/dx12-shader-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-shaders:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile W3D DX12 unlit shader for Shader Model 5.1
+        shell: pwsh
+        run: |
+          $sdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+          if (-not (Test-Path $sdkBin)) { throw "Windows SDK bin directory not found: $sdkBin" }
+          $compiler = Get-ChildItem -Path $sdkBin -Filter fxc.exe -Recurse -File |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $compiler) { throw "Windows SDK fxc.exe shader compiler not found" }
+
+          $shader = "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/W3DLegacyUnlit.hlsl"
+          $outVS = Join-Path $env:RUNNER_TEMP "W3DLegacyUnlit.vs.cso"
+          $outPS = Join-Path $env:RUNNER_TEMP "W3DLegacyUnlit.ps.cso"
+
+          & $compiler.FullName /nologo /T vs_5_1 /E W3D_VS /Fo $outVS $shader
+          if ($LASTEXITCODE -ne 0) { throw "DX12 vertex shader compilation failed" }
+          & $compiler.FullName /nologo /T ps_5_1 /E W3D_PS /Fo $outPS $shader
+          if ($LASTEXITCODE -ne 0) { throw "DX12 pixel shader compilation failed" }
+
+          if ((Get-Item $outVS).Length -eq 0 -or (Get-Item $outPS).Length -eq 0) {
+            throw "DX12 shader compilation produced empty bytecode"
+          }
+          Write-Host "W3D DX12 reference VS and PS compiled as Shader Model 5.1"
