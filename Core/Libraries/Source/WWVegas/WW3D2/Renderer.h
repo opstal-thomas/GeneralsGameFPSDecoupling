@@ -277,11 +277,12 @@ struct RenderTextureVolumeDescription
 // platform-native graphics types and can also report an existing surface.
 struct RenderSurfaceDescription
 {
-    RenderSurfaceDescription() : width(0), height(0), pixelFormat(0) {}
+    RenderSurfaceDescription() : width(0), height(0), pixelFormat(0), multisampled(false) {}
 
     unsigned width;
     unsigned height;
     unsigned pixelFormat;
+    bool multisampled; // The offscreen screen-filter target must match depth sampling.
 
     bool Is_Valid() const { return width > 0 && height > 0; }
 };
@@ -735,6 +736,16 @@ public:
     // Returns a newly retained surface level. Caller must Release_Surface().
     static RenderSurfaceHandle Acquire_Texture_Surface_Level(
         RenderTexture2DHandle texture, unsigned mipLevel);
+
+    // The filter pass preserves a one-mip DEFAULT-pool target with the
+    // exact active backbuffer format. Color and depth acquisition return
+    // retained references; callers release them via Release_Surface().
+    static RenderTexture2DHandle Create_Offscreen_Texture(const RenderSurfaceDescription & description);
+    static RenderSurfaceHandle Acquire_Current_Color_Surface();
+    static RenderSurfaceHandle Acquire_Current_Depth_Surface();
+    // Target surfaces are borrowed. False means unsupported sample/format
+    // pairing or device failure, without changing the caller's ownership.
+    static bool Set_Render_Target_Surfaces(RenderSurfaceHandle color, RenderSurfaceHandle depth);
     // Copy between compatible texture allocations, preserving DX8's managed
     // to default memory-pool UpdateTexture behavior during transition.
     static void Update_Texture(RenderTextureHandle source, RenderTextureHandle destination);

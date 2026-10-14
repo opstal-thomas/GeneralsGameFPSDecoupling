@@ -2627,7 +2627,7 @@ void W3DShaderManager::init()
 {
 	int i,j;
 
-	D3DSURFACE_DESC desc;
+	RenderSurfaceDescription desc;
 	// For now, check & see if we are gf3 or higher on the food chain.
 
 	ChipsetType res=DC_UNKNOWN;
@@ -2635,39 +2635,46 @@ void W3DShaderManager::init()
 	{
 		m_currentChipset = res;	//cache the current chipset.
 
-		//Some of our effects require an offscreen render target, so try creating it here.
-		HRESULT hr=DX8Wrapper::_Get_D3D_Device8()->GetRenderTarget(&m_oldRenderSurface);
-
-		if (hr != S_OK || !m_oldRenderSurface)
+		// Keep the legacy RTT fallback on unsupported MSAA/target combinations.
+		m_oldRenderSurface = reinterpret_cast<IDirect3DSurface8 *>(
+			Renderer::Acquire_Current_Color_Surface());
+		if (!m_oldRenderSurface)
 			return;
 
-		m_oldRenderSurface->GetDesc(&desc);
-		
-		// TheSuperHackers @bugfix Redirecting rendering to a non-multisampled texture
-		// while using a multisampled depth buffer is an API violation in DX8.
-		if (desc.MultiSampleType == D3DMULTISAMPLE_NONE)
+		Renderer::Describe_Surface(
+			reinterpret_cast<RenderSurfaceHandle>(m_oldRenderSurface), desc);
+
+		// Non-MSAA color textures cannot be bound with an MSAA depth surface in DX8.
+		if (!desc.multisampled)
 		{
-			hr=DX8Wrapper::_Get_D3D_Device8()->CreateTexture(desc.Width,desc.Height,1,D3DUSAGE_RENDERTARGET,desc.Format,D3DPOOL_DEFAULT,&m_renderTexture);
+			m_renderTexture = reinterpret_cast<IDirect3DTexture8 *>(
+				Renderer::Create_Offscreen_Texture(desc));
 		}
 		else
 		{
-			// Force failure path to avoid MSAA mismatch
-			hr = E_FAIL;
+			m_renderTexture = nullptr;
 		}
 
-		if (hr != S_OK)
+		if (!m_renderTexture)
 		{
 			SAFE_RELEASE(m_oldRenderSurface);
 			m_renderTexture = nullptr;
-		} else {
-			hr = m_renderTexture->GetSurfaceLevel(0, &m_newRenderSurface);
-			if (hr != S_OK)
+		}
+		else
+		{
+			m_newRenderSurface = reinterpret_cast<IDirect3DSurface8 *>(
+				Renderer::Acquire_Texture_Surface_Level(
+					reinterpret_cast<RenderTexture2DHandle>(m_renderTexture), 0));
+			if (!m_newRenderSurface)
 			{
 				SAFE_RELEASE(m_renderTexture);
 				m_newRenderSurface = nullptr;
-			}	else {
-				hr = DX8Wrapper::_Get_D3D_Device8()->GetDepthStencilSurface(&m_oldDepthSurface);
-				if (hr != S_OK)
+			}
+			else
+			{
+				m_oldDepthSurface = reinterpret_cast<IDirect3DSurface8 *>(
+					Renderer::Acquire_Current_Depth_Surface());
+				if (!m_oldDepthSurface)
 				{
 					SAFE_RELEASE(m_newRenderSurface);
 					SAFE_RELEASE(m_renderTexture);
@@ -2869,12 +2876,14 @@ void W3DShaderManager::startRenderToTexture()
 	DEBUG_ASSERTCRASH(!m_renderingToTexture, ("Already rendering to texture - cannot nest calls."));
 
 	if (m_renderingToTexture || m_newRenderSurface==nullptr || m_oldDepthSurface==nullptr) return;
-	HRESULT hr = DX8Wrapper::_Get_D3D_Device8()->SetRenderTarget(m_newRenderSurface,m_oldDepthSurface);
+	const bool targetBound = Renderer::Set_Render_Target_Surfaces(
+		reinterpret_cast<RenderSurfaceHandle>(m_newRenderSurface),
+		reinterpret_cast<RenderSurfaceHandle>(m_oldDepthSurface));
 
 	// TheSuperHackers @bugfix If SetRenderTarget fails (e.g. due to MSAA forced by driver
 	// profile causing a depth buffer mismatch that D3DSURFACE_DESC doesn't report), permanently
 	// disable RTT to prevent repeated failures and accidental backbuffer clears.
-	if (hr != S_OK)
+	if (!targetBound)
 	{
 		// Permanently disable RTT
 		SAFE_RELEASE(m_newRenderSurface);
@@ -2918,9 +2927,11 @@ IDirect3DTexture8 *W3DShaderManager::endRenderToTexture()
 {
 	DEBUG_ASSERTCRASH(m_renderingToTexture, ("Not rendering to texture."));
 	if (!m_renderingToTexture) return nullptr;
-	HRESULT hr = DX8Wrapper::_Get_D3D_Device8()->SetRenderTarget(m_oldRenderSurface,m_oldDepthSurface);	//restore original render target
-	DEBUG_ASSERTCRASH(hr==S_OK, ("Set target failed unexpectedly."));
-	if (hr == S_OK)
+	const bool restored = Renderer::Set_Render_Target_Surfaces(
+		reinterpret_cast<RenderSurfaceHandle>(m_oldRenderSurface),
+		reinterpret_cast<RenderSurfaceHandle>(m_oldDepthSurface));
+	DEBUG_ASSERTCRASH(restored, ("Set target failed unexpectedly."));
+	if (restored)
 	{
 		//assume render target texture will be in stage 0.  Most hardware has "conditional" support for
 		//non-power-of-2 textures so we must force some required states:

@@ -467,7 +467,10 @@ coordinate descriptions to `Renderer`; all 268 direct texture-stage state
 writes previously in `W3DShaderManager.cpp` now belong to the DX8 backend.
 The original state-write order and its cache remain unchanged. Stage
 texture transform operations now use the neutral indexed transform API;
-render-target ownership and native pixel shader handles remain DX8-dependent.
+render-target device operations are now routed through the neutral offscreen-target
+API, preserving the original one-mip allocation and MSAA failure behavior.
+Surface and texture ownership in the shader-manager class, and the native
+pixel shader handles, still require decoupling.
 
 **Outstanding blockers:** `RenderStateStruct` still embeds D3D8 light and
 matrix types; dynamic buffers and polygon renderers are still legacy-owned;

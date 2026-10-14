@@ -742,6 +742,49 @@ unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
     return reinterpret_cast<IDirect3DBaseTexture8 *>(texture)->GetLevelCount();
 }
 
+RenderTexture2DHandle Renderer::Create_Offscreen_Texture(const RenderSurfaceDescription & description)
+{
+    // Preserve the screen-filter's original exact CreateTexture parameters.
+    // D3DXCreateTexture can negotiate formats, so do not use it for this RTT.
+    if (!description.Is_Valid() || description.multisampled)
+        return nullptr;
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return nullptr;
+    IDirect3DTexture8 * texture = nullptr;
+    const HRESULT result = device->CreateTexture(description.width, description.height,
+        1, D3DUSAGE_RENDERTARGET,
+        WW3DFormat_To_D3DFormat(static_cast<WW3DFormat>(description.pixelFormat)),
+        D3DPOOL_DEFAULT, &texture);
+    return result == S_OK ? reinterpret_cast<RenderTexture2DHandle>(texture) : nullptr;
+}
+
+RenderSurfaceHandle Renderer::Acquire_Current_Color_Surface()
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    IDirect3DSurface8 * surface = nullptr;
+    if (!device || device->GetRenderTarget(&surface) != S_OK)
+        return nullptr;
+    return reinterpret_cast<RenderSurfaceHandle>(surface);
+}
+
+RenderSurfaceHandle Renderer::Acquire_Current_Depth_Surface()
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    IDirect3DSurface8 * surface = nullptr;
+    if (!device || device->GetDepthStencilSurface(&surface) != S_OK)
+        return nullptr;
+    return reinterpret_cast<RenderSurfaceHandle>(surface);
+}
+
+bool Renderer::Set_Render_Target_Surfaces(RenderSurfaceHandle color, RenderSurfaceHandle depth)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    return device && device->SetRenderTarget(
+        reinterpret_cast<IDirect3DSurface8 *>(color),
+        reinterpret_cast<IDirect3DSurface8 *>(depth)) == S_OK;
+}
+
 RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level(
     RenderTexture2DHandle texture, unsigned mipLevel)
 {
@@ -914,6 +957,7 @@ void Renderer::Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescri
     description.pixelFormat = static_cast<unsigned>(D3DFormat_To_WW3DFormat(nativeDescription.Format));
     description.width = nativeDescription.Width;
     description.height = nativeDescription.Height;
+    description.multisampled = nativeDescription.MultiSampleType != D3DMULTISAMPLE_NONE;
 }
 
 void Renderer::Retain_Surface(RenderSurfaceHandle surface)
