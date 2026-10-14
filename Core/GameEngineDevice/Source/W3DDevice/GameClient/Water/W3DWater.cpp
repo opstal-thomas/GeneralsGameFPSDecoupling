@@ -229,8 +229,8 @@ void WaterRenderObjClass::setupJbaWaterShader()
 	if (!m_riverAlphaEdge->Is_Initialized())
 		m_riverAlphaEdge->Init();
 	DX8Wrapper::_Get_D3D_Device8()->SetTexture(3,m_riverAlphaEdge->Peek_D3D_Texture());
-	DX8Wrapper::Set_DX8_Texture_Stage_State(3,  D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-	DX8Wrapper::Set_DX8_Texture_Stage_State(3,  D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+	Renderer::Set_Texture_Address(3, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
+	Renderer::Set_Texture_Address(3, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(0,  D3DTSS_TEXCOORDINDEX, 0);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(1,  D3DTSS_TEXCOORDINDEX, 0);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(3,  D3DTSS_TEXCOORDINDEX, 1);
@@ -246,14 +246,14 @@ void WaterRenderObjClass::setupJbaWaterShader()
 			m_waterNoiseTexture->Init();
 		DX8Wrapper::_Get_D3D_Device8()->SetTexture(2,m_waterNoiseTexture->Peek_D3D_Texture());
 
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1,  D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1,  D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+		Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
+		Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 
 		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION);
 		// Two output coordinates are used.
 		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT2);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+		Renderer::Set_Texture_Address(2, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
+		Renderer::Set_Texture_Address(2, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 
 		D3DXMATRIX curView;
 		DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, curView);
@@ -1643,8 +1643,8 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 				inv *=clipMatrix;
 
 				// Change texture wrapping mode to 'clamp' for texture stage 1
-				DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ADDRESSU, D3DTADDRESS_CLAMP);
-				DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ADDRESSV, D3DTADDRESS_CLAMP);
+				Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
+				Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
 
 				// Use CameraSpace vertices as input to matrix and use texture wrap mode from stage 1
 				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION|1);
@@ -1655,8 +1655,8 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 				DX8Wrapper::_Set_DX8_Transform(D3DTS_TEXTURE1, inv);
 
 				// Disable bilinear filtering
-				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_POINT);
-				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_POINT);
+				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MIN_FILTER, RENDER_SAMPLER_POINT);
+				Renderer::Set_Texture_Filter(1, RENDER_SAMPLER_MAG_FILTER, RENDER_SAMPLER_POINT);
 
 				// Pass stage 0 texture data untouched(by modulating with white)
 				DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_COLORARG1, D3DTA_TEXTURE );	//stage 1 texture
@@ -1669,7 +1669,7 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 
 				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF,0x00);
 				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAFUNC,D3DCMP_NOTEQUAL);	//pass pixels who's alpha is not zero
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE, true);	//test pixels if transparent(clipped) before rendering.
+				Renderer::Set_Alpha_Test_Enabled(true);	//test pixels if transparent(clipped) before rendering.
 
 				// Set clipping texture
 				m_alphaClippingTexture->Set_U_Addr_Mode(TextureClass::TEXTURE_ADDRESS_CLAMP);
@@ -1722,7 +1722,7 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 
 				//disable texture coordinate generation
 				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHATESTENABLE, false);	//disable alpha testing
+				Renderer::Set_Alpha_Test_Enabled(false);	//disable alpha testing
 			#endif
 
 				ShaderClass::Invert_Backface_Culling(false);	//return culling back to normal
@@ -2930,7 +2930,7 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 	//In additive blending we need to use the alpha at the edges of river to darken
 	//rgb instead.
 	if (TheWaterTransparency->m_additiveBlend)
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA );
+		Renderer::Set_Source_Blend(RENDER_BLEND_SRC_ALPHA);
 
 	if (m_riverWaterPixelShader) DX8Wrapper::_Get_D3D_Device8()->SetPixelShader(m_riverWaterPixelShader);
  	DWORD cull;
@@ -2951,7 +2951,7 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 
 	//restore blend mode to what W3D expects.
 	if (TheWaterTransparency->m_additiveBlend)
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, D3DBLEND_ONE );
+		Renderer::Set_Source_Blend(RENDER_BLEND_ONE);
 
 	DX8Wrapper::_Get_D3D_Device8()->SetRenderState(D3DRS_CULLMODE, cull);
 
@@ -3023,14 +3023,14 @@ void WaterRenderObjClass::setupFlatWaterShader()
 
 		DX8Wrapper::_Get_D3D_Device8()->SetTexture(2,m_waterNoiseTexture->Peek_D3D_Texture());
 
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1,  D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1,  D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+		Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
+		Renderer::Set_Texture_Address(1, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 
 		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION);
 		// Two output coordinates are used.
 		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT2);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_ADDRESSV, D3DTADDRESS_WRAP);
+		Renderer::Set_Texture_Address(2, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_REPEAT);
+		Renderer::Set_Texture_Address(2, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_REPEAT);
 
 		D3DXMATRIX curView;
 		DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, curView);
@@ -3292,9 +3292,9 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 
 	//If video card supports it and it's enabled, feather the water edge using destination alpha
 	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8 && TheGlobalData->m_showSoftWaterEdge && TheWaterTransparency->m_transparentWaterDepth !=0)
-	{		DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, D3DBLEND_DESTALPHA );
+	{		Renderer::Set_Source_Blend(RENDER_BLEND_DEST_ALPHA);
 			if (!TheWaterTransparency->m_additiveBlend)
-				DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, D3DBLEND_INVDESTALPHA );
+				Renderer::Set_Destination_Blend(RENDER_BLEND_INV_DEST_ALPHA);
 	}
 
 
@@ -3339,13 +3339,13 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 	if (m_riverWaterPixelShader) DX8Wrapper::_Get_D3D_Device8()->SetPixelShader(0);
 	//Restore alpha blend to default values since we may have changed them to feather edges.
 	if (!TheWaterTransparency->m_additiveBlend)
-	{	DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA );
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA );
+	{	Renderer::Set_Source_Blend(RENDER_BLEND_SRC_ALPHA);
+		Renderer::Set_Destination_Blend(RENDER_BLEND_INV_SRC_ALPHA);
 	}
 	else
 	{
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND, D3DBLEND_ONE );
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, D3DBLEND_ONE );
+		Renderer::Set_Source_Blend(RENDER_BLEND_ONE);
+		Renderer::Set_Destination_Blend(RENDER_BLEND_ONE);
 	}
 
 	if (TheTerrainRenderObject->getShroud())
