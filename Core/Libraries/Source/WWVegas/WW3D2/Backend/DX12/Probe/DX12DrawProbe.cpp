@@ -4,6 +4,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <d3d12.h>
+#include <d3d12sdklayers.h>
 #include <dxgi1_4.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -15,6 +16,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
@@ -123,8 +125,38 @@ struct alignas(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) Constants {
 };
 static_assert(sizeof(Constants) == 256, "CBV layout/alignment");
 
+void PrintDiagnostics(ID3D12Device * device)
+{
+    const HRESULT removed = device->GetDeviceRemovedReason();
+    std::cerr << "DX12 GetDeviceRemovedReason: 0x"
+              << std::hex << static_cast<unsigned>(removed) << std::dec << '\n';
+    ComPtr<ID3D12InfoQueue> info;
+    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&info)))) {
+        std::cerr << "D3D12 debug information queue unavailable\n";
+        return;
+    }
+    const UINT64 count = info->GetNumStoredMessagesAllowedByRetrievalFilter();
+    const UINT64 start = count > 45 ? count - 45 : 0;
+    for (UINT64 i = start; i < count; ++i) {
+        SIZE_T size = 0;
+        if (FAILED(info->GetMessage(i, nullptr, &size)) || !size) continue;
+        std::vector<BYTE> storage(size);
+        auto * message = reinterpret_cast<D3D12_MESSAGE *>(storage.data());
+        if (SUCCEEDED(info->GetMessage(i, message, &size)))
+            std::cerr << "DX12 debug [" << message->ID << "]: "
+                      << message->pDescription << '\n';
+    }
+}
+
 void Run(const wchar_t * shader)
 {
+    ComPtr<ID3D12Debug> debug;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
+        debug->EnableDebugLayer();
+        std::cout << "D3D12 debug layer enabled\n";
+    } else {
+        std::cout << "D3D12 debug layer is not installed\n";
+    }
     // WARP gives a functional software D3D12 device on Windows CI.
     ComPtr<IDXGIFactory4> factory;
     Check(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)), "CreateDXGIFactory2");
@@ -366,12 +398,18 @@ void Run(const wchar_t * shader)
     list->CopyTextureRegion(&readDst, 0, 0, 0, &renderSrc, nullptr);
     Check(list->Close(), "Close command list");
 
-    ID3D12CommandList * submitted[] = {list.Get()};
-    queue->ExecuteCommandLists(1, submitted);
+    // Create synchronization objects before submitting GPU commands so
+    // device removal can be reported with the debug messages from the draw.
     ComPtr<ID3D12Fence> fence;
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE,
           IID_PPV_ARGS(&fence)), "CreateFence");
-    Check(queue->Signal(fence.Get(), 1), "Queue Signal");
+    ID3D12CommandList * submitted[] = {list.Get()};
+    queue->ExecuteCommandLists(1, submitted);
+    HRESULT signalResult = queue->Signal(fence.Get(), 1);
+    if (FAILED(signalResult)) {
+        PrintDiagnostics(device.Get());
+        Check(signalResult, "Queue Signal");
+    }
     if (fence->GetCompletedValue() < 1) {
         HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (!event) throw std::runtime_error("CreateEventW failed");
@@ -382,8 +420,16 @@ void Run(const wchar_t * shader)
         }
         const DWORD result = WaitForSingleObject(event, 30000);
         CloseHandle(event);
-        if (result != WAIT_OBJECT_0)
+        if (result != WAIT_OBJECT_0) {
+            PrintDiagnostics(device.Get());
             throw std::runtime_error("WARP queue timeout");
+        }
+    }
+
+    const HRESULT gpuStatus = device->GetDeviceRemovedReason();
+    if (FAILED(gpuStatus)) {
+        PrintDiagnostics(device.Get());
+        Check(gpuStatus, "DX12 GPU draw");
     }
 
     const D3D12_RANGE range = {0, SIZE_T(Pitch) * Height};
