@@ -66,6 +66,50 @@ int TextureLoader::TextureInactiveOverrideTime = 0;
 
 #define USE_MANAGED_TEXTURES
 
+// Transitional DX8 loader bridge. Texture allocation and pool selection
+// belong to Renderer; mip/face access still consumes COM resources until
+// that separate part of the loader is migrated.
+static IDirect3DTexture8 * Create_Loader_Texture_2D(
+    unsigned width, unsigned height, WW3DFormat format, MipCountType mipLevels,
+    RenderTextureMemory memory = RENDER_TEXTURE_MANAGED)
+{
+    RenderTexture2DDescription description;
+    description.width = width;
+    description.height = height;
+    description.pixelFormat = static_cast<unsigned>(format);
+    description.mipLevels = static_cast<unsigned>(mipLevels);
+    description.memory = memory;
+    return reinterpret_cast<IDirect3DTexture8 *>(Renderer::Create_Texture_2D(description));
+}
+
+static IDirect3DCubeTexture8 * Create_Loader_Texture_Cube(
+    unsigned width, unsigned height, WW3DFormat format, MipCountType mipLevels,
+    RenderTextureMemory memory = RENDER_TEXTURE_MANAGED)
+{
+    // The legacy DX8 cube factory uses width as the edge length.
+    (void)height;
+    RenderTextureCubeDescription description;
+    description.edgeLength = width;
+    description.pixelFormat = static_cast<unsigned>(format);
+    description.mipLevels = static_cast<unsigned>(mipLevels);
+    description.memory = memory;
+    return reinterpret_cast<IDirect3DCubeTexture8 *>(Renderer::Create_Texture_Cube(description));
+}
+
+static IDirect3DVolumeTexture8 * Create_Loader_Texture_Volume(
+    unsigned width, unsigned height, unsigned depth, WW3DFormat format,
+    MipCountType mipLevels, RenderTextureMemory memory = RENDER_TEXTURE_MANAGED)
+{
+    RenderTextureVolumeDescription description;
+    description.width = width;
+    description.height = height;
+    description.depth = depth;
+    description.pixelFormat = static_cast<unsigned>(format);
+    description.mipLevels = static_cast<unsigned>(mipLevels);
+    description.memory = memory;
+    return reinterpret_cast<IDirect3DVolumeTexture8 *>(Renderer::Create_Texture_Volume(description));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // TextureLoadTaskListClass implementation
@@ -261,7 +305,7 @@ IDirect3DTexture8* Load_Compressed_Texture(
 	// Note that the nearest valid format could be anything, even uncompressed.
 	if (dest_format==WW3D_FORMAT_UNKNOWN) dest_format=Get_Valid_Texture_Format(dds_file.Get_Format(),true);
 
-	IDirect3DTexture8* d3d_texture = DX8Wrapper::_Create_DX8_Texture
+	IDirect3DTexture8* d3d_texture = Create_Loader_Texture_2D
 	(
 		width,
 		height,
@@ -440,15 +484,15 @@ IDirect3DTexture8* TextureLoader::Load_Thumbnail(const StringClass& filename, co
 		WWASSERT(dest_format==texture_format);
 	}
 
-	IDirect3DTexture8* sysmem_texture = DX8Wrapper::_Create_DX8_Texture(
+	IDirect3DTexture8* sysmem_texture = Create_Loader_Texture_2D(
 		thumb->Get_Width(),
 		thumb->Get_Height(),
 		dest_format,
 		MIP_LEVELS_ALL,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED);
+		RENDER_TEXTURE_MANAGED);
 #else
-		D3DPOOL_SYSTEMMEM);
+		RENDER_TEXTURE_SYSTEM);
 #endif
 
 	unsigned level=0;
@@ -500,12 +544,12 @@ IDirect3DTexture8* TextureLoader::Load_Thumbnail(const StringClass& filename, co
 #ifdef USE_MANAGED_TEXTURES
 	return sysmem_texture;
 #else
-	IDirect3DTexture8* d3d_texture = DX8Wrapper::_Create_DX8_Texture(
+	IDirect3DTexture8* d3d_texture = Create_Loader_Texture_2D(
 		thumb->Get_Width(),
 		thumb->Get_Height(),
 		dest_format,
 		TextureBaseClass::MIP_LEVELS_ALL,
-		D3DPOOL_DEFAULT);
+		RENDER_TEXTURE_DEFAULT);
 	DX8CALL(UpdateTexture(sysmem_texture,d3d_texture));
 	sysmem_texture->Release();
 
@@ -599,20 +643,21 @@ IDirect3DSurface8* TextureLoader::Load_Surface_Immediate(
 
 	unsigned src_pitch=src_width*src_bpp;
 
-	IDirect3DSurface8* d3d_surface = DX8Wrapper::_Create_DX8_Surface(width,height,dest_format);
+	RenderSurfaceDescription surfaceDescription;
+	surfaceDescription.width = width;
+	surfaceDescription.height = height;
+	surfaceDescription.pixelFormat = static_cast<unsigned>(dest_format);
+	RenderSurfaceHandle surface = Renderer::Create_Surface(surfaceDescription);
+	IDirect3DSurface8* d3d_surface = reinterpret_cast<IDirect3DSurface8 *>(surface);
 	WWASSERT(d3d_surface);
-	D3DLOCKED_RECT locked_rect;
-	DX8_ErrorCode(
-		d3d_surface->LockRect(
-			&locked_rect,
-			nullptr,
-			0));
+	RenderSurfaceMap locked_rect;
+	Renderer::Lock_Surface(surface, locked_rect);
 
 	BitmapHandlerClass::Copy_Image(
-		(unsigned char*)locked_rect.pBits,
+		(unsigned char*)locked_rect.data,
 		width,
 		height,
-		locked_rect.Pitch,
+		locked_rect.rowPitch,
 		dest_format,
 		src_surface,
 		src_width,
@@ -623,7 +668,7 @@ IDirect3DSurface8* TextureLoader::Load_Surface_Immediate(
 		targa.Header.CMapDepth>>3,
 		false);	// No mipmap
 
-	DX8_ErrorCode(d3d_surface->UnlockRect());
+	Renderer::Unlock_Surface(surface);
 
 	delete[] converted_surface;
 
@@ -1543,16 +1588,16 @@ bool TextureLoadTaskClass::Begin_Compressed_Load()
 
 	Apply_Mip_Reduction(MipLevelCount, Reduction, Width, Height, orig_mip_count);
 
-	D3DTexture	= DX8Wrapper::_Create_DX8_Texture
+	D3DTexture	= Create_Loader_Texture_2D
 	(
 		Width,
 		Height,
 		Format,
 		(MipCountType)MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 
@@ -1612,16 +1657,16 @@ bool TextureLoadTaskClass::Begin_Uncompressed_Load()
 		Format = Get_Valid_Texture_Format(Format, false);
 	}
 
-	D3DTexture = DX8Wrapper::_Create_DX8_Texture
+	D3DTexture = Create_Loader_Texture_2D
 	(
 		Width,
 		Height,
 		Format,
 		Texture->MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 
@@ -1665,7 +1710,7 @@ void TextureLoadTaskClass::Unlock_Surfaces()
 	}
 
 #ifndef USE_MANAGED_TEXTURES
-	IDirect3DTexture8* tex = DX8Wrapper::_Create_DX8_Texture(Width, Height, Format, Texture->MipLevelCount,D3DPOOL_DEFAULT);
+	IDirect3DTexture8* tex = Create_Loader_Texture_2D(Width, Height, Format, Texture->MipLevelCount,RENDER_TEXTURE_DEFAULT);
 	DX8CALL(UpdateTexture(Peek_D3D_Texture(),tex));
 	Peek_D3D_Texture()->Release();
 	D3DTexture=tex;
@@ -2046,13 +2091,13 @@ void CubeTextureLoadTaskClass::Unlock_Surfaces()
 	}
 
 #ifndef USE_MANAGED_TEXTURES
-	IDirect3DCubeTexture8* tex = DX8Wrapper::_Create_DX8_Cube_Texture
+	IDirect3DCubeTexture8* tex = Create_Loader_Texture_Cube
 	(
 		Width,
 		Height,
 		Format,
 		Texture->MipLevelCount,
-		D3DPOOL_DEFAULT
+		RENDER_TEXTURE_DEFAULT
 	);
 	DX8CALL(UpdateTexture(Peek_D3D_Volume_Texture(),tex));
 	Peek_D3D_Volume_Texture()->Release();
@@ -2095,16 +2140,16 @@ bool CubeTextureLoadTaskClass::Begin_Compressed_Load()
 
 	Apply_Mip_Reduction(MipLevelCount, Reduction, Width, Height, orig_mip_count);
 
-	D3DTexture	= DX8Wrapper::_Create_DX8_Cube_Texture
+	D3DTexture	= Create_Loader_Texture_Cube
 	(
 		Width,
 		Height,
 		Format,
 		(MipCountType)MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 
@@ -2164,16 +2209,16 @@ bool CubeTextureLoadTaskClass::Begin_Uncompressed_Load()
 		Format = Get_Valid_Texture_Format(Format, false);
 	}
 
-	D3DTexture = DX8Wrapper::_Create_DX8_Cube_Texture
+	D3DTexture = Create_Loader_Texture_Cube
 	(
 		Width,
 		Height,
 		Format,
 		Texture->MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 
@@ -2359,7 +2404,7 @@ void VolumeTextureLoadTaskClass::Unlock_Surfaces()
 	}
 
 #ifndef USE_MANAGED_TEXTURES
-	IDirect3DTexture8* tex = DX8Wrapper::_Create_DX8_Volume_Texture(Width, Height, Depth, Format, Texture->MipLevelCount,D3DPOOL_DEFAULT);
+	IDirect3DVolumeTexture8* tex = Create_Loader_Texture_Volume(Width, Height, Depth, Format, Texture->MipLevelCount,RENDER_TEXTURE_DEFAULT);
 	DX8CALL(UpdateTexture(Peek_D3D_Volume_Texture(),tex));
 	Peek_D3D_Volume_Texture()->Release();
 	D3DTexture=tex;
@@ -2402,7 +2447,7 @@ bool VolumeTextureLoadTaskClass::Begin_Compressed_Load()
 
 	Apply_Mip_Reduction(MipLevelCount, Reduction, Width, Height, orig_mip_count);
 
-	D3DTexture	= DX8Wrapper::_Create_DX8_Volume_Texture
+	D3DTexture	= Create_Loader_Texture_Volume
 	(
 		Width,
 		Height,
@@ -2410,9 +2455,9 @@ bool VolumeTextureLoadTaskClass::Begin_Compressed_Load()
 		Format,
 		(MipCountType)MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 
@@ -2474,7 +2519,7 @@ bool VolumeTextureLoadTaskClass::Begin_Uncompressed_Load()
 		Format = Get_Valid_Texture_Format(Format, false);
 	}
 
-	D3DTexture = DX8Wrapper::_Create_DX8_Volume_Texture
+	D3DTexture = Create_Loader_Texture_Volume
 	(
 		Width,
 		Height,
@@ -2482,9 +2527,9 @@ bool VolumeTextureLoadTaskClass::Begin_Uncompressed_Load()
 		Format,
 		Texture->MipLevelCount,
 #ifdef USE_MANAGED_TEXTURES
-		D3DPOOL_MANAGED
+		RENDER_TEXTURE_MANAGED
 #else
-		D3DPOOL_SYSTEMMEM
+		RENDER_TEXTURE_SYSTEM
 #endif
 	);
 

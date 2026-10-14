@@ -656,6 +656,10 @@ public:
     // W3D retains ownership of existing native texture references for now.
     // Both creation entry points support the original device-reset tracker.
     static RenderTexture2DHandle Create_Texture_2D(const RenderTexture2DDescription & description);
+    // Source surface is borrowed. Native format conversion and texture
+    // allocation remain inside the backend.
+    static RenderTexture2DHandle Create_Texture_From_Surface(
+        RenderSurfaceHandle surface, unsigned mipLevels);
     static RenderTexture2DHandle Create_Depth_Texture_2D(const RenderTexture2DDescription & description);
     static RenderTextureCubeHandle Create_Texture_Cube(const RenderTextureCubeDescription & description);
     static RenderTextureVolumeHandle Create_Texture_Volume(const RenderTextureVolumeDescription & description);

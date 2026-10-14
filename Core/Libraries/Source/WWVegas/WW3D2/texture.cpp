@@ -784,14 +784,9 @@ TextureClass::TextureClass
 	default: break;
 	}
 
-	Poke_Texture
-	(
-		DX8Wrapper::_Create_DX8_Texture
-		(
-			surface->Peek_D3D_Surface(),
-			mip_level_count
-		)
-	);
+	Poke_Texture(reinterpret_cast<IDirect3DTexture8 *>(
+        Renderer::Create_Texture_From_Surface(
+            surface->Peek_Render_Surface(), static_cast<unsigned>(mip_level_count))));
 	LastAccessed=WW3D::Get_Sync_Time();
 }
 

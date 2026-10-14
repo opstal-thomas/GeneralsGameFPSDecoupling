@@ -572,6 +572,19 @@ RenderTexture2DHandle Renderer::Create_Texture_2D(const RenderTexture2DDescripti
     return reinterpret_cast<RenderTexture2DHandle>(texture);
 }
 
+RenderTexture2DHandle Renderer::Create_Texture_From_Surface(
+    RenderSurfaceHandle surface, unsigned mipLevels)
+{
+    DX8_THREAD_ASSERT();
+    if (!surface)
+        return nullptr;
+
+    IDirect3DTexture8 * texture = DX8Wrapper::_Create_DX8_Texture(
+        reinterpret_cast<IDirect3DSurface8 *>(surface),
+        static_cast<MipCountType>(mipLevels));
+    return reinterpret_cast<RenderTexture2DHandle>(texture);
+}
+
 RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDescription & description)
 {
     DX8_THREAD_ASSERT();
