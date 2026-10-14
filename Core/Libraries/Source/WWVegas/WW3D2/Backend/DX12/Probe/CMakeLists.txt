@@ -18,3 +18,12 @@ add_test(
     COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl"
 )
 set_tests_properties(W3D_DX12_WARP_Offscreen_Triangle PROPERTIES TIMEOUT 45)
+
+# A separate pass checks WARP clears/readback with no texture copy or draw.
+# If both tests report PnP device removal, the CI VM does not support
+# executing software GPU commands; a physical Windows run is then needed.
+add_test(
+    NAME W3D_DX12_WARP_Offscreen_Clear
+    COMMAND W3DDX12Probe "${CMAKE_CURRENT_SOURCE_DIR}/../W3DLegacyUnlit.hlsl" --clear-only
+)
+set_tests_properties(W3D_DX12_WARP_Offscreen_Clear PROPERTIES TIMEOUT 45)

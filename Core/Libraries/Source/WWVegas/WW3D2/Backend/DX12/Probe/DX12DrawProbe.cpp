@@ -148,7 +148,7 @@ void PrintDiagnostics(ID3D12Device * device)
     }
 }
 
-void Run(const wchar_t * shader)
+void Run(const wchar_t * shader, bool clearOnly)
 {
     ComPtr<ID3D12Debug> debug;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) {
@@ -162,6 +162,9 @@ void Run(const wchar_t * shader)
     Check(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)), "CreateDXGIFactory2");
     ComPtr<IDXGIAdapter> adapter;
     Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)), "EnumWarpAdapter");
+    DXGI_ADAPTER_DESC adapterDesc = {};
+    Check(adapter->GetDesc(&adapterDesc), "IDXGIAdapter::GetDesc");
+    std::wcout << L"WARP adapter: " << adapterDesc.Description << L'\n';
     ComPtr<ID3D12Device> device;
     Check(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0,
           IID_PPV_ARGS(&device)), "D3D12CreateDevice");
@@ -255,6 +258,7 @@ void Run(const wchar_t * shader)
     ComPtr<ID3D12PipelineState> pso;
     Check(device->CreateGraphicsPipelineState(
           &psoDesc, IID_PPV_ARGS(&pso)), "CreateGraphicsPipelineState");
+    Check(device->GetDeviceRemovedReason(), "device health after PSO creation");
 
     D3D12_CLEAR_VALUE clear = {};
     clear.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -294,10 +298,12 @@ void Run(const wchar_t * shader)
     src.PlacedFootprint.Footprint.RowPitch = Pitch;
     dst.pResource = texture.Get();
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
     auto transition = Barrier(texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    list->ResourceBarrier(1, &transition);
+    if (!clearOnly) {
+        list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        list->ResourceBarrier(1, &transition);
+    }
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -378,7 +384,8 @@ void Run(const wchar_t * shader)
     list->ClearRenderTargetView(rtv, black, 0, nullptr);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->IASetVertexBuffers(0, 1, &vbv);
-    list->DrawInstanced(3, 1, 0, 0);
+    if (!clearOnly)
+        list->DrawInstanced(3, 1, 0, 0);
 
     transition = Barrier(target.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
                          D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -403,6 +410,7 @@ void Run(const wchar_t * shader)
     ComPtr<ID3D12Fence> fence;
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE,
           IID_PPV_ARGS(&fence)), "CreateFence");
+    Check(device->GetDeviceRemovedReason(), "device health before GPU submission");
     ID3D12CommandList * submitted[] = {list.Get()};
     queue->ExecuteCommandLists(1, submitted);
     HRESULT signalResult = queue->Signal(fence.Get(), 1);
@@ -446,24 +454,31 @@ void Run(const wchar_t * shader)
     auto closeTo = [](BYTE actual, int expected) {
         return std::abs(int(actual) - expected) <= 10;
     };
-    // 128/255/255 texture * (1, 0.25, 0.5) diffuse vertex color.
-    if (!(closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
-          closeTo(inside[2], 128) && closeTo(inside[3], 255) &&
-          closeTo(outside[0], 0) && closeTo(outside[1], 0) &&
-          closeTo(outside[2], 0) && closeTo(outside[3], 255)))
+    // The clear-only test isolates basic GPU submission/copy from texture
+    // uploads, pixel shading and drawing. It must produce the clear color.
+    const bool insideMatches = clearOnly
+        ? (closeTo(inside[0], 0) && closeTo(inside[1], 0) &&
+           closeTo(inside[2], 0) && closeTo(inside[3], 255))
+        : (closeTo(inside[0], 128) && closeTo(inside[1], 64) &&
+           closeTo(inside[2], 128) && closeTo(inside[3], 255));
+    if (!(insideMatches && closeTo(outside[0], 0) &&
+          closeTo(outside[1], 0) && closeTo(outside[2], 0) &&
+          closeTo(outside[3], 255)))
         throw std::runtime_error("D3D12 WARP pixel verification failed");
-    std::cout << "D3D12 device, PSO, descriptors, triangle and readback: PASS\n";
+    std::cout << (clearOnly ? "D3D12 WARP clear/readback" : "D3D12 WARP textured draw")
+              << ": PASS\n";
 }
 }
 
 int wmain(int argc, wchar_t ** argv)
 {
-    if (argc != 2) {
-        std::cerr << "Usage: W3DDX12Probe <path-to-W3DLegacyUnlit.hlsl>\n";
+    if (argc < 2 || argc > 3) {
+        std::cerr << "Usage: W3DDX12Probe <path-to-W3DLegacyUnlit.hlsl> [--clear-only]\n";
         return 2;
     }
     try {
-        Run(argv[1]);
+        const bool clearOnly = argc == 3 && std::wcscmp(argv[2], L"--clear-only") == 0;
+        Run(argv[1], clearOnly);
         return 0;
     } catch (const std::exception & e) {
         std::cerr << "DX12 WARP probe failure: " << e.what() << '\n';
