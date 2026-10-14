@@ -611,6 +611,15 @@ public:
     static void Set_Triangle_Draw_Enabled(bool enabled);
     static void Unbind_Sorting_Geometry();
 
+    // Pretransformed W3D postprocess quads. The vertex memory contains four
+    // tightly-packed [x,y,z,rhw,ARGB,u0,v0,(u1,v1)] vertices. This is a
+    // transitional CPU vertex path, not a DX8 FVF or D3D primitive ordinal.
+    static void Draw_Transformed_Quad(const void * vertices, unsigned vertexStride,
+                                      unsigned uvSets);
+    // Screen filters deliberately bypass the WW3D deferred texture cache.
+    // Keep this immediate binding distinct from Bind_Texture's cached path.
+    static void Bind_Immediate_Texture(unsigned stage, RenderTextureHandle texture);
+
     // W3D-owned material, shader and texture selections. The original DX8
     // backend preserves its deferred state cache and reference ownership.
     // New backends interpret these as rendering intent, not DX8 commands.

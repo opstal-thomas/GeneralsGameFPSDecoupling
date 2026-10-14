@@ -208,6 +208,36 @@ void Renderer::Unbind_Sorting_Geometry()
     DX8Wrapper::Set_Vertex_Buffer(nullptr);
 }
 
+void Renderer::Draw_Transformed_Quad(const void * vertices, unsigned vertexStride,
+                                     unsigned uvSets)
+{
+    const unsigned requiredStride = 20u + uvSets * 8u;
+    WWASSERT(vertices && (uvSets == 1 || uvSets == 2) &&
+             vertexStride == requiredStride);
+    if (!vertices || (uvSets != 1 && uvSets != 2) ||
+        vertexStride != requiredStride)
+        return;
+
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return;
+    // The legacy screen filters used SetVertexShader(FVF) followed by
+    // DrawPrimitiveUP. Binding the FVF here preserves their exact layout,
+    // even after a shader pass modifies the device's vertex program.
+    const DWORD fvf = D3DFVF_XYZRHW | D3DFVF_DIFFUSE |
+        (uvSets == 2 ? D3DFVF_TEX2 : D3DFVF_TEX1);
+    DX8_ErrorCode(device->SetVertexShader(fvf));
+    DX8_ErrorCode(device->DrawPrimitiveUP(
+        D3DPT_TRIANGLESTRIP, 2, vertices, vertexStride));
+}
+
+void Renderer::Bind_Immediate_Texture(unsigned stage, RenderTextureHandle texture)
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device)
+        device->SetTexture(stage, reinterpret_cast<IDirect3DBaseTexture8 *>(texture));
+}
+
 void Renderer::Set_Shader(const ShaderClass & shader)
 {
     DX8Wrapper::Set_Shader(shader);
