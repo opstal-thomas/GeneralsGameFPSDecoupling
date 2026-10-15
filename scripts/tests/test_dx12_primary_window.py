@@ -56,8 +56,8 @@ class PrimaryWindowIntegrationTests(unittest.TestCase):
         self.assertIn("RSSetScissorRects(1, &scissor)", primary)
         self.assertIn("ClearRenderTargetView(rtv, rgba", device)
         self.assertIn("ClearDepthStencilView(", device)
-        self.assertRegex(renderer, r"Renderer::Get_Device_Status\\(\\)")
-        self.assertNotRegex(renderer, r"(?m)^.*\\bDX8Wrapper\\s*::")
+        self.assertRegex(renderer, r"Renderer::Get_Device_Status\(\)")
+        self.assertNotRegex(renderer, r"(?m)^.*\bDX8Wrapper\s*::")
 
     def test_real_warp_test_and_build_both_include_primary_adapter(self):
         main = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/CMakeLists.txt").read_text(encoding="utf-8")
