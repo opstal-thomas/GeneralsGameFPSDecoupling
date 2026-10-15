@@ -10,6 +10,7 @@ endif()
 add_library(W3DDX12PresentationDevice STATIC
     ../DX12PresentationDevice.cpp
     ../DX12W3DPassGraph.cpp
+    ../DX12W3DGeometryBuffers.cpp
     ../DX12PrimaryWindow.cpp
     ../DX12IndexedMeshPass.cpp
 )
