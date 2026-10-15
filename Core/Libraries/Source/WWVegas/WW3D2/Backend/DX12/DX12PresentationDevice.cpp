@@ -357,10 +357,12 @@ bool DX12PresentationDevice::IsReady() const
            impl_->buffers[0] && impl_->buffers[1];
 }
 
-bool DX12PresentationDevice::BeginFrame(const float clearColor[4])
+bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearColorTarget,
+                                        bool clearDepthTarget, float clearDepthValue)
 {
     Impl & state = *impl_;
-    if (!IsReady() || state.recording || !clearColor)
+    if (!IsReady() || state.recording || (clearColorTarget && !clearColor) ||
+        (clearDepthTarget && !(clearDepthValue >= 0.f && clearDepthValue <= 1.f)))
         return state.Fail("BeginFrame invalid state", E_INVALIDARG);
 
     state.currentBuffer = state.swapChain->GetCurrentBackBufferIndex();
@@ -385,9 +387,11 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4])
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv =
         state.dsvHeap->GetCPUDescriptorHandleForHeapStart();
     state.commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
-    state.commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
-    state.commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH,
-                                             1.f, 0, 0, nullptr);
+    if (clearColorTarget)
+        state.commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+    if (clearDepthTarget)
+        state.commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH,
+                                                 clearDepthValue, 0, 0, nullptr);
     state.recording = true;
     return true;
 }
@@ -395,7 +399,8 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4])
 bool DX12PresentationDevice::ClearActiveFrame(bool color, bool depth, const float rgba[4], float z)
 {
     Impl & state = *impl_;
-    if (!state.recording || (color && !rgba) || z < 0.f || z > 1.f)
+    if (!state.recording || (color && !rgba) ||
+        (depth && !(z >= 0.f && z <= 1.f)))
         return state.Fail("ClearActiveFrame invalid state", E_INVALIDARG);
 
     if (color)
@@ -411,7 +416,7 @@ bool DX12PresentationDevice::ClearActiveFrame(bool color, bool depth, const floa
     return true;
 }
 
-bool DX12PresentationDevice::EndFrame(unsigned syncInterval)
+bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
 {
     Impl & state = *impl_;
     if (!state.recording || syncInterval > 4)
@@ -427,13 +432,35 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval)
 
     ID3D12CommandList * lists[] = {state.commandList.Get()};
     state.queue->ExecuteCommandLists(1, lists);
-    const HRESULT presented = state.swapChain->Present(syncInterval, 0);
+    const HRESULT presented = present ? state.swapChain->Present(syncInterval, 0) : S_OK;
     const UINT64 signalValue = state.nextFence++;
     const HRESULT signalled = state.queue->Signal(state.fence.Get(), signalValue);
     if (!state.Check(signalled, "Signal frame fence"))
         return false;
     state.frameFences[state.currentBuffer] = signalValue;
     return state.Check(presented, "IDXGISwapChain::Present");
+}
+
+bool DX12PresentationDevice::IsRecording() const { return impl_->recording; }
+
+bool DX12PresentationDevice::IsDeviceHealthy() const
+{
+    return IsReady() && SUCCEEDED(impl_->device->GetDeviceRemovedReason());
+}
+
+bool DX12PresentationDevice::GetAdapterIdentity(
+    unsigned & vendorId, unsigned & deviceId, unsigned long long & driverVersion) const
+{
+    vendorId = deviceId = 0;
+    driverVersion = 0;
+    if (!IsDeviceHealthy() || !impl_->adapter)
+        return false;
+    DXGI_ADAPTER_DESC1 desc = {};
+    if (FAILED(impl_->adapter->GetDesc1(&desc)))
+        return false;
+    vendorId = desc.VendorId;
+    deviceId = desc.DeviceId;
+    return true;
 }
 
 bool DX12PresentationDevice::WaitForIdle()
