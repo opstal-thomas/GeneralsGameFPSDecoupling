@@ -20,7 +20,7 @@ Selecting DX12 while enabling the DX8-dependent gameplay preview is a
 configuration error. DX12 selection requires modern MSVC on Windows and links
 the native DX12 primary-window presentation library.
 
-This is **not** yet a DX12-only application. Non-Renderer engine subsystems
+This is **not** yet a DX12-only Generals / Zero Hour game. Non-Renderer engine subsystems
 still compile legacy DX8 dependencies (see [DX8 dependency inventory](DX8DependencyInventory.md)).
 The DX12 bootstrap never falls back to DX8 **through Renderer**. Until the
 remaining dependencies are removed and the real game device is implemented,
@@ -68,9 +68,10 @@ unsupported and the game must not be shipped in this mode.
 - The normal DX8 builds, secondary DX12-preview builds, and two new
   `win32-dx12-bootstrap` builds are independently validated.
 - B04 implements **native frame/state and clear operations**, validated
-  against WARP. Native W3D geometry/resources and the launch checkpoint
-  remain unfinished under R01/M01/B07/B10; unsupported methods remain explicit
-  rather than silently falling back.
+  against WARP. B10 adds a [standalone DX12-only developer launcher](DX12OnlyLaunchCheckpoint.md)
+  without a D3D8 device. Authoritative W3D geometry/assets still require
+  R01/R04/M01/B07; unsupported game methods remain explicit and do not
+  silently fall back to DX8.
 
 ## Next dependency chain
 
@@ -84,6 +85,9 @@ pre-frame clearing, conditional present, transforms, viewport and native
 device queries. The developer-only gate prevents unsupported gameplay
 paths from being treated as complete.
 
-**B10:** Only after B03/B04, demonstrate a real game-window DX12-only
-frame without creating a Direct3D8 device. B01 inventory still needs to
-be driven down and ultimately validated at V07.
+**B10 (standalone DX12-only launch checkpoint):** The dedicated
+[developer GUI executable](DX12OnlyLaunchCheckpoint.md) creates a primary
+HWND and presents frames using the real DX12 Renderer implementation, without
+loading or importing D3D8. This does **not** enable normal game startup:
+the B01 inventory still must be driven down and validated by V07, and
+gameplay asset/draw paths remain open under R01/R04/M01/B07.
