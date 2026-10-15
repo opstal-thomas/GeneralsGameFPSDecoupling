@@ -137,7 +137,7 @@ namespace
             WNDCLASSW cls = {};
             cls.hInstance = instance;
             cls.lpfnWndProc = WindowProc;
-            cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+            cls.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
             cls.lpszClassName = WindowClassName;
             registered = RegisterClassW(&cls) != 0;
             if (!registered)
