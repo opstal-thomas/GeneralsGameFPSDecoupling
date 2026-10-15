@@ -228,6 +228,16 @@ target_link_libraries(corei_gameenginedevice_private INTERFACE
     stb
 )
 
+# The DX12 gameplay mirror has hooks in Core/GameEngineDevice as well as
+# WW3D2. The latter's compile definitions are private to the actual WW3D2
+# target and are not inherited by GameEngineDevice source files.
+# Keep the macro explicitly scoped to opted-in Windows preview builds.
+if(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    target_compile_definitions(corei_gameenginedevice_private INTERFACE
+        W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=1
+    )
+endif()
+
 target_link_libraries(corei_gameenginedevice_public INTERFACE
     corei_gameengine_public
     deps_bink
