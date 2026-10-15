@@ -437,26 +437,22 @@ bool Renderer::Set_Next_Render_Device()
 
 int Renderer::Get_Render_Device()
 {
-    ReportPending("Renderer::Get_Render_Device");
-    return {};
+    return ready ? 0 : -1;
 }
 
 int Renderer::Get_Render_Device_Count()
 {
-    ReportPending("Renderer::Get_Render_Device_Count");
-    return {};
+    return ready ? 1 : 0;
 }
 
 const char * Renderer::Get_Render_Device_Name(int device_index)
 {
-    (void)device_index;
-    return "DX12 bootstrap (B03/B04 pending)";
+    return device_index == 0 ? "Direct3D 12 diagnostic" : "";
 }
 
 bool Renderer::Is_Windowed()
 {
-    ReportPending("Renderer::Is_Windowed");
-    return {};
+    return primaryWindow.Window() && !primaryWindow.IsBorderless();
 }
 
 bool Renderer::Toggle_Windowed()
@@ -496,7 +492,7 @@ int Renderer::Get_Swap_Interval()
 
 Renderer::DeviceStatus Renderer::Get_Device_Status()
 {
-    return DEVICE_UNAVAILABLE;
+    return Has_Active_Device() ? DEVICE_READY : DEVICE_UNAVAILABLE;
 }
 
 bool Renderer::Reset_Device()
