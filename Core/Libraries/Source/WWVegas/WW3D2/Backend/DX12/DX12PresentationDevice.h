@@ -63,6 +63,10 @@ public:
     // buffer generations and upload staging, including released handles.
     bool RetainFrameResource(ID3D12Resource * resource);
     unsigned InFlightResourceCount() const;
+    // DX8 SetIndices carried a base-vertex offset. D3D12 applies it during
+    // DrawIndexedInstanced, not IASetIndexBuffer; cache for B07 submission.
+    void SetBoundBaseVertexIndex(unsigned index);
+    unsigned BoundBaseVertexIndex() const;
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
