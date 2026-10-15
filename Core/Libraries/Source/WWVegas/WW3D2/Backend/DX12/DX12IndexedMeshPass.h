@@ -43,6 +43,8 @@ public:
                 const DX12W3DVertex * vertices, unsigned vertexCount,
                 const std::uint16_t * indices, unsigned indexCount);
     void Reset();
+    // Safe only after the queue completed the recorded upload copies.
+    void Release_Upload_Buffers();
     bool IsReady() const;
     unsigned IndexCount() const;
     const char * LastError() const;

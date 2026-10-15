@@ -308,8 +308,12 @@ namespace
             return PresentAndVerify(device, clear, draw, &expected);
         };
 
-        if (!runMaterial(singleStage, normal, singlePixel) ||
-            !runMaterial(twoStage, normal, doublePixel) ||
+        if (!runMaterial(singleStage, normal, singlePixel))
+            return false;
+        // Verify resident default-heap geometry is usable after its upload
+        // buffers have been freed, including subsequent resize and draws.
+        mesh.Release_Upload_Buffers();
+        if (!runMaterial(twoStage, normal, doublePixel) ||
             !runMaterial(untextured, normal, plainPixel) ||
             !runMaterial(singleStage, rejected, clear))
             return false;
@@ -346,6 +350,7 @@ namespace
         };
         if (!runDepth(true) || !runDepth(false))
             return false;
+        depthMesh.Release_Upload_Buffers();
 
         // The same default-heap geometry and textures survive ResizeBuffers.
         if (!device.Resize(160, 90) || !runMaterial(singleStage, normal, singlePixel) ||

@@ -198,6 +198,12 @@ void DX12W3DIndexedMesh::Reset()
     impl_->indexCount = 0;
 }
 
+void DX12W3DIndexedMesh::Release_Upload_Buffers()
+{
+    impl_->vertexUpload.Reset();
+    impl_->indexUpload.Reset();
+}
+
 bool DX12W3DIndexedMesh::IsReady() const
 {
     return impl_->vertices && impl_->indices && impl_->indexCount > 0;

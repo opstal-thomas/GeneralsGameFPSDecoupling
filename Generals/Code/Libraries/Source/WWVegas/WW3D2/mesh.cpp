@@ -745,8 +745,8 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                 {
                     const int vertexCount = Model->Get_Vertex_Count();
                     const int polygonCount = Model->Get_Polygon_Count();
-                    if (vertexCount >= 3 && vertexCount <= 2048 &&
-                        polygonCount > 0 && polygonCount <= 4096)
+                    if (vertexCount >= 3 && vertexCount <= 16384 &&
+                        polygonCount > 0 && polygonCount <= 32768)
                     {
                         const Vector3 * positions = Model->Get_Vertex_Array();
                         const TriIndex * polygons = Model->Get_Polygon_Array();

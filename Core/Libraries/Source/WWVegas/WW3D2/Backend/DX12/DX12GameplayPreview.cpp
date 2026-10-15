@@ -33,11 +33,37 @@ namespace
 {
     constexpr unsigned PreviewWidth = 640;
     constexpr unsigned PreviewHeight = 480;
-    constexpr unsigned MaxMeshesPerFrame = 12;
-    constexpr unsigned MaxVerticesPerMesh = 2048;
-    constexpr unsigned MaxIndicesPerMesh = 4096 * 3;
+    // Increase scene coverage without losing bounded diagnostic resource use.
+    constexpr unsigned MaxMeshesPerFrame = 256;
+    constexpr unsigned MaxVerticesPerMesh = 16384;
+    constexpr unsigned MaxIndicesPerMesh = 32768 * 3;
+    constexpr unsigned MaxResidentMeshes = 512;
+    constexpr std::size_t MaxResidentGeometryBytes = 32u * 1024u * 1024u;
     constexpr unsigned MaxCapturedTextures = 64;
     constexpr unsigned MaxTextureDimension = 512;
+
+    // Content identity, excluding per-instance transforms and textures.
+    // Compare the actual vertex/index bytes before accepting a hash hit.
+    std::uint64_t HashGeometry(const RenderGameplayPreviewVertex * vertices,
+                               unsigned vertexCount, const unsigned short * indices,
+                               unsigned indexCount)
+    {
+        std::uint64_t hash = 14695981039346656037ull;
+        const auto append = [&](const void * data, std::size_t count)
+        {
+            const auto * bytes = static_cast<const unsigned char *>(data);
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                hash ^= bytes[i];
+                hash *= 1099511628211ull;
+            }
+        };
+        append(&vertexCount, sizeof(vertexCount));
+        append(&indexCount, sizeof(indexCount));
+        append(vertices, std::size_t(vertexCount) * sizeof(*vertices));
+        append(indices, std::size_t(indexCount) * sizeof(*indices));
+        return hash;
+    }
 
     bool EnvironmentEnabled(const wchar_t * name)
     {
@@ -87,6 +113,9 @@ struct DX12GameplayPreview::Impl
     bool ready = false;
     bool recording = false;
     unsigned meshesThisFrame = 0;
+    std::uint64_t frameSerial = 0;
+    std::size_t residentGeometryBytes = 0;
+    bool geometryLimitLogged = false;
     unsigned whiteTexture0 = 0;
     unsigned whiteTexture1 = 0;
     bool texturesUploaded = false;
@@ -95,9 +124,43 @@ struct DX12GameplayPreview::Impl
     std::unordered_map<RenderTextureHandle, unsigned> textureCache;
     DX12PresentationDevice presentation;
     DX12W3DIndexedMeshPass pass;
-    // Upload heaps and GPU buffers must outlive the submitted frame. End_Frame
-    // waits for idle before discarding these diagnostic-only resources.
-    std::vector<std::unique_ptr<DX12W3DIndexedMesh>> meshes;
+    struct CachedGeometry
+    {
+        std::vector<DX12W3DVertex> vertices;
+        std::vector<std::uint16_t> indices;
+        std::unique_ptr<DX12W3DIndexedMesh> gpu;
+        std::uint64_t lastUsedFrame = 0;
+    };
+    // Shared models use one GPU allocation for all instances and subsequent frames.
+    std::unordered_multimap<std::uint64_t, CachedGeometry> geometryCache;
+
+    bool MakeRoom(std::size_t bytes)
+    {
+        if (bytes > MaxResidentGeometryBytes)
+            return false;
+        // The prior frame has finished by now. Entries used in the *current*
+        // command list cannot be evicted until its GPU work completes.
+        while (geometryCache.size() >= MaxResidentMeshes ||
+               residentGeometryBytes > MaxResidentGeometryBytes - bytes)
+        {
+            auto oldest = geometryCache.end();
+            for (auto it = geometryCache.begin(); it != geometryCache.end(); ++it)
+            {
+                if (it->second.lastUsedFrame == frameSerial)
+                    continue;
+                if (oldest == geometryCache.end() ||
+                    it->second.lastUsedFrame < oldest->second.lastUsedFrame)
+                    oldest = it;
+            }
+            if (oldest == geometryCache.end())
+                return false;
+            residentGeometryBytes -=
+                oldest->second.vertices.size() * sizeof(DX12W3DVertex) +
+                oldest->second.indices.size() * sizeof(std::uint16_t);
+            geometryCache.erase(oldest);
+        }
+        return true;
+    }
 
     void Report(const char * stage, const char * reason)
     {
@@ -193,6 +256,8 @@ void DX12GameplayPreview::Begin_Frame()
     }
     state.recording = true;
     state.meshesThisFrame = 0;
+    ++state.frameSerial;
+    state.geometryLimitLogged = false;
 
     if (!state.texturesUploaded)
     {
@@ -224,23 +289,55 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         indexCount % 3 != 0)
         return;
 
-    // Explicitly copy to the DX12 vertex representation. Do not reinterpret
-    // source W3D objects, whose lifetime ends after this synchronous call.
+    // Reuse immutable object-space geometry; only WVP and material vary by draw.
     static_assert(sizeof(RenderGameplayPreviewVertex) == sizeof(DX12W3DVertex),
                   "Preview and DX12 mesh vertex layouts must match");
-    std::vector<DX12W3DVertex> expanded(vertexCount);
-    for (unsigned i = 0; i < vertexCount; ++i)
-        std::memcpy(&expanded[i], &vertices[i], sizeof(DX12W3DVertex));
-    std::vector<std::uint16_t> triangleIndices(indices, indices + indexCount);
-
-    std::unique_ptr<DX12W3DIndexedMesh> mesh(new DX12W3DIndexedMesh);
-    if (!mesh->Upload(state.presentation, expanded.data(), vertexCount,
-                      triangleIndices.data(), indexCount))
+    const std::size_t vertexBytes = std::size_t(vertexCount) * sizeof(DX12W3DVertex);
+    const std::size_t indexBytes = std::size_t(indexCount) * sizeof(std::uint16_t);
+    const std::uint64_t hash = HashGeometry(vertices, vertexCount, indices, indexCount);
+    auto match = state.geometryCache.end();
+    const auto range = state.geometryCache.equal_range(hash);
+    for (auto it = range.first; it != range.second; ++it)
     {
-        // Unsupported/corrupt geometry is ignored rather than affecting DX8.
-        state.Report("Upload W3D gameplay mesh", mesh->LastError());
-        return;
+        const auto & entry = it->second;
+        if (entry.vertices.size() == vertexCount &&
+            entry.indices.size() == indexCount &&
+            std::memcmp(entry.vertices.data(), vertices, vertexBytes) == 0 &&
+            std::memcmp(entry.indices.data(), indices, indexBytes) == 0)
+        {
+            match = it;
+            break;
+        }
     }
+    if (match == state.geometryCache.end())
+    {
+        if (!state.MakeRoom(vertexBytes + indexBytes))
+        {
+            if (!state.geometryLimitLogged)
+            {
+                state.Report("Geometry residency limit",
+                             "cache is full; some W3D meshes are skipped");
+                state.geometryLimitLogged = true;
+            }
+            return;
+        }
+        Impl::CachedGeometry entry;
+        entry.vertices.resize(vertexCount);
+        std::memcpy(entry.vertices.data(), vertices, vertexBytes);
+        entry.indices.assign(indices, indices + indexCount);
+        entry.gpu.reset(new DX12W3DIndexedMesh);
+        if (!entry.gpu->Upload(state.presentation, entry.vertices.data(), vertexCount,
+                               entry.indices.data(), indexCount))
+        {
+            state.Report("Upload W3D gameplay mesh", entry.gpu->LastError());
+            return;
+        }
+        entry.lastUsedFrame = state.frameSerial;
+        match = state.geometryCache.emplace(hash, std::move(entry));
+        state.residentGeometryBytes += vertexBytes + indexBytes;
+    }
+    auto & resident = match->second;
+    resident.lastUsedFrame = state.frameSerial;
 
     unsigned colorTexture = state.whiteTexture0;
     if (texture)
@@ -286,18 +383,13 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         material.alphaTestEnabled = alphaTest;
     }
 
-    if (!state.pass.Draw(*mesh, 0, indexCount, combiner, material,
+    if (!state.pass.Draw(*resident.gpu, 0, indexCount, combiner, material,
                          worldViewProjection, colorTexture,
                          state.whiteTexture1))
     {
         state.Report("Draw W3D gameplay mesh", state.pass.LastError());
-        // Upload commands still reference this mesh, so it must survive the
-        // frame even on a failed Draw.
-        state.meshes.push_back(std::move(mesh));
         return;
     }
-
-    state.meshes.push_back(std::move(mesh));
     ++state.meshesThisFrame;
 }
 
@@ -313,9 +405,10 @@ void DX12GameplayPreview::End_Frame()
         Shutdown();
         return;
     }
-    // Intentionally synchronous and small: this diagnostic is not a
-    // production streaming or frame-resource allocator.
-    state.meshes.clear();
+    // Only after the GPU fence can upload staging allocations be released.
+    // Default-heap buffers remain alive and can be rendered next frame.
+    for (auto & pair : state.geometryCache)
+        pair.second.gpu->Release_Upload_Buffers();
 }
 
 void DX12GameplayPreview::Shutdown()
@@ -325,7 +418,8 @@ void DX12GameplayPreview::Shutdown()
         state.presentation.WaitForIdle();
     state.recording = false;
     state.ready = false;
-    state.meshes.clear();
+    state.geometryCache.clear();
+    state.residentGeometryBytes = 0;
     state.textureCache.clear();
     state.pass.Shutdown();
     state.presentation.Shutdown();
