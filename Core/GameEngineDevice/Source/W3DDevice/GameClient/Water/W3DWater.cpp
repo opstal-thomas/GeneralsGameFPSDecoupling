@@ -2040,37 +2040,7 @@ void WaterRenderObjClass::renderWater()
 					points[2].Set(pt2.x, pt2.y, pt2.z);
 					points[3].Set(pt3.x, pt3.y, pt3.z);
 
-#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
-                    // Render the translucent standing-water footprint once.
-                    // DX8 still handles all feather layers and specialized
-                    // reflection passes; those are not mirrored yet.
-                    if (Renderer::Is_DX12_Gameplay_Preview_Recording())
-                    {
-                        RenderGameplayPreviewVertex quad[4] = {};
-                        const unsigned diffuse = m_settings[m_tod].waterDiffuse;
-                        for (unsigned vertex = 0; vertex < 4; ++vertex)
-                        {
-                            quad[vertex].position[0] = points[vertex].X;
-                            quad[vertex].position[1] = points[vertex].Y;
-                            quad[vertex].position[2] = points[vertex].Z;
-                            quad[vertex].diffuse[0] = ((diffuse >> 16) & 255u) / 255.f;
-                            quad[vertex].diffuse[1] = ((diffuse >> 8) & 255u) / 255.f;
-                            quad[vertex].diffuse[2] = (diffuse & 255u) / 255.f;
-                            quad[vertex].diffuse[3] = ((diffuse >> 24) & 255u) / 255.f;
-                            quad[vertex].uv0[0] = points[vertex].X / 150.f;
-                            quad[vertex].uv0[1] = points[vertex].Y / 150.f;
-                            quad[vertex].uv1[0] = quad[vertex].uv0[0];
-                            quad[vertex].uv1[1] = quad[vertex].uv0[1];
-                        }
-                        const unsigned short indices[6] = {0, 1, 2, 0, 2, 3};
-                        RenderTextureHandle waterTexture = nullptr;
-                        if (m_riverTexture && m_riverTexture->Is_Initialized())
-                            waterTexture = m_riverTexture->Peek_Render_Texture();
-                        Renderer::Preview_DX12_Gameplay_Mesh(
-                            quad, 4, indices, 6, Matrix3D(true),
-                            waterTexture, false, true, RENDER_PREVIEW_WATER);
-                    }
-#endif
+
 
 					if ( TheGlobalData->m_featherWater )
 					{
@@ -3256,6 +3226,36 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 	//Keep diffuse from lighting calculations but substitute custom alpha
 	diffuse |= m_settings[m_tod].waterDiffuse & 0xff000000;	//copy alpha/opacity from ini setting
 
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    // Reuse exactly the dynamic water vertices that DX8 submits. This avoids
+    // approximating curved/wavy water with a flat quad, and preserves both
+    // animated UVs and the color/opacity selected by the actual W3D shader.
+    const bool captureWater = Renderer::Is_DX12_Gameplay_Preview_Recording() &&
+        uCount > 1 && vCount > 1 &&
+        static_cast<size_t>(uCount) * vCount <= 16384;
+    std::vector<RenderGameplayPreviewVertex> previewWaterVertices;
+    if (captureWater)
+        previewWaterVertices.reserve(static_cast<size_t>(uCount) * vCount);
+    const auto captureWaterVertex = [&](const VertexFormatXYZNDUV2 & source)
+    {
+        if (!captureWater)
+            return;
+        RenderGameplayPreviewVertex vertex = {};
+        vertex.position[0] = source.x;
+        vertex.position[1] = source.y;
+        vertex.position[2] = source.z;
+        vertex.diffuse[0] = ((source.diffuse >> 16) & 0xffu) / 255.f;
+        vertex.diffuse[1] = ((source.diffuse >> 8) & 0xffu) / 255.f;
+        vertex.diffuse[2] = (source.diffuse & 0xffu) / 255.f;
+        vertex.diffuse[3] = ((source.diffuse >> 24) & 0xffu) / 255.f;
+        vertex.uv0[0] = source.u1;
+        vertex.uv0[1] = source.v1;
+        vertex.uv1[0] = source.u2;
+        vertex.uv1[1] = source.v2;
+        previewWaterVertices.push_back(vertex);
+    };
+#endif
+
 	DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,(rectangleCount+1)*2);
 
 //#define WAVY_WATER
@@ -3319,6 +3319,9 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 				vb->nx = 0;
 				vb->ny = 0;
 				vb->nz = 1.0f;
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+                captureWaterVertex(*vb);
+#endif
 				vb++;
 			}
 		}
@@ -3368,6 +3371,9 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 				vb->nx = 0;
 				vb->ny = 0;
 				vb->nz = 1.0f;
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+                captureWaterVertex(*vb);
+#endif
 				vb++;
 			}
 		}
@@ -3418,6 +3424,39 @@ void WaterRenderObjClass::drawTrapezoidWater(Vector3 points[4])
 //#endif // FEATHER_WATER
 //#endif //WAVY_WATER
 		DX8Wrapper::Draw_Triangles(	0,rectangleCount*2, 0,	(rectangleCount+1)*2);//lorenzen thinks this is where to itereate the soft shoreline effect
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+        if (captureWater &&
+            previewWaterVertices.size() == static_cast<size_t>(uCount) * vCount)
+        {
+            // Match the DX8 indexed triangles, including the tessellated
+            // trapezoid's true outline and each optional feather layer.
+            std::vector<unsigned short> previewWaterIndices(
+                static_cast<size_t>(rectangleCount) * 6);
+            for (Int row = 0; row < vCount - 1; ++row)
+                for (Int col = 0; col < uCount - 1; ++col)
+                {
+                    const unsigned first = static_cast<unsigned>(row * uCount + col);
+                    const unsigned other = first + static_cast<unsigned>(uCount);
+                    unsigned short * dst = previewWaterIndices.data() +
+                        static_cast<size_t>(row * (uCount - 1) + col) * 6;
+                    dst[0] = static_cast<unsigned short>(first);
+                    dst[1] = static_cast<unsigned short>(other + 1);
+                    dst[2] = static_cast<unsigned short>(other);
+                    dst[3] = static_cast<unsigned short>(first);
+                    dst[4] = static_cast<unsigned short>(first + 1);
+                    dst[5] = static_cast<unsigned short>(other + 1);
+                }
+            RenderTextureHandle waterTexture = nullptr;
+            if (m_riverTexture && m_riverTexture->Is_Initialized())
+                waterTexture = m_riverTexture->Peek_Render_Texture();
+            Renderer::Preview_DX12_Gameplay_Mesh(
+                previewWaterVertices.data(),
+                static_cast<unsigned>(previewWaterVertices.size()),
+                previewWaterIndices.data(),
+                static_cast<unsigned>(previewWaterIndices.size()),
+                Matrix3D(true), waterTexture, false, true, RENDER_PREVIEW_WATER);
+        }
+#endif
 	}
 
 
