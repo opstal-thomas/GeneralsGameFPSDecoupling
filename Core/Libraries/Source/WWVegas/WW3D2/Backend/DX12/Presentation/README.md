@@ -72,3 +72,16 @@ D3D12 and DXGI but not the original graphics API.
 See the [B10 launch guide](../../../../../../../../Documentation/DX12OnlyLaunchCheckpoint.md)
 for build instructions, acceptance criteria, and the dedicated GitHub Actions
 artifact. This launcher is **not** a playable Generals / Zero Hour binary.
+
+## DX12-B05 — Render-pass graph and offscreen barriers
+
+The native B05 `DX12W3DPassGraph` now runs on this same command list: it
+sequences opaque world, terrain, water, effects, transparency, shroud, UI
+and postprocess; validates pass attachment/texture/UAV hazards; and emits
+tracked `ResourceBarrier` transitions before native submission. The primary
+HWND enters the opaque stage when BeginScene succeeds. Future W3D providers
+must register offscreen resource states, provide their own descriptors and
+draw calls, and advance stages explicitly. A dedicated
+`W3DDX12PassGraphSmoke` Win32/x64 WARP test exercises the full sequence,
+compute-style UAV barriers, GPU offscreen readback and resize recovery.
+See [B05 specification](../../../../../../../../Documentation/DX12RenderPassGraph.md).
