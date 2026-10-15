@@ -100,3 +100,16 @@ add_test(NAME W3D_DX12_WARP_Developer_Launch
     COMMAND W3DDX12LaunchCheckpoint --warp --frames 12 --ci
 )
 set_tests_properties(W3D_DX12_WARP_Developer_Launch PROPERTIES TIMEOUT 90)
+
+# B05: real WARP coverage for canonical world/terrain/water/effects/
+# transparency/shroud/UI/postprocess order, offscreen state transitions,
+# rejected aliasing/out-of-order passes, and GPU pixel readback.
+add_executable(W3DDX12PassGraphSmoke DX12PassGraphSmoke.cpp)
+target_compile_features(W3DDX12PassGraphSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12PassGraphSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12PassGraphSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_Ordered_Render_Passes
+    COMMAND W3DDX12PassGraphSmoke)
+set_tests_properties(W3D_DX12_WARP_Ordered_Render_Passes PROPERTIES TIMEOUT 90)
