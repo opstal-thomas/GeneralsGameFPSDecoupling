@@ -12,9 +12,18 @@ The exclusive DX12 backend now binds its native swap chain to the **application'
 - `PresentDiagnostic()` records and presents one clear frame using the game HWND and the existing DX12 device. `Shutdown()` releases GPU resources but never destroys the game window.
 - A destroyed HWND is a failure, not an opportunity to create a replacement. GPU resources are safely released.
 
-**Deliberate limitation:** `Renderer::Init` exercises primary-HWND DX12 initialization and diagnostic presentation, then intentionally returns `false` and tears down the device. This fail-closed behavior remains until **DX12-B04** implements a persistent game rendering lifecycle. Running the B03 exclusive-backend executable as a playable game is not supported.
+**Current status after B04:** The original B03 milestone demonstrated
+single-frame native presentation on the borrowed HWND. B04 now adds
+[persistent native frame and state ownership](DX12NativeRendererFrame.md)
+behind `W3D_DX12_B04_DIAGNOSTIC=1`. Without this opt-in, the exclusive
+backend **still fails initialization closed**. Neither B03 nor B04 implies
+playable DX12 gameplay; B07/B10 remain open.
 
-The normal DX8 renderer and optional secondary DX12 mesh preview are unchanged. DX12-B03 does not implement exclusive fullscreen, full game render/device mode policy, DX12 vertex/texture resources, or real `Begin_Scene` / `End_Scene`. DX12-B04 and B06 will address those.
+The normal DX8 renderer and optional secondary DX12 mesh preview are unchanged.
+B03 did not implement native gameplay frames. **B04 has now implemented
+`Begin_Scene` / `End_Scene`, queued clears, viewport and transforms.**
+Exclusive fullscreen, device-removal policy, native gameplay vertex/texture
+resources and authoritative W3D mesh submission remain separate tasks.
 
 For a software adapter diagnostic, the exclusive build accepts `W3D_DX12_GAME_WARP=1`. The normal path uses a physical DX12 adapter.
 
@@ -33,6 +42,11 @@ ctest --test-dir build/dx12-primary-window -C Release --output-on-failure
 
 The Windows game-build matrix independently compiles Generals and Zero Hour in DX8, DX12 preview and DX12 exclusive-backend configurations. Source tests assert real-HWND ownership and prohibit an independent preview HWND or DX8 fallback.
 
-## Next: B04
+## After B04
 
-Make the primary HWND device lifetime persistent through `Renderer::Init`/`Shutdown`, connect device selection and client resizing to the game's graphics settings, and implement the first valid native DX12 `Begin_Scene` / `End_Scene` frame and state APIs. DX12-B10's first true game frame follows B04; B03 is **window presentation only**, not a full DX12 game runtime.
+The [B04 native Renderer frame/state milestone](DX12NativeRendererFrame.md)
+implements persistent diagnostic window/device lifetime, frame recording,
+selective clears, device selection and window resizing. The next milestones
+are B05 (pass ordering/barriers), B06 (robust device/mode lifecycle),
+B07/R01/R04/M01 (authoritative rendering), and B10 (DX12-only game launch).
+B03 alone remains a **window presentation** milestone, not gameplay parity.
