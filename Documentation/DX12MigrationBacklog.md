@@ -13,6 +13,11 @@
 - A task is only complete when its **acceptance check** passes in both Generals and Zero Hour where applicable. Mark its row `Done` after a tested commit/PR, and link the evidence.
 - The source audit is not an exhaustive automated proof of every remaining DX8 symbol. `DX12-B01` builds that inventory. New blockers discovered during implementation must be added to this index with new stable IDs.
 
+## Completed backend foundations
+
+- **DX12-B01:** [Source-level DX8 dependency inventory](DX8DependencyInventory.md) and a CI regression baseline.
+- **DX12-B02:** [Exclusive DX8/DX12 Renderer selection](DX12ExclusiveBackendBootstrap.md), verified by the [Generals and Zero Hour build matrix](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38809550457) and [DX12 shader/WARP tests](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38809550422). DX12 bootstrap builds are deliberately not playable until B03/B04.
+
 ## What already works
 
 - A backend-neutral `Renderer.h` exists and many previously direct DX8 calls route into `DX8Backend.cpp`.
@@ -39,7 +44,7 @@
 | ID | Priority | Effort | Depends on | Current state | Scope and acceptance check |
 |---|---|---|---|---|---|
 | **DX12-B01** | P0 | S | — | Done (source inventory + CI) | **Inventory every remaining DX8 caller, type, and link dependency.** Implemented with [source inventory](DX8DependencyInventory.md), JSON/Markdown CI artifact and immutable baseline ratchet; binary/runtime proof remains DX12-V07. |
-| **DX12-B02** | P0 | M | `DX12-B01` | Open | **Introduce exclusive DX8 / DX12 renderer build and runtime selection.** An explicit DX12-only configuration selects backend implementations without compiling duplicate Renderer symbols; DX8 remains a reference option until retirement. |
+| **DX12-B02** | P0 | M | `DX12-B01` | Done (exclusive DX12 bootstrap; B03/B04 pending) | **Introduce exclusive DX8 / DX12 renderer build and runtime selection.** [Implemented](DX12ExclusiveBackendBootstrap.md): DX8 and DX12 build choices exclusively compile one Renderer definition set, enforced in Windows compile-command CI; full Generals/Zero Hour DX8, preview and DX12-bootstrap Win32 builds pass. The DX12 bootstrap intentionally rejects game initialization pending B03/B04. |
 | **DX12-B03** | P0 | L | `DX12-B02` | Partial: preview | **Give DX12 ownership of the game's actual HWND and swap chain.** A DX12 device presents to the real gameplay window, not the secondary preview, with correct minimize, restore, resolution, and borderless/windowed behavior. |
 | **DX12-B04** | P0 | L | `DX12-B02`, `DX12-B03` | Boundary only | **Implement native DX12 Renderer frame and state entry points.** Init, Begin_Scene, End_Scene, Clear, viewport, transforms, device queries and basic rendering work without calling DX8Wrapper. |
 | **DX12-B05** | P0 | L | `DX12-B04` | Open | **Define a stable render-pass order and resource-state transitions.** Opaque world, terrain, water, effects, transparency, shroud, UI and postprocessing render in deliberate order with correct D3D12 resource barriers. |
