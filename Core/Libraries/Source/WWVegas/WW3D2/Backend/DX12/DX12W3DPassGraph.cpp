@@ -147,9 +147,11 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
         return Fail("Unknown W3D render-pass stage");
     if (order <= currentPass_)
         return Fail("W3D render passes must advance strictly in canonical order");
-    if (!bindings.colorTarget && !bindings.depthTarget)
-        return Fail("A graphics pass must declare at least one color/depth output");
+    if (!bindings.colorTarget && !bindings.depthTarget &&
+        bindings.uavOutputCount == 0)
+        return Fail("A pass must declare a color, depth or UAV output");
     if ((bindings.shaderInputCount != 0 && !bindings.shaderInputs) ||
+        (bindings.uavOutputCount != 0 && !bindings.uavOutputs) ||
         (bindings.colorTarget && bindings.colorTarget == bindings.depthTarget))
         return Fail("Invalid render-pass targets or shader dependencies");
 
@@ -160,12 +162,25 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
         (bindings.depthTarget && !GetTrackedState(bindings.depthTarget, ignored)))
         return Fail("Render-pass output resource is not registered");
 
+    for (std::size_t i = 0; i < bindings.uavOutputCount; ++i)
+    {
+        ID3D12Resource * output = bindings.uavOutputs[i];
+        if (!output || output == bindings.colorTarget ||
+            output == bindings.depthTarget || !GetTrackedState(output, ignored))
+            return Fail("Unregistered or conflicting UAV output");
+        for (std::size_t j = 0; j < i; ++j)
+            if (output == bindings.uavOutputs[j])
+                return Fail("Duplicate UAV write binding in same pass");
+    }
     for (std::size_t i = 0; i < bindings.shaderInputCount; ++i)
     {
         ID3D12Resource * input = bindings.shaderInputs[i];
         if (!input || input == bindings.colorTarget ||
             input == bindings.depthTarget || !GetTrackedState(input, ignored))
             return Fail("Unregistered input or same-pass read/write resource hazard");
+        for (std::size_t j = 0; j < bindings.uavOutputCount; ++j)
+            if (input == bindings.uavOutputs[j])
+                return Fail("Simultaneous UAV write and shader-read hazard");
     }
 
     // Stage transitions are recorded before the caller binds descriptors and
@@ -181,6 +196,22 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
             return false;
+    for (std::size_t i = 0; i < bindings.uavOutputCount; ++i)
+    {
+        ID3D12Resource * output = bindings.uavOutputs[i];
+        D3D12_RESOURCE_STATES previous = D3D12_RESOURCE_STATE_COMMON;
+        if (!GetTrackedState(output, previous))
+            return Fail("Untracked UAV write after pass validation");
+        // D3D12 UAV writes need explicit memory ordering even when the resource
+        // stays in UNORDERED_ACCESS across effects/shroud/postprocess passes.
+        if (previous == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+        {
+            if (!UAVBarrier(output))
+                return false;
+        }
+        else if (!RequireState(output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+            return false;
+    }
 
     currentPass_ = order;
     return true;
