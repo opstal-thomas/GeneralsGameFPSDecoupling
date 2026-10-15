@@ -91,7 +91,12 @@ bool Renderer::Is_Device_Unavailable_For_Rendering()
 
 bool Renderer::Is_Debug_Console_Disabled()
 {
+#ifdef EXTENDED_STATS
     return DX8Wrapper::stats.m_disableConsole;
+#else
+    // This legacy diagnostic option does not exist in standard builds.
+    return false;
+#endif
 }
 
 void Renderer::Set_Gamma(float gamma, float bright, float contrast, bool calibrate, bool uselimit)
