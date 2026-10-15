@@ -34,13 +34,14 @@ namespace
     constexpr unsigned PreviewWidth = 640;
     constexpr unsigned PreviewHeight = 480;
     // Increase scene coverage without losing bounded diagnostic resource use.
-    constexpr unsigned MaxMeshesPerFrame = 256;
+    // Draw instances, not allocations. A scene may contain many tile meshes.
+    constexpr unsigned MaxMeshesPerFrame = 1024;
     constexpr unsigned MaxVerticesPerMesh = 16384;
     constexpr unsigned MaxIndicesPerMesh = 32768 * 3;
     constexpr unsigned MaxResidentMeshes = 512;
     constexpr std::size_t MaxResidentGeometryBytes = 32u * 1024u * 1024u;
     constexpr unsigned MaxCapturedTextures = 64;
-    constexpr unsigned MaxTextureDimension = 512;
+    constexpr unsigned MaxTextureDimension = 1024;
 
     // Content identity, excluding per-instance transforms and textures.
     // Compare the actual vertex/index bytes before accepting a hash hit.
@@ -353,11 +354,25 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
             Renderer::Describe_Texture_Level_2D(
                 reinterpret_cast<RenderTexture2DHandle>(texture), 0, description);
             if (description.width > 0 && description.height > 0 &&
-                description.width <= MaxTextureDimension &&
-                description.height <= MaxTextureDimension)
+                description.width <= 8192 && description.height <= 8192)
             {
+                const unsigned largest = description.width > description.height
+                    ? description.width : description.height;
+                unsigned targetWidth = description.width;
+                unsigned targetHeight = description.height;
+                if (largest > MaxTextureDimension)
+                {
+                    targetWidth = static_cast<unsigned>(
+                        (static_cast<std::uint64_t>(description.width) * MaxTextureDimension +
+                         largest / 2) / largest);
+                    targetHeight = static_cast<unsigned>(
+                        (static_cast<std::uint64_t>(description.height) * MaxTextureDimension +
+                         largest / 2) / largest);
+                    if (!targetWidth) targetWidth = 1;
+                    if (!targetHeight) targetHeight = 1;
+                }
                 std::vector<std::uint8_t> pixels(
-                    static_cast<size_t>(description.width) * description.height * 4);
+                    static_cast<size_t>(targetWidth) * targetHeight * 4);
                 unsigned width = 0, height = 0;
                 unsigned uploaded = 0;
                 if (Renderer::Snapshot_DX12_Preview_Texture_RGBA8(

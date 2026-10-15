@@ -50,6 +50,9 @@
 #ifndef USE_FLAT_HEIGHT_MAP // Flat height map uses flattened textures. jba. [3/20/2003]
 
 #include <stdlib.h>
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+#include <vector>
+#endif
 #include <WW3D2/assetmgr.h>
 #include <WW3D2/texture.h>
 #include <WWMath/tri.h>
@@ -2180,6 +2183,68 @@ void HeightMapRenderObjClass::renderTerrainPass(CameraClass *pCamera)
 			if (Is_Hidden() == 0) {
 				DX8Wrapper::Draw_Triangles(0, HEIGHTMAP_POLYGON_NUM, 0, HEIGHTMAP_VERTEX_NUM);
 			}
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+                // Mirror the heightmap's own CPU-side tile, without reading a
+                // DX8 GPU buffer or disturbing the authoritative terrain pass.
+                if (pass == 0 && !doMultiPassWireFrame && m_vertexBufferBackup &&
+                    !ShaderClass::Is_Backface_Culling_Inverted() &&
+                    Renderer::Is_DX12_Gameplay_Preview_Recording())
+                {
+                    const Int remainingX = m_x - 1 - i * VERTEX_BUFFER_TILE_LENGTH;
+                    const Int remainingY = m_y - 1 - j * VERTEX_BUFFER_TILE_LENGTH;
+                    const Int cols = remainingX < VERTEX_BUFFER_TILE_LENGTH
+                        ? remainingX : VERTEX_BUFFER_TILE_LENGTH;
+                    const Int rows = remainingY < VERTEX_BUFFER_TILE_LENGTH
+                        ? remainingY : VERTEX_BUFFER_TILE_LENGTH;
+                    if (cols > 0 && rows > 0)
+                    {
+                        const VERTEX_FORMAT * backup = getVertexBufferBackup(i, j);
+                        const unsigned cellCount = static_cast<unsigned>(cols * rows);
+                        std::vector<RenderGameplayPreviewVertex> vertices(cellCount * 4);
+                        std::vector<unsigned short> indices(cellCount * 6);
+                        unsigned cell = 0;
+                        for (Int row = 0; row < rows; ++row)
+                            for (Int col = 0; col < cols; ++col, ++cell)
+                            {
+                                const VERTEX_FORMAT * quad = backup +
+                                    (row * VERTEX_BUFFER_TILE_LENGTH + col) * 4;
+                                const unsigned base = cell * 4;
+                                for (unsigned corner = 0; corner < 4; ++corner)
+                                {
+                                    const VERTEX_FORMAT & src = quad[corner];
+                                    RenderGameplayPreviewVertex & dst = vertices[base + corner];
+                                    dst.position[0] = src.x;
+                                    dst.position[1] = src.y;
+                                    dst.position[2] = src.z;
+                                    dst.diffuse[0] = ((src.diffuse >> 16) & 0xff) / 255.f;
+                                    dst.diffuse[1] = ((src.diffuse >> 8) & 0xff) / 255.f;
+                                    dst.diffuse[2] = (src.diffuse & 0xff) / 255.f;
+                                    dst.diffuse[3] = 1.f;
+                                    dst.uv0[0] = src.u1;
+                                    dst.uv0[1] = src.v1;
+                                    dst.uv1[0] = src.u2;
+                                    dst.uv1[1] = src.v2;
+                                }
+                                // Match DX8's static heightmap index-buffer winding.
+                                unsigned short * tri = indices.data() + cell * 6;
+                                tri[0] = base;
+                                tri[1] = base + 2;
+                                tri[2] = base + 3;
+                                tri[3] = base;
+                                tri[4] = base + 1;
+                                tri[5] = base + 2;
+                            }
+                        RenderTextureHandle atlas = nullptr;
+                        if (!m_disableTextures && m_stageZeroTexture &&
+                            m_stageZeroTexture->Is_Initialized())
+                            atlas = m_stageZeroTexture->Peek_Render_Texture();
+                        Renderer::Preview_DX12_Gameplay_Mesh(
+                            vertices.data(), static_cast<unsigned>(vertices.size()),
+                            indices.data(), static_cast<unsigned>(indices.size()),
+                            Matrix3D(true), atlas);
+                    }
+                }
+#endif
 		}
 }
 

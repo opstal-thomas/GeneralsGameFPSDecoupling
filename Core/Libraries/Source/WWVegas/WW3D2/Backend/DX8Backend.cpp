@@ -222,8 +222,27 @@ bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
     D3DSURFACE_DESC description = {};
     if (FAILED(sourceTexture->GetLevelDesc(0, &description)) ||
         description.Width == 0 || description.Height == 0 ||
-        description.Width > 512 || description.Height > 512 ||
-        static_cast<unsigned long long>(description.Width) * description.Height * 4 > capacity)
+        description.Width > 8192 || description.Height > 8192)
+        return false;
+    // Preserve normalized UVs and atlas aspect ratio, while limiting each
+    // diagnostic texture capture to 1024x1024 RGBA8 on the DX12 device.
+    const unsigned maxDimension = 1024;
+    const unsigned largest = description.Width > description.Height
+        ? description.Width : description.Height;
+    unsigned targetWidth = description.Width;
+    unsigned targetHeight = description.Height;
+    if (largest > maxDimension)
+    {
+        targetWidth = static_cast<unsigned>(
+            (static_cast<unsigned long long>(description.Width) * maxDimension +
+             largest / 2) / largest);
+        targetHeight = static_cast<unsigned>(
+            (static_cast<unsigned long long>(description.Height) * maxDimension +
+             largest / 2) / largest);
+        if (!targetWidth) targetWidth = 1;
+        if (!targetHeight) targetHeight = 1;
+    }
+    if (static_cast<unsigned long long>(targetWidth) * targetHeight * 4 > capacity)
         return false;
 
     IDirect3DSurface8 * source = nullptr;
@@ -231,17 +250,19 @@ bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
         return false;
     IDirect3DSurface8 * staging = nullptr;
     const HRESULT created = device->CreateImageSurface(
-        description.Width, description.Height, D3DFMT_A8R8G8B8, &staging);
+        targetWidth, targetHeight, D3DFMT_A8R8G8B8, &staging);
     if (FAILED(created) || !staging)
     {
         source->Release();
         return false;
     }
 
-    // This conversion works for DDS BC1/BC2/BC3 as well as uncompressed
-    // legacy W3D formats. It runs only once per captured texture handle.
+    // D3DX converts packed/BC texture formats and downsamples large atlases.
+    const DWORD filter = (targetWidth != description.Width ||
+                          targetHeight != description.Height)
+        ? D3DX_FILTER_TRIANGLE : D3DX_FILTER_NONE;
     const HRESULT converted = D3DXLoadSurfaceFromSurface(
-        staging, nullptr, nullptr, source, nullptr, nullptr, D3DX_FILTER_NONE, 0);
+        staging, nullptr, nullptr, source, nullptr, nullptr, filter, 0);
     source->Release();
     if (FAILED(converted))
     {
@@ -251,7 +272,7 @@ bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
 
     D3DLOCKED_RECT mapped = {};
     if (FAILED(staging->LockRect(&mapped, nullptr, D3DLOCK_READONLY)) ||
-        !mapped.pBits || mapped.Pitch < static_cast<int>(description.Width * 4))
+        !mapped.pBits || mapped.Pitch < static_cast<int>(targetWidth * 4))
     {
         if (mapped.pBits)
             staging->UnlockRect();
@@ -260,11 +281,11 @@ bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
     }
 
     const auto * input = static_cast<const unsigned char *>(mapped.pBits);
-    for (unsigned y = 0; y < description.Height; ++y)
+    for (unsigned y = 0; y < targetHeight; ++y)
     {
         const unsigned char * src = input + static_cast<size_t>(y) * mapped.Pitch;
-        unsigned char * dst = rgba8 + static_cast<size_t>(y) * description.Width * 4;
-        for (unsigned x = 0; x < description.Width; ++x)
+        unsigned char * dst = rgba8 + static_cast<size_t>(y) * targetWidth * 4;
+        for (unsigned x = 0; x < targetWidth; ++x)
         {
             // D3DFMT_A8R8G8B8 has BGRA byte order in little-endian memory.
             dst[x * 4 + 0] = src[x * 4 + 2];
@@ -275,8 +296,8 @@ bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
     }
     staging->UnlockRect();
     staging->Release();
-    width = description.Width;
-    height = description.Height;
+    width = targetWidth;
+    height = targetHeight;
     return true;
 #else
     (void)texture;
