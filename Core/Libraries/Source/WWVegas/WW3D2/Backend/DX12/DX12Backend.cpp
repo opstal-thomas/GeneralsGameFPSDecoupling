@@ -13,6 +13,8 @@
 #include "WW3D2/Renderer.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WWMath/vector3.h"
+#include "WWMath/matrix4.h"
+#include <cstring>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -37,6 +39,8 @@ namespace
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
     RenderViewport viewportState = {0, 0, 0, 0, 0.f, 1.f};
+    Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
+    bool ValidTransform(RenderTransform transform) { return transform >= RENDER_TRANSFORM_WORLD && transform <= RENDER_TRANSFORM_PROJECTION; }
 
     void ReportPending(const char * operation)
     {
@@ -105,6 +109,7 @@ void Renderer::Shutdown()
     ready = recording = false;
     renderThread = 0;
     primaryWindow.Shutdown();
+    for (auto & matrix : transforms) matrix.Make_Identity();
 }
 
 bool Renderer::Is_Initialized()
@@ -372,17 +377,17 @@ void Renderer::Apply_Pending_State_Changes()
 
 void Renderer::Set_Transform(RenderTransform transform, const Matrix3D & matrix)
 {
-    ReportPending("Renderer::Set_Transform");
+    if (ValidTransform(transform)) transforms[transform] = Matrix4x4(matrix);
 }
 
 void Renderer::Set_Transform(RenderTransform transform, const Matrix4x4 & matrix)
 {
-    ReportPending("Renderer::Set_Transform");
+    if (ValidTransform(transform)) transforms[transform] = matrix;
 }
 
 void Renderer::Get_Transform(RenderTransform transform, Matrix4x4 & matrix)
 {
-    ReportPending("Renderer::Get_Transform");
+    matrix = ValidTransform(transform) ? transforms[transform] : Matrix4x4(true);
 }
 
 void Renderer::Set_Texture_Transform(unsigned stage, const float matrix[16])
@@ -392,13 +397,15 @@ void Renderer::Set_Texture_Transform(unsigned stage, const float matrix[16])
 
 void Renderer::Get_Transform_Elements(RenderTransform transform, float matrix[16])
 {
-    (void)transform; for (unsigned i = 0; i < 16; ++i) matrix[i] = 0.f;
-    ReportPending("Renderer::Get_Transform_Elements");
+    const Matrix4x4 & value = ValidTransform(transform) ? transforms[transform] : transforms[0];
+    for (unsigned row = 0; row < 4; ++row)
+        for (unsigned column = 0; column < 4; ++column)
+            matrix[row * 4 + column] = value[row][column];
 }
 
 void Renderer::Set_World_Identity()
 {
-    ReportPending("Renderer::Set_World_Identity");
+    transforms[RENDER_TRANSFORM_WORLD].Make_Identity();
 }
 
 void Renderer::Set_Ambient(const Vector3 & color)
