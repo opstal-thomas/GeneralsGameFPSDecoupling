@@ -503,7 +503,7 @@ int wmain(int argc, wchar_t ** argv)
     const std::array<float, 4> replacement = {{0.6f, 0.2f, 0.4f, 1.f}};
     if (device.ClearActiveFrame(true, true, replacement.data(), 1.f))
     {
-        std::cerr << "ClearActiveFrame accepted a call outside a frame\\n";
+        std::cerr << "ClearActiveFrame accepted a call outside a frame\n";
         return 1;
     }
     if (!PresentAndVerify(device, initial,
