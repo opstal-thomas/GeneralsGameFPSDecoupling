@@ -50,6 +50,10 @@
 #include "WW3D2/mesh.h"
 #include "WW3D2/matinfo.h"
 
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+#include <vector>
+#endif
+
 #include "Common/FramePacer.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -2780,6 +2784,16 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 
 	m_drawingRiver = true;
 
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    // Preserve the exact CPU-generated, animated river vertices. The DX12
+    // mesh stream remains bounded to the currently supported 16-bit geometry.
+    const bool captureRiver = Renderer::Is_DX12_Gameplay_Preview_Recording() &&
+        rectangleCount > 0 && rectangleCount <= 8191;
+    std::vector<RenderGameplayPreviewVertex> dx12RiverVertices;
+    if (captureRiver)
+        dx12RiverVertices.resize(static_cast<size_t>(rectangleCount + 1) * 2);
+#endif
+
 	DynamicIBAccessClass ib_access(BUFFER_TYPE_DYNAMIC_DX8,indexCount);
 	{
 		DynamicIBAccessClass::WriteLockClass lockib(&ib_access);
@@ -2946,6 +2960,28 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 			vb->ny = 0;
 			vb->nz = 1.0f;
 			vb++;
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+            if (captureRiver)
+            {
+                for (unsigned point = 0; point < 2; ++point)
+                {
+                    const VertexFormatXYZNDUV2 & src = vb[static_cast<int>(point) - 2];
+                    RenderGameplayPreviewVertex & dest =
+                        dx12RiverVertices[static_cast<size_t>(i) * 2 + point];
+                    dest.position[0] = src.x;
+                    dest.position[1] = src.y;
+                    dest.position[2] = src.z;
+                    dest.diffuse[0] = ((src.diffuse >> 16) & 0xff) / 255.f;
+                    dest.diffuse[1] = ((src.diffuse >> 8) & 0xff) / 255.f;
+                    dest.diffuse[2] = (src.diffuse & 0xff) / 255.f;
+                    dest.diffuse[3] = ((src.diffuse >> 24) & 0xff) / 255.f;
+                    dest.uv0[0] = src.u1;
+                    dest.uv0[1] = src.v1;
+                    dest.uv1[0] = src.u2;
+                    dest.uv1[1] = src.v2;
+                }
+            }
+#endif
 
 		}
 	}
@@ -2975,6 +3011,33 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
 		DX8Wrapper::_Get_D3D_Device8()->SetRenderState(D3DRS_FILLMODE,D3DFILL_WIREFRAME);
 	}
 	DX8Wrapper::Draw_Triangles(	0,rectangleCount*2, 0,	(rectangleCount+1)*2);
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    if (captureRiver)
+    {
+        std::vector<unsigned short> dx12RiverIndices(
+            static_cast<size_t>(rectangleCount) * 6);
+        for (Int strip = 0; strip < rectangleCount; ++strip)
+        {
+            const unsigned base = static_cast<unsigned>(strip) * 2;
+            unsigned short * dst = dx12RiverIndices.data() + strip * 6;
+            dst[0] = base;
+            dst[1] = base + 1;
+            dst[2] = base + 3;
+            dst[3] = base;
+            dst[4] = base + 3;
+            dst[5] = base + 2;
+        }
+        RenderTextureHandle riverTexture = nullptr;
+        if (m_riverTexture && m_riverTexture->Is_Initialized())
+            riverTexture = m_riverTexture->Peek_Render_Texture();
+        Renderer::Preview_DX12_Gameplay_Mesh(
+            dx12RiverVertices.data(),
+            static_cast<unsigned>(dx12RiverVertices.size()),
+            dx12RiverIndices.data(),
+            static_cast<unsigned>(dx12RiverIndices.size()),
+            Matrix3D(true), riverTexture, false, true);
+    }
+#endif
 	if (wireframeForDebug) {
 		DX8Wrapper::_Get_D3D_Device8()->SetRenderState(D3DRS_FILLMODE,D3DFILL_SOLID);
 	}
