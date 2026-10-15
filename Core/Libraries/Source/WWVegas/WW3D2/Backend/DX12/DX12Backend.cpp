@@ -519,17 +519,9 @@ bool Renderer::Get_Adapter_Identification(RenderAdapterIdentification & identifi
 
 RenderCapabilities Renderer::Get_Capabilities()
 {
-    RenderCapabilities caps;
-    if (Has_Active_Device())
-    {
-        caps.hardwareTransformAndLighting = true;
-        caps.textureCompression = true;
-        caps.anisotropicFiltering = true;
-        caps.cubeTextures = true;
-        caps.maxTextureWidth = 16384;
-        caps.maxTextureHeight = 16384;
-    }
-    return caps;
+    // Hardware capabilities are not W3D feature support. Do not advertise
+    // textures, shaders or geometry until the native resource path exists.
+    return RenderCapabilities();
 }
 
 void Renderer::Set_Mesh_Camera(CameraClass * camera)
