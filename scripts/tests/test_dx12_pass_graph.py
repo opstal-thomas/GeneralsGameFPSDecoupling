@@ -46,6 +46,11 @@ class DX12B05PassGraphTests(unittest.TestCase):
         self.assertIn("Simultaneous UAV write and shader-read hazard", code)
         self.assertIn("UAVBarrier(output)", code)
         self.assertIn("A pass must declare a color, depth or UAV output", code)
+        self.assertIn("D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET", code)
+        self.assertIn("D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL", code)
+        self.assertIn("D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS", code)
+        self.assertIn("D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE", code)
+        self.assertIn("RequireState(depthBuffer_, D3D12_RESOURCE_STATE_DEPTH_WRITE)", code)
         self.assertIn("states_.clear()", code)
 
     def test_actual_dx12_presentation_owns_transitions(self):
