@@ -31,6 +31,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_launch_checkpoint.py'
       - name: Verify DX12-B05 pass scheduling and resource-state contracts
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_pass_graph.py'
+      - name: Verify R01 native vertex and index buffer migration
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_geometry_buffers.py'
       - name: Prevent direct DX8 call regressions
         run: python3 scripts/check_w3d_dx8_boundaries.py
       - name: Inventory DX8 symbols and block new runtime dependencies
