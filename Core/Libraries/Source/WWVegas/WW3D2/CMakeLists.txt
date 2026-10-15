@@ -304,6 +304,8 @@ if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW OR
     add_library(w3d_dx12_presentation STATIC EXCLUDE_FROM_ALL
         Backend/DX12/DX12PresentationDevice.h
         Backend/DX12/DX12PresentationDevice.cpp
+        Backend/DX12/DX12W3DPassGraph.h
+        Backend/DX12/DX12W3DPassGraph.cpp
         Backend/DX12/DX12PrimaryWindow.h
         Backend/DX12/DX12PrimaryWindow.cpp
         Backend/DX12/DX12IndexedMeshPass.h
