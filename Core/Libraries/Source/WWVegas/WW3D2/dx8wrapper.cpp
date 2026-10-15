@@ -2312,7 +2312,7 @@ void DX8Wrapper::Apply_Render_State_Changes()
 				if (render_state.LightEnable[index]) {
 #if defined(DEBUG_CRASHING) || defined(DEBUG_LOGGING)
 					if ( WW3D::Is_Snapshot_Activated() ) {
-						D3DLIGHT8 * light = &(render_state.Lights[index]);
+						RenderSortingLight * light = &(render_state.Lights[index]);
 						static const char * _light_types[] = { "Unknown", "Point","Spot", "Directional" };
 						WWASSERT((light->Type >= 0) && (light->Type <= 3));
 
@@ -2327,7 +2327,8 @@ void DX8Wrapper::Apply_Render_State_Changes()
 					}
 #endif
 
-					Set_DX8_Light(index,&render_state.Lights[index]);
+					D3DLIGHT8 nativeLight = DX8_Light_From_Render_Sorting(render_state.Lights[index]);
+					Set_DX8_Light(index, &nativeLight);
 				}
 				else {
 					Set_DX8_Light(index,nullptr);
@@ -2339,11 +2340,11 @@ void DX8Wrapper::Apply_Render_State_Changes()
 
 	if (render_state_changed&WORLD_CHANGED) {
 		SNAPSHOT_SAY(("DX8 - apply world matrix"));
-		_Set_DX8_Transform(D3DTS_WORLD,render_state.world);
+		_Set_DX8_Transform(D3DTS_WORLD,DX8_Matrix_From_Render_Sorting(render_state.world));
 	}
 	if (render_state_changed&VIEW_CHANGED) {
 		SNAPSHOT_SAY(("DX8 - apply view matrix"));
-		_Set_DX8_Transform(D3DTS_VIEW,render_state.view);
+		_Set_DX8_Transform(D3DTS_VIEW,DX8_Matrix_From_Render_Sorting(render_state.view));
 	}
 	if (render_state_changed&VERTEX_BUFFER_CHANGED) {
 		SNAPSHOT_SAY(("DX8 - apply vb change"));
@@ -3009,7 +3010,7 @@ void DX8Wrapper::Compute_Caps(WW3DFormat display_format)
 void DX8Wrapper::Set_Light(unsigned index, const D3DLIGHT8* light)
 {
 	if (light) {
-		render_state.Lights[index]=*light;
+		render_state.Lights[index]=Render_Sorting_Light_From_DX8(*light);
 		render_state.LightEnable[index]=true;
 	}
 	else {
@@ -3747,7 +3748,9 @@ void DX8Wrapper::Set_World_Identity()
 {
 	if (render_state_changed&(unsigned)WORLD_IDENTITY)
 		return;
-	wrapper::D3DMatrixIdentity(&render_state.world);
+	D3DMATRIX identity;
+	wrapper::D3DMatrixIdentity(&identity);
+	render_state.world=Render_Sorting_Matrix_From_DX8(identity);
 	render_state_changed|=(unsigned)WORLD_CHANGED|(unsigned)WORLD_IDENTITY;
 }
 
@@ -3755,7 +3758,9 @@ void DX8Wrapper::Set_View_Identity()
 {
 	if (render_state_changed&(unsigned)VIEW_IDENTITY)
 		return;
-	wrapper::D3DMatrixIdentity(&render_state.view);
+	D3DMATRIX identity;
+	wrapper::D3DMatrixIdentity(&identity);
+	render_state.view=Render_Sorting_Matrix_From_DX8(identity);
 	render_state_changed|=(unsigned)VIEW_CHANGED|(unsigned)VIEW_IDENTITY;
 }
 

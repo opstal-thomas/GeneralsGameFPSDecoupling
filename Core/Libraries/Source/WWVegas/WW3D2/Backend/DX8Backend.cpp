@@ -184,10 +184,21 @@ void Renderer::Release_Sorting_State()
     DX8Wrapper::Release_Render_State();
 }
 
+static void Apply_DX8_Sorting_Light(unsigned index, const RenderSortingLight * light)
+{
+    if (!light)
+    {
+        DX8Wrapper::Set_DX8_Light(index, nullptr);
+        return;
+    }
+    D3DLIGHT8 nativeLight = DX8_Light_From_Render_Sorting(*light);
+    DX8Wrapper::Set_DX8_Light(index, &nativeLight);
+}
+
 void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_state)
 {
-    DX8Wrapper::_Set_DX8_Transform(D3DTS_WORLD,render_state.world);
-    DX8Wrapper::_Set_DX8_Transform(D3DTS_VIEW,render_state.view);
+    DX8Wrapper::_Set_DX8_Transform(D3DTS_WORLD, DX8_Matrix_From_Render_Sorting(render_state.world));
+    DX8Wrapper::_Set_DX8_Transform(D3DTS_VIEW, DX8_Matrix_From_Render_Sorting(render_state.view));
 
 
     if (!render_state.material->Get_Lighting())
@@ -195,28 +206,28 @@ void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_st
   //prevLight = render_state.lightsHash;
 
     if (render_state.LightEnable[0]) {
-    	DX8Wrapper::Set_DX8_Light(0,&render_state.Lights[0]);
+    	Apply_DX8_Sorting_Light(0,&render_state.Lights[0]);
     	if (render_state.LightEnable[1]) {
-    		DX8Wrapper::Set_DX8_Light(1,&render_state.Lights[1]);
+    		Apply_DX8_Sorting_Light(1,&render_state.Lights[1]);
     		if (render_state.LightEnable[2]) {
-    			DX8Wrapper::Set_DX8_Light(2,&render_state.Lights[2]);
+    			Apply_DX8_Sorting_Light(2,&render_state.Lights[2]);
     			if (render_state.LightEnable[3]) {
-    				DX8Wrapper::Set_DX8_Light(3,&render_state.Lights[3]);
+    				Apply_DX8_Sorting_Light(3,&render_state.Lights[3]);
     			}
     			else {
-    				DX8Wrapper::Set_DX8_Light(3,nullptr);
+    				Apply_DX8_Sorting_Light(3,nullptr);
     			}
     		}
     		else {
-    			DX8Wrapper::Set_DX8_Light(2,nullptr);
+    			Apply_DX8_Sorting_Light(2,nullptr);
     		}
     	}
     	else {
-    		DX8Wrapper::Set_DX8_Light(1,nullptr);
+    		Apply_DX8_Sorting_Light(1,nullptr);
     	}
     }
     else {
-    	DX8Wrapper::Set_DX8_Light(0,nullptr);
+    	Apply_DX8_Sorting_Light(0,nullptr);
     }
 }
 

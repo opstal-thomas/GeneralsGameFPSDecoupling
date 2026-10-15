@@ -70,6 +70,21 @@ using RenderTextureVolumeHandle = RendererTextureVolumeResource *;
 struct RendererSurfaceResource;
 using RenderSurfaceHandle = RendererSurfaceResource *;
 
+// Legacy sorted/deferred geometry keeps raw, already-transposed matrices
+// and fixed-function light fields, but the snapshot no longer uses D3D8 types.
+// The DX8 adapter explicitly converts these values at its boundary.
+struct RenderSortingMatrix { float m[4][4]; };
+struct RenderSortingColor { float r, g, b, a; };
+struct RenderSortingVector { float x, y, z; };
+
+struct RenderSortingLight
+{
+    unsigned Type;
+    RenderSortingColor Diffuse, Specular, Ambient;
+    RenderSortingVector Position, Direction;
+    float Range, Falloff, Attenuation0, Attenuation1, Attenuation2, Theta, Phi;
+};
+
 // Pixel-space surface copy regions, independent of Windows RECT/POINT.
 // Right and bottom are exclusive, matching the existing W3D surface API.
 struct RenderSurfaceRect

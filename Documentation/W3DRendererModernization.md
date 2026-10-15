@@ -614,6 +614,16 @@ releases the old reference, assigns the incoming one, and retains it.
 Format and mip description remain backend queries. This migrates the
 virtual resource replacement contract without changing loader order.
 
+### Backend-neutral sorting lights and matrices
+
+The legacy `RenderStateStruct` now carries `RenderSortingLight` and
+`RenderSortingMatrix` values instead of native D3DLIGHT8/D3DMATRIX fields.
+The DX8 wrapper verifies exact sizes and offsets at compile time, converting
+back to native values only at the device API boundary. Lighting, original
+pretransposed world/view transforms, deferred state invalidation and legacy
+engine buffer-reference counts remain unchanged. Sorting geometry and the
+D3DX-based CPU projection remain legacy-owned for a later stage.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

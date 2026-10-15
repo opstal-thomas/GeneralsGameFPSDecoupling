@@ -52,6 +52,9 @@
 #include "WWMath/vector4.h"
 #include "WWLib/cpudetect.h"
 #include "dx8caps.h"
+#include "Renderer.h"
+#include <cstddef>
+#include <cstring>
 
 #include "texture.h"
 #include "dx8vertexbuffer.h"
@@ -198,10 +201,10 @@ struct RenderStateStruct
 	ShaderClass shader;
 	VertexMaterialClass* material;
 	TextureBaseClass * Textures[MAX_TEXTURE_STAGES];
-	D3DLIGHT8 Lights[4];
+	RenderSortingLight Lights[4];
 	bool LightEnable[4];
-	D3DMATRIX world;
-	D3DMATRIX view;
+	RenderSortingMatrix world;
+	RenderSortingMatrix view;
 	unsigned vertex_buffer_types[MAX_VERTEX_STREAMS];
 	unsigned index_buffer_type;
 	unsigned short vba_offset;
@@ -216,6 +219,42 @@ struct RenderStateStruct
 
 	RenderStateStruct& operator= (const RenderStateStruct& src);
 };
+
+// The DX8 compatibility copy must stay byte-identical to the original state.
+static_assert(sizeof(RenderSortingMatrix) == sizeof(D3DMATRIX), "DX8 sorting matrix size");
+static_assert(sizeof(RenderSortingColor) == sizeof(D3DCOLORVALUE), "DX8 sorting color size");
+static_assert(sizeof(RenderSortingVector) == sizeof(D3DVECTOR), "DX8 sorting vector size");
+static_assert(sizeof(RenderSortingLight) == sizeof(D3DLIGHT8), "DX8 sorting light size");
+static_assert(offsetof(RenderSortingLight, Direction) == offsetof(D3DLIGHT8, Direction), "DX8 sorting direction offset");
+static_assert(offsetof(RenderSortingLight, Attenuation0) == offsetof(D3DLIGHT8, Attenuation0), "DX8 sorting attenuation offset");
+
+inline RenderSortingMatrix Render_Sorting_Matrix_From_DX8(const D3DMATRIX & source)
+{
+    RenderSortingMatrix result;
+    std::memcpy(&result, &source, sizeof(result));
+    return result;
+}
+
+inline D3DMATRIX DX8_Matrix_From_Render_Sorting(const RenderSortingMatrix & source)
+{
+    D3DMATRIX result;
+    std::memcpy(&result, &source, sizeof(result));
+    return result;
+}
+
+inline RenderSortingLight Render_Sorting_Light_From_DX8(const D3DLIGHT8 & source)
+{
+    RenderSortingLight result;
+    std::memcpy(&result, &source, sizeof(result));
+    return result;
+}
+
+inline D3DLIGHT8 DX8_Light_From_Render_Sorting(const RenderSortingLight & source)
+{
+    D3DLIGHT8 result;
+    std::memcpy(&result, &source, sizeof(result));
+    return result;
+}
 
 /**
 ** DX8Wrapper
@@ -1217,12 +1256,12 @@ WWINLINE void DX8Wrapper::Set_Transform(D3DTRANSFORMSTATETYPE transform,const Ma
 {
 	switch ((int)transform) {
 	case D3DTS_WORLD:
-		render_state.world=To_D3DMATRIX(m);
+		render_state.world=Render_Sorting_Matrix_From_DX8(To_D3DMATRIX(m));
 		render_state_changed|=(unsigned)WORLD_CHANGED;
 		render_state_changed&=~(unsigned)WORLD_IDENTITY;
 		break;
 	case D3DTS_VIEW:
-		render_state.view=To_D3DMATRIX(m);
+		render_state.view=Render_Sorting_Matrix_From_DX8(To_D3DMATRIX(m));
 		render_state_changed|=(unsigned)VIEW_CHANGED;
 		render_state_changed&=~(unsigned)VIEW_IDENTITY;
 		break;
@@ -1246,12 +1285,12 @@ WWINLINE void DX8Wrapper::Set_Transform(D3DTRANSFORMSTATETYPE transform,const Ma
 {
 	switch ((int)transform) {
 	case D3DTS_WORLD:
-		render_state.world=To_D3DMATRIX(m);
+		render_state.world=Render_Sorting_Matrix_From_DX8(To_D3DMATRIX(m));
 		render_state_changed|=(unsigned)WORLD_CHANGED;
 		render_state_changed&=~(unsigned)WORLD_IDENTITY;
 		break;
 	case D3DTS_VIEW:
-		render_state.view=To_D3DMATRIX(m);
+		render_state.view=Render_Sorting_Matrix_From_DX8(To_D3DMATRIX(m));
 		render_state_changed|=(unsigned)VIEW_CHANGED;
 		render_state_changed&=~(unsigned)VIEW_IDENTITY;
 		break;
@@ -1278,11 +1317,11 @@ WWINLINE void DX8Wrapper::Get_Transform(D3DTRANSFORMSTATETYPE transform, Matrix4
 	switch ((int)transform) {
 	case D3DTS_WORLD:
 		if (render_state_changed&WORLD_IDENTITY) m.Make_Identity();
-		else m=To_Matrix4x4(render_state.world);
+		else m=To_Matrix4x4(DX8_Matrix_From_Render_Sorting(render_state.world));
 		break;
 	case D3DTS_VIEW:
 		if (render_state_changed&VIEW_IDENTITY) m.Make_Identity();
-		else m=To_Matrix4x4(render_state.view);
+		else m=To_Matrix4x4(DX8_Matrix_From_Render_Sorting(render_state.view));
 		break;
 	default:
 		D3DMATRIX dxm;

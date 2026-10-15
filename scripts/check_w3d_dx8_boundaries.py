@@ -94,6 +94,10 @@ def main() -> int:
     errors.extend(check(WW3D / "surfaceclass.h", [
         r"\bIDirect3DSurface8\s*\*\s*D3DSurface\b",
     ]))
+    errors.extend(check(WW3D / "dx8wrapper.h", [
+        r"\bD3DLIGHT8\s+Lights\s*\[",
+        r"\bD3DMATRIX\s+(?:world|view)\s*;",
+    ]))
     errors.extend(check(WW3D / "texture.h", [
         r"\bIDirect3DBaseTexture8\s*\*\s*D3DTexture\b",
     ]))
