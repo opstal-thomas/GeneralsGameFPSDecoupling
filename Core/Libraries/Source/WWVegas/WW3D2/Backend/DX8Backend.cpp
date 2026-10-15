@@ -82,6 +82,18 @@ bool Renderer::Has_Active_Device()
     return DX8Wrapper::_Get_D3D_Device8() != nullptr;
 }
 
+bool Renderer::Is_Device_Unavailable_For_Rendering()
+{
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    // Match the old null-device path: only a present, lost device skips work.
+    return device && device->TestCooperativeLevel() != D3D_OK;
+}
+
+bool Renderer::Is_Debug_Console_Disabled()
+{
+    return DX8Wrapper::stats.m_disableConsole;
+}
+
 void Renderer::Set_Gamma(float gamma, float bright, float contrast, bool calibrate, bool uselimit)
 {
     DX8Wrapper::Set_Gamma(gamma, bright, contrast, calibrate, uselimit);

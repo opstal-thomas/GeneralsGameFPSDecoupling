@@ -31,6 +31,7 @@
 #include "WW3D2/camera.h"
 #include "WWLib/simplevec.h"
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/Renderer.h"
 #include "WWMath/vector2i.h"
 #include "Common/MapObject.h"
 #include "Common/PerfTimer.h"
@@ -462,7 +463,7 @@ void W3DShroud::render(CameraClass *cam)
 	if (!m_shroudData)
 		return; //nothing to update from.  Must be in reset state.
 
-	if (DX8Wrapper::_Get_D3D_Device8() && (DX8Wrapper::_Get_D3D_Device8()->TestCooperativeLevel()) != D3D_OK)
+	if (Renderer::Is_Device_Unavailable_For_Rendering())
 		return;	//device not ready to render anything
 
 #if defined(RTS_DEBUG)

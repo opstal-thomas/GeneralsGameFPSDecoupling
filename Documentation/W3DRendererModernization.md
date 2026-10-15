@@ -647,6 +647,17 @@ order, and existing vertex copies are unchanged. This removes direct D3DX
 math calls from the W3D sorting source while leaving the current GPU
 sorting buffers and DX8 reference cache intact.
 
+### Game-specific road, debug UI and shroud dispatch boundaries
+
+Both game variants now submit road buffer selection, texture and shader state
+and geometry draws through `Renderer`. The debug hint overlay similarly
+routes material, texture, mesh binding, world transforms and geometry through
+Renderer; the console suppression flag is queried from the backend.
+Shroud update readiness uses the renderer-level availability test, which
+preserves DX8's previous device-present and cooperative-level condition,
+including the null-device behavior. The automated audit now guards all six
+game-specific files against direct DX8Wrapper device dispatch.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

@@ -27,6 +27,12 @@ FULLY_ROUTED = [
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp"),
     Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
     Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
+    Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DRoadBuffer.cpp"),
+    Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DRoadBuffer.cpp"),
+    Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DInGameUI.cpp"),
+    Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DInGameUI.cpp"),
+    Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DShroud.cpp"),
+    Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DShroud.cpp"),
 ]
 
 DYNAMIC_BINDING_VIEW_CALLERS = [

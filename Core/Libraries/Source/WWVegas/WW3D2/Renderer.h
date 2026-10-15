@@ -633,6 +633,10 @@ public:
     static unsigned Get_Render_Thread_ID();
     // The device may be absent in lite/reset modes even after initialization.
     static bool Has_Active_Device();
+    // Preserve the old device-present && TestCooperativeLevel()!=D3D_OK
+    // condition for pausing shroud uploads on DX8 device loss/reset.
+    static bool Is_Device_Unavailable_For_Rendering();
+    static bool Is_Debug_Console_Disabled();
 
     // Device selection, resolution and present policy stay behind the
     // backend boundary. The DX8 implementation preserves legacy semantics.

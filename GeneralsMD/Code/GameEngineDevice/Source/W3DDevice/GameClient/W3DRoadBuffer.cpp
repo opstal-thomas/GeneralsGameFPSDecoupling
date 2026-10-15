@@ -63,6 +63,7 @@
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/Renderer.h"
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
@@ -159,8 +160,8 @@ RoadType::~RoadType()
 void RoadType::applyTexture()
 {
  	W3DShaderManager::setTexture(0,m_roadTexture);
-	DX8Wrapper::Set_Index_Buffer(m_indexRoad,0);
-	DX8Wrapper::Set_Vertex_Buffer(m_vertexRoad);
+	Renderer::Bind_Legacy_Index_Buffer(m_indexRoad,0);
+	Renderer::Bind_Legacy_Vertex_Buffer(m_vertexRoad);
 }
 
 
@@ -3334,19 +3335,19 @@ void W3DRoadBuffer::drawRoads(CameraClass * camera, TextureClass *cloudTexture, 
 			if (m_roadTypes[i].getNumIndices() == 0) continue;
 			if (wireframe) {
 				m_roadTypes[i].applyTexture();
-				DX8Wrapper::Set_Texture(0,nullptr);
+				Renderer::Set_Texture(0,nullptr);
 			} else {
 				m_roadTypes[i].applyTexture();
 			}
 	#ifdef RTS_DEBUG
-			//DX8Wrapper::Set_Shader(detailShader); // shows clipping.
+			//Renderer::Set_Shader(detailShader); // shows clipping.
 	#endif
 			for (Int pass=0; pass < devicePasses; pass++)
 			{
 				if (!wireframe)
 		 			W3DShaderManager::setShader(st, pass);
 				//Draw all this road type.
-				DX8Wrapper::Draw_Triangles(	0, m_roadTypes[i].getNumIndices()/3, 0,	m_roadTypes[i].getNumVertices());
+				Renderer::Draw_Triangles(	0, m_roadTypes[i].getNumIndices()/3, 0,	m_roadTypes[i].getNumVertices());
 #ifdef LOG_STATS
 				polys += m_roadTypes[i].getNumIndices()/3;
 #endif
@@ -3364,8 +3365,8 @@ void W3DRoadBuffer::drawRoads(CameraClass * camera, TextureClass *cloudTexture, 
 
 #if 0
 	// Need to use a separate set of index & vertex buffers for this.  jba.
-	DX8Wrapper::Set_Index_Buffer(nullptr,0);
-	DX8Wrapper::Set_Vertex_Buffer(nullptr);
+	Renderer::Bind_Legacy_Index_Buffer(nullptr,0);
+	Renderer::Bind_Legacy_Vertex_Buffer(nullptr);
 	if (pDynamicLightsIterator) {
 		for (i=0; i<m_maxRoadTypes; i++) {
 			m_curRoadType = i;
@@ -3374,16 +3375,16 @@ void W3DRoadBuffer::drawRoads(CameraClass * camera, TextureClass *cloudTexture, 
 			loadLitRoadsInVertexAndIndexBuffers(pDynamicLightsIterator);
 			if (this->m_curNumRoadIndices == 0) continue;
 			if (wireframe) {
-					DX8Wrapper::Set_Texture(0,nullptr);
+					Renderer::Set_Texture(0,nullptr);
 			} else {
 				m_roadTypes[i].applyTexture();
 				if (cloudTexture) {
-					DX8Wrapper::Set_Texture(1,cloudTexture);
+					Renderer::Set_Texture(1,cloudTexture);
 				}
 			}
-			DX8Wrapper::Set_Shader(detailAlphaShader);
+			Renderer::Set_Shader(detailAlphaShader);
 			//Draw all the roads.
-			DX8Wrapper::Draw_Triangles(	0, m_curNumRoadIndices/3, 0,	m_curNumRoadVertices);
+			Renderer::Draw_Triangles(	0, m_curNumRoadIndices/3, 0,	m_curNumRoadVertices);
 		}
 	}
 #endif
