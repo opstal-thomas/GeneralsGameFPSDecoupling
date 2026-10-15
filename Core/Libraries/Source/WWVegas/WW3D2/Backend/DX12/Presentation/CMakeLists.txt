@@ -55,6 +55,7 @@ add_executable(W3DDX12RendererFrameSmoke
 target_include_directories(W3DDX12RendererFrameSmoke PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../.."
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../Include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../../Dependencies/Utility"
 )
 target_compile_features(W3DDX12RendererFrameSmoke PRIVATE cxx_std_17)
 target_compile_definitions(W3DDX12RendererFrameSmoke PRIVATE
