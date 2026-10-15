@@ -186,6 +186,12 @@ void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangle
     DX8Wrapper::Draw_Triangles(startIndex, triangleCount, minVertexIndex, vertexCount);
 }
 
+void Renderer::Draw_Triangle_Strip(unsigned short startIndex, unsigned short primitiveCount,
+                                   unsigned short minVertexIndex, unsigned short vertexCount)
+{
+    DX8Wrapper::Draw_Strip(startIndex, primitiveCount, minVertexIndex, vertexCount);
+}
+
 void Renderer::Capture_Sorting_State(RenderStateStruct & state)
 {
     DX8Wrapper::Get_Render_State(state);
@@ -1493,6 +1499,11 @@ void Renderer::Apply_Blend_State(const RenderBlendState & state)
 void Renderer::Set_Depth_Compare(RenderCompareFunc compare)
 {
     DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC, To_DX8_Compare(compare));
+}
+
+void Renderer::Set_Legacy_Depth_Bias(unsigned bias)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_ZBIAS, bias);
 }
 
 void Renderer::Set_Depth_Write(bool enabled)

@@ -309,18 +309,25 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 	Real	widthFrac;
 	Real	heightFrac;
 
+	const unsigned vertexStride = vertexBuffer->FVF_Info().Get_FVF_Size();
+	RenderVertexBufferHandle bufferHandle = vertexBuffer->Get_Render_Vertex_Buffer();
 	if (batchStart < (WATER_VB_PAGES*WATER_STRIP_X*WATER_STRIP_Y-m_x*m_y))
 	{
-		//we have room in current VB, append new verts
-		if(vertexBuffer->Get_DX8_Vertex_Buffer()->Lock(batchStart*vertexBuffer->FVF_Info().Get_FVF_Size(),m_x*m_y*vertexBuffer->FVF_Info().Get_FVF_Size(),(unsigned char**)&vb,D3DLOCK_NOOVERWRITE) != D3D_OK)
+		// Append to the same dynamic ring slice, preserving NOOVERWRITE.
+		vb = static_cast<VertexFormatXYZDUV1 *>(Renderer::Map_Vertex_Buffer(
+			bufferHandle, batchStart*vertexStride, m_x*m_y*vertexStride,
+			RENDER_MAP_NO_OVERWRITE));
+		if (!vb)
 			return batchStart;
 	}
 	else
 	{
-		//ran out of room in last VB, request a substitute VB.
-		if(vertexBuffer->Get_DX8_Vertex_Buffer()->Lock(0,m_x*m_y*vertexBuffer->FVF_Info().Get_FVF_Size(),(unsigned char**)&vb,D3DLOCK_DISCARD) != D3D_OK)
+		// End of ring: discard the old contents and restart at vertex zero.
+		vb = static_cast<VertexFormatXYZDUV1 *>(Renderer::Map_Vertex_Buffer(
+			bufferHandle, 0, m_x*m_y*vertexStride, RENDER_MAP_DISCARD));
+		if (!vb)
 			return batchStart;
-		batchStart=0;	//reset start of page to first vertex
+		batchStart=0;
 	}
 
 	//Adjust wave position in a non-linear way so that it slows down as it hits the target.  Using 1/4 sine wave
@@ -479,12 +486,12 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 	vb->v1=1.0f;
 	vb++;
 
-	vertexBuffer->Get_DX8_Vertex_Buffer()->Unlock();
+	Renderer::Unmap_Vertex_Buffer(bufferHandle);
 
 	Int idxCount=(m_y-1)*(m_x*2+2) - 2;	//index count
 
-	DX8Wrapper::Set_Index_Buffer(TheWaterTracksRenderSystem->m_indexBuffer,batchStart);
-	DX8Wrapper::Draw_Strip(0,idxCount-2,0,m_x*m_y);	//there are always n-2 primitives for n index strip.
+	Renderer::Bind_Legacy_Index_Buffer(TheWaterTracksRenderSystem->m_indexBuffer,batchStart);
+	Renderer::Draw_Triangle_Strip(0,idxCount-2,0,m_x*m_y);	//there are always n-2 primitives for n index strip.
 
 	return batchStart+m_x*m_y;	//return new offset into unused area of vertex buffer
 }
@@ -904,8 +911,8 @@ Try improving the fit to vertical surfaces like cliffs.
 	Renderer::Set_Material(m_vertexMaterialClass);
 	Renderer::Set_Shader(m_shaderClass);
 
-	DX8Wrapper::Set_Vertex_Buffer(m_vertexBuffer);
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ZBIAS,8);
+	Renderer::Bind_Legacy_Vertex_Buffer(m_vertexBuffer);
+	Renderer::Set_Legacy_Depth_Bias(8);
 	//Force apply of render states so we can override them.
 	Renderer::Apply_Pending_State_Changes();
 
@@ -915,14 +922,14 @@ Try improving the fit to vertical surfaces like cliffs.
 		W3DShaderManager::setShader(W3DShaderManager::ST_SHROUD_TEXTURE, 1);
 
 		//modulate with shroud texture
-		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_COLORARG1, D3DTA_TEXTURE );	//stage 1 texture
-		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_COLORARG2, D3DTA_CURRENT );	//previous stage texture
-		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_COLOROP,   D3DTOP_MODULATE );
-		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ALPHAOP,   D3DTOP_MODULATE );
+		Renderer::Set_Fixed_Stage_Argument(1, false, 1, RENDER_TEXARG_TEXTURE);	//stage 1 texture
+		Renderer::Set_Fixed_Stage_Argument(1, false, 2, RENDER_TEXARG_CURRENT);	//previous stage texture
+		Renderer::Set_Fixed_Stage_Operation(1, false, RENDER_FIXED_STAGE_MODULATE);
+		Renderer::Set_Fixed_Stage_Operation(1, true, RENDER_FIXED_STAGE_MODULATE);
 
 		//Shroud shader uses z-compare of EQUAL which wouldn't work on water because it doesn't
 		//write to the zbuffer.  Change to LESSEQUAL.
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+		Renderer::Set_Depth_Compare(RENDER_COMPARE_LESS_EQUAL);
 	}
 
 	Int LastTextureType=-1;
@@ -941,12 +948,12 @@ Try improving the fit to vertical surfaces like cliffs.
 		mod = mod->m_nextSystem;
 	}
 
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ZBIAS,0);
+	Renderer::Set_Legacy_Depth_Bias(0);
 
 	if (TheTerrainRenderObject->getShroud())
 	{
 		//we used the shroud shader, so reset it.
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC, D3DCMP_EQUAL);
+		Renderer::Set_Depth_Compare(RENDER_COMPARE_EQUAL);
 		W3DShaderManager::resetShader(W3DShaderManager::ST_SHROUD_TEXTURE);
 	}
 }

@@ -658,6 +658,18 @@ preserves DX8's previous device-present and cooperative-level condition,
 including the null-device behavior. The automated audit now guards all six
 game-specific files against direct DX8Wrapper device dispatch.
 
+### Water tracks: neutral buffer mapping, strips and depth state
+
+The water-tracks rendering module now maps/unmaps its vertex stream with
+`Renderer`, preserving the dynamic ring-page NOOVERWRITE/DISCARD policy,
+appended vertex offsets and original strip index counts. Legacy index/vertex
+binding and indexed strip submission also route through `Renderer`.
+The fixed-function stage argument and combiner changes, water Z-bias and
+depth-compare overrides are expressed as neutral state operations. The DX8
+backend still executes the original render-state and `Draw_Strip` calls;
+shroud blending and draw order are unchanged. The boundary audit guards
+this migrated module against future direct DX8 wrapper calls.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

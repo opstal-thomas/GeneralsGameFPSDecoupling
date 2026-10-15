@@ -25,6 +25,7 @@ FULLY_ROUTED = [
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainBackground.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"),
     Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/Water/W3DWaterTracks.cpp"),
     Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
     Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
     Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DRoadBuffer.cpp"),

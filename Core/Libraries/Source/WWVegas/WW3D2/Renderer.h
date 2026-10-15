@@ -696,6 +696,10 @@ public:
     // dynamic sorting remain separate from this draw command for now.
     static void Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,
                                unsigned short minVertexIndex, unsigned short vertexCount);
+    // Water tracks submit indexed triangle strips; the count is the number
+    // of primitives, matching the legacy DX8 Draw_Strip contract.
+    static void Draw_Triangle_Strip(unsigned short startIndex, unsigned short primitiveCount,
+                                    unsigned short minVertexIndex, unsigned short vertexCount);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs
@@ -944,6 +948,9 @@ public:
     // Supports the legacy effects' alpha-only and RGB-only passes.
     static void Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled);
     static void Set_Depth_Compare(RenderCompareFunc compare);
+    // W3D water tracks use integer legacy Z-bias steps; the backend maps the
+    // meaning to native API state until a true semantic depth-bias model exists.
+    static void Set_Legacy_Depth_Bias(unsigned bias);
     static void Set_Depth_Write(bool enabled);
     static void Set_Cull_Mode(RenderCullMode cullMode);
     static void Set_Alpha_Test_Enabled(bool enabled);
