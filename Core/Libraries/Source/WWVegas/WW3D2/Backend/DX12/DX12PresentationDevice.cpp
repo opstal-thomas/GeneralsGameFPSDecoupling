@@ -60,6 +60,7 @@ struct DX12PresentationDevice::Impl
     unsigned height = 0;
     float sourceAspect = 0.f;
     bool recording = false;
+    unsigned boundBaseVertexIndex = 0;
     // Resources referenced by a submitted command list cannot be released
     // when their W3D owner is destroyed on the CPU. Keep a per-frame
     // AddRef until the queue signals its fence; handles may be reused.
@@ -203,6 +204,7 @@ struct DX12PresentationDevice::Impl
         width = height = 0;
         sourceAspect = 0.f;
         recording = false;
+        boundBaseVertexIndex = 0;
         recordingResources.clear();
         retiredResources.clear();
         passGraph.Reset();
@@ -383,6 +385,7 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
     if (!state.WaitForFence(state.frameFences[index]))
         return false;
     state.CollectRetired();
+    state.boundBaseVertexIndex = 0;
     if (!state.recordingResources.empty())
         return state.Fail("Unsubmitted frame resource retention remained", E_FAIL);
     if (!state.Check(state.allocators[index]->Reset(), "Reset frame command allocator"))
@@ -570,6 +573,17 @@ unsigned DX12PresentationDevice::InFlightResourceCount() const
     for (const auto & frame : impl_->retiredResources)
         count += frame.second.size();
     return static_cast<unsigned>(count);
+}
+
+void DX12PresentationDevice::SetBoundBaseVertexIndex(unsigned index)
+{
+    if (impl_->recording)
+        impl_->boundBaseVertexIndex = index;
+}
+
+unsigned DX12PresentationDevice::BoundBaseVertexIndex() const
+{
+    return impl_->boundBaseVertexIndex;
 }
 
 bool DX12PresentationDevice::WaitForIdle()
