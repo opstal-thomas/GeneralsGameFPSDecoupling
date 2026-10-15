@@ -66,8 +66,10 @@ remain fail-closed for DX12-only gameplay.
   `ResourceBarrier` calls can desynchronize the graph and is prohibited
   for these resources in future authoritative implementations.
 - Every frame returns its current back buffer to
-  `D3D12_RESOURCE_STATE_PRESENT`, regardless of which optional stages ran,
-  and still respects `End_Scene(false)` (submission without DXGI Present).
+  `D3D12_RESOURCE_STATE_PRESENT`, and restores the persistent D32 depth
+  surface to `D3D12_RESOURCE_STATE_DEPTH_WRITE`, even after an offscreen
+  copy or shader sampling stage. Optional stages may be skipped, and
+  `End_Scene(false)` still submits without DXGI Present.
 - Resource registrations are **per frame**. Offscreen resource owners must
   re-register their actual current states after frame completion.
   `Resize` / `Shutdown` invalidate the tracker, preventing stale COM
@@ -93,6 +95,12 @@ swap-chain resizing.
 `scripts/tests/test_dx12_pass_graph.py` guards the canonical order, native
 integration, forbidden DX8 delegation and test/CI coverage. Both it and
 the Windows WARP test gate the feature branch.
+
+**Verified 2026-10-16:** [Win32/x64 WARP, GPU pixel readback, shader and
+source-contract workflow](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38824254425)
+and [all seven Generals/Zero Hour Windows build/audit
+jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38824254493)
+passed.
 
 ### Follow-on integration
 
