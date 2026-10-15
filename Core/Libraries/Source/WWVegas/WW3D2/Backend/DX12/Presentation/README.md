@@ -5,10 +5,11 @@ It creates a D3D12 device (WARP or a supported hardware adapter), direct queue,
 double-buffered flip-discard DXGI swapchain bound to a real HWND, RTV heap,
 per-buffer allocators, graphics command list, and GPU fences.
 
-`BeginFrame` transitions the current buffer into render-target state and clears
-it; native DX12 W3D draws can be appended to `ActiveCommandList()`.
-`EndFrame` transitions to PRESENT, executes commands, calls IDXGISwapChain::Present
-and records an individual back-buffer fence. `Resize` waits for GPU idle before
+`BeginFrame` transitions the current buffer into render-target state and
+optionally clears color and depth; native DX12 W3D draws can be appended to
+`ActiveCommandList()`. `EndFrame` transitions the buffer back to PRESENT,
+executes the command list, optionally calls `IDXGISwapChain::Present` and
+records an individual back-buffer fence. `Resize` waits for GPU idle before
 releasing buffers and recreating RTVs. Zero-sized resize notifications are
 ignored until the window has a usable client area.
 
@@ -27,10 +28,11 @@ CI tests both Win32 (the game's target architecture) and x64 on WARP.
 Use `W3DDX12PresentationSmoke --hardware` locally to test a physical GPU.
 The workflow publishes standalone Win32 and x64 smoke executables as artifacts.
 
-The standalone test and optional `w3d_dx12_presentation` library share the
-same `.cpp` implementation. The library is deliberately NOT selected as the
-game's `Renderer` backend. There is no mesh/material submission or shipped
-DX12 gameplay renderer yet: the DX8 backend remains authoritative.
+The standalone test and the native `w3d_dx12_presentation` library share the
+same `.cpp` device implementation. The exclusive DX12 `Renderer` now uses
+this library behind an explicit diagnostic gate (B04); the real game still
+has unported geometry and material paths. The playable Generals/Zero Hour
+configuration therefore remains DX8.
 
 ## W3D indexed mesh validation
 
@@ -56,3 +58,17 @@ This standalone test is not a DX12 gameplay mode. It compiles HLSL from
 source only in the dev probe; production would embed precompiled shader
 bytecode. Lighting, fog, depth, alpha blending, complete W3D vertex layouts
 and full asset binding are separate milestones.
+
+## B10 — DX12-only developer launch
+
+`W3DDX12LaunchCheckpoint.exe` is a separate Win32 GUI executable that
+compiles and links the **actual** `DX12Backend.cpp` Renderer implementation
+without linking any Direct3D 8 library. It owns its main HWND, draws native
+D3D12 clear frames and runs until Escape/close; `--warp --frames 12 --ci`
+runs a deterministic startup/render/shutdown test. CI also audits the built
+Win32/x64 PE import tables for D3D8, verifying that the executable imports
+D3D12 and DXGI but not the original graphics API.
+
+See the [B10 launch guide](../../../../../../../../Documentation/DX12OnlyLaunchCheckpoint.md)
+for build instructions, acceptance criteria, and the dedicated GitHub Actions
+artifact. This launcher is **not** a playable Generals / Zero Hour binary.
