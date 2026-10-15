@@ -236,6 +236,9 @@ int wmain()
         !Check(!device.TransitionFrameResource(unregistered.Get(),
                                                D3D12_RESOURCE_STATE_COPY_SOURCE),
                "Reject unregistered resource") ||
+        !Check(device.RegisterFrameResource(unregistered.Get(),
+                    D3D12_RESOURCE_STATE_GENERIC_READ),
+               "Register upload buffer in its actual generic-read state") ||
         !Check(device.BeginRenderPass(DX12W3DPass::OpaqueWorld,
                                      Pass(offscreen.Get(), device.CurrentDepthTarget())),
                "Opaque world stage and offscreen target"))
@@ -252,6 +255,8 @@ int wmain()
     ID3D12Resource * inputs[] = {offscreen.Get()};
     const unsigned beforeInvalid = device.FrameBarrierCount();
     if (!Check(!device.BeginRenderPass(DX12W3DPass::Terrain,
+                   Pass(unregistered.Get())), "Reject buffer without ALLOW_RENDER_TARGET") ||
+        !Check(!device.BeginRenderPass(DX12W3DPass::Terrain,
                    Pass(offscreen.Get(), nullptr, inputs, 1)),
                "Reject reading and writing the same texture within one pass") ||
         !Check(device.FrameBarrierCount() == beforeInvalid,
@@ -309,7 +314,16 @@ int wmain()
         return 1;
     CopyOffscreen(device.ActiveCommandList(), offscreen.Get(), readback.Get());
 
+    // The primary depth target can be copied/read in a later pass. The
+    // graph must restore its persistent DEPTH_WRITE invariant at EndFrame,
+    // before the subsequent BeginFrame assumes that starting state.
+    if (!Check(device.TransitionFrameResource(device.CurrentDepthTarget(),
+               D3D12_RESOURCE_STATE_COPY_SOURCE), "Depth write -> copy read"))
+        return 1;
+    const unsigned barriersBeforeEnd = device.FrameBarrierCount();
     if (!Check(device.EndFrame(0), "Return swap chain to PRESENT + execute") ||
+        !Check(device.FrameBarrierCount() == barriersBeforeEnd + 2,
+               "Both primary color and depth restore their frame-end state") ||
         !Check(device.WaitForIdle(), "Wait WARP GPU completion") ||
         !Check(VerifyReadback(readback.Get(), clear), "GPU readback of offscreen stage") ||
         !Check(!device.GetFrameResourceState(offscreen.Get(), tracked),
