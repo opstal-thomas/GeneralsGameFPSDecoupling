@@ -71,3 +71,31 @@ target_link_libraries(W3DDX12RendererFrameSmoke PRIVATE
 add_test(NAME W3D_DX12_WARP_Renderer_Frame_State
     COMMAND W3DDX12RendererFrameSmoke)
 set_tests_properties(W3D_DX12_WARP_Renderer_Frame_State PROPERTIES TIMEOUT 90)
+
+# DX12-B10: a separately built Windows GUI executable, with the real native
+# Renderer implementation and no engine/game bootstrap or DX8 dependencies.
+# Only THIS executable receives the developer checkpoint compile definition;
+# normal Generals / Zero Hour DX12 configurations remain fail-closed.
+add_executable(W3DDX12LaunchCheckpoint WIN32
+    DX12LaunchCheckpoint.cpp
+    ../DX12Backend.cpp
+)
+target_include_directories(W3DDX12LaunchCheckpoint PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../.."
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../Include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../../Dependencies/Utility"
+)
+target_compile_features(W3DDX12LaunchCheckpoint PRIVATE cxx_std_17)
+target_compile_options(W3DDX12LaunchCheckpoint PRIVATE /Zc:__cplusplus)
+target_compile_definitions(W3DDX12LaunchCheckpoint PRIVATE
+    W3D_RENDER_BACKEND_DX12=1
+    W3D_DX12_DEVELOPER_CHECKPOINT=1
+    NOMINMAX WIN32_LEAN_AND_MEAN
+)
+target_link_libraries(W3DDX12LaunchCheckpoint PRIVATE
+    W3DDX12PresentationDevice user32 shell32
+)
+add_test(NAME W3D_DX12_WARP_Developer_Launch
+    COMMAND W3DDX12LaunchCheckpoint --warp --frames 12 --ci
+)
+set_tests_properties(W3D_DX12_WARP_Developer_Launch PROPERTIES TIMEOUT 90)
