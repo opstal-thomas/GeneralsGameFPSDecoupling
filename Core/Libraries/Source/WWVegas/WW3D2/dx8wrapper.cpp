@@ -1942,22 +1942,32 @@ void DX8Wrapper::Set_Index_Buffer(const IndexBufferClass* ib,unsigned short inde
 //
 // ----------------------------------------------------------------------------
 
-void DX8Wrapper::Set_Vertex_Buffer(const DynamicVBAccessClass& vba_)
+void DX8Wrapper::Set_Vertex_Buffer(const DynamicVBAccessClass& vba)
 {
-	// Release all streams (only one stream allowed in the legacy pipeline)
+	Set_Dynamic_Vertex_Buffer(vba.Get_Render_Binding());
+}
+
+void DX8Wrapper::Set_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding& binding)
+{
+	// Preserve stream reset, deferred engine references and index invalidation.
 	for (int i=1;i<MAX_VERTEX_STREAMS;++i) {
 		DX8Wrapper::Set_Vertex_Buffer(nullptr, i);
 	}
 
+	VertexBufferClass * owner = const_cast<VertexBufferClass *>(
+		static_cast<const VertexBufferClass *>(binding.legacyOwner));
+	WWASSERT(owner);
+	if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8) {
+		WWASSERT(binding.resource == static_cast<DX8VertexBufferClass *>(owner)->Get_Render_Vertex_Buffer());
+	}
 	if (render_state.vertex_buffers[0]) render_state.vertex_buffers[0]->Release_Engine_Ref();
-	DynamicVBAccessClass& vba=const_cast<DynamicVBAccessClass&>(vba_);
-	render_state.vertex_buffer_types[0]=vba.Get_Type();
-	render_state.vba_offset=vba.VertexBufferOffset;
-	render_state.vba_count=vba.Get_Vertex_Count();
-	REF_PTR_SET(render_state.vertex_buffers[0],vba.VertexBuffer);
+	render_state.vertex_buffer_types[0]=binding.bufferType;
+	render_state.vba_offset=binding.firstVertex;
+	render_state.vba_count=binding.vertexCount;
+	REF_PTR_SET(render_state.vertex_buffers[0],owner);
 	render_state.vertex_buffers[0]->Add_Engine_Ref();
 	render_state_changed|=VERTEX_BUFFER_CHANGED;
-	render_state_changed|=INDEX_BUFFER_CHANGED;		// vba_offset changes so index buffer needs to be reset as well.
+	render_state_changed|=INDEX_BUFFER_CHANGED;	// base vertex changes the index state too.
 }
 
 // ----------------------------------------------------------------------------
@@ -1966,15 +1976,24 @@ void DX8Wrapper::Set_Vertex_Buffer(const DynamicVBAccessClass& vba_)
 //
 // ----------------------------------------------------------------------------
 
-void DX8Wrapper::Set_Index_Buffer(const DynamicIBAccessClass& iba_,unsigned short index_base_offset)
+void DX8Wrapper::Set_Index_Buffer(const DynamicIBAccessClass& iba,unsigned short index_base_offset)
 {
-	if (render_state.index_buffer) render_state.index_buffer->Release_Engine_Ref();
+	Set_Dynamic_Index_Buffer(iba.Get_Render_Binding(), index_base_offset);
+}
 
-	DynamicIBAccessClass& iba=const_cast<DynamicIBAccessClass&>(iba_);
+void DX8Wrapper::Set_Dynamic_Index_Buffer(const RenderDynamicIndexBinding& binding,unsigned short index_base_offset)
+{
+	IndexBufferClass * owner = const_cast<IndexBufferClass *>(
+		static_cast<const IndexBufferClass *>(binding.legacyOwner));
+	WWASSERT(owner);
+	if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8) {
+		WWASSERT(binding.resource == static_cast<DX8IndexBufferClass *>(owner)->Get_Render_Index_Buffer());
+	}
+	if (render_state.index_buffer) render_state.index_buffer->Release_Engine_Ref();
 	render_state.index_base_offset=index_base_offset;
-	render_state.index_buffer_type=iba.Get_Type();
-	render_state.iba_offset=iba.IndexBufferOffset;
-	REF_PTR_SET(render_state.index_buffer,iba.IndexBuffer);
+	render_state.index_buffer_type=binding.bufferType;
+	render_state.iba_offset=binding.firstIndex;
+	REF_PTR_SET(render_state.index_buffer,owner);
 	render_state.index_buffer->Add_Engine_Ref();
 	render_state_changed|=INDEX_BUFFER_CHANGED;
 }

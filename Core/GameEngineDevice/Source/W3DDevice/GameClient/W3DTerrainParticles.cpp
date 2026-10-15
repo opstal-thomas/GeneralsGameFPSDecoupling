@@ -256,8 +256,8 @@ void W3DTerrainParticles::flushBatch()
 			       m_numIndices * sizeof(UnsignedShort));
 		}
 
-		Renderer::Bind_Dynamic_Index_Buffer(indexAccess, 0);
-		Renderer::Bind_Dynamic_Vertex_Buffer(vertexAccess);
+		Renderer::Bind_Dynamic_Index_Buffer(indexAccess.Get_Render_Binding(), 0);
+		Renderer::Bind_Dynamic_Vertex_Buffer(vertexAccess.Get_Render_Binding());
 		DX8_RECORD_TERRAIN_PARTICLE_BATCH(m_numIndices / 3);
 		Renderer::Draw_Triangles(0,
 		                           m_numIndices / 3,

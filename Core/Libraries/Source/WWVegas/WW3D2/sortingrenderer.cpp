@@ -511,8 +511,8 @@ void SortingRendererClass::Flush_Sorting_Pool()
 
 		// Set index buffer and render!
 
-		Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access,0); // Override with this buffer (do something to prevent need for this!)
-		Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access); // Override with this buffer (do something to prevent need for this!)
+		Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding(),0); // Override with this buffer (do something to prevent need for this!)
+		Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding()); // Override with this buffer (do something to prevent need for this!)
 
 		Renderer::Apply_Pending_State_Changes();
 

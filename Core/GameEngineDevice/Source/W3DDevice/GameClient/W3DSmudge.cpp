@@ -510,7 +510,7 @@ void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 		}
 
 flushSmudges:
-		Renderer::Bind_Dynamic_Vertex_Buffer(vb_access);
+		Renderer::Bind_Dynamic_Vertex_Buffer(vb_access.Get_Render_Binding());
 
 		Renderer::Draw_Triangles(0,smudgesInRenderBatch*4, 0, smudgesInRenderBatch*5);
 

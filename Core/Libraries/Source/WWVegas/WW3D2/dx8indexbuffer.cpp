@@ -378,6 +378,18 @@ DynamicIBAccessClass::DynamicIBAccessClass(unsigned short type_, unsigned short 
 	}
 }
 
+RenderDynamicIndexBinding DynamicIBAccessClass::Get_Render_Binding() const
+{
+    RenderDynamicIndexBinding binding;
+    binding.legacyOwner = IndexBuffer;
+    binding.bufferType = Type;
+    binding.firstIndex = IndexBufferOffset;
+    binding.indexCount = IndexCount;
+    if (Type == BUFFER_TYPE_DYNAMIC_DX8)
+        binding.resource = static_cast<DX8IndexBufferClass*>(IndexBuffer)->Get_Render_Index_Buffer();
+    return binding;
+}
+
 DynamicIBAccessClass::~DynamicIBAccessClass()
 {
 	REF_PTR_RELEASE(IndexBuffer);

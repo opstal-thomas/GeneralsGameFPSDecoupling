@@ -624,6 +624,19 @@ pretransposed world/view transforms, deferred state invalidation and legacy
 engine buffer-reference counts remain unchanged. Sorting geometry and the
 D3DX-based CPU projection remain legacy-owned for a later stage.
 
+### Explicit dynamic geometry ring-buffer slices
+
+Dynamic VB/IB accessors now expose a neutral `RenderDynamicVertexBinding` or
+`RenderDynamicIndexBinding` with an opaque GPU allocation (for device buffers),
+offset, element count, and the existing W3D buffer kind. `Renderer` accepts
+these views and the DX8 deferred state consumes their original W3D owner
+references. Vertex binding still resets extra streams and marks the index
+state dirty, while index binding preserves the base-vertex and ring offsets.
+Allocation, sorting CPU buffers, map DISCARD/NOOVERWRITE cycling and draw order
+remain unchanged. Primitives, sorting, effects, terrain particles, and both
+game variants' meshes now pass explicit views. The legacy access-object
+overloads remain as temporary compatibility shims.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

@@ -127,6 +127,7 @@ public:
 
 	unsigned Get_Type() const { return Type; }
 	unsigned short Get_Index_Count() const { return IndexCount; }
+	RenderDynamicIndexBinding Get_Render_Binding() const;
 
 	// Call at the end of the execution, or at whatever time you wish to release
 	// the recycled dynamic index buffer.

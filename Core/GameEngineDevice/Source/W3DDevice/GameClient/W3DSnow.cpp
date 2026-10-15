@@ -549,7 +549,7 @@ flush_particles:
 		//Render any particles that may be queued up.
 		if (numberInBatch)
 		{
-			Renderer::Bind_Dynamic_Vertex_Buffer(vb_access);
+			Renderer::Bind_Dynamic_Vertex_Buffer(vb_access.Get_Render_Binding());
 			Renderer::Draw_Triangles(0,numberInBatch*2, 0, numberInBatch*4);
 			totalPart -= numberInBatch;
 		}

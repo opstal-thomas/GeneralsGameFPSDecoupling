@@ -225,6 +225,31 @@ struct RenderBufferDescription
     bool Is_Dynamic() const { return (usageFlags & RENDER_BUFFER_DYNAMIC) != 0; }
 };
 
+// A dynamic binding captures the selected ring-buffer slice without leaking
+// the legacy DynamicVB/IB accessors into the renderer's command stream.
+// legacyOwner is borrowed and is retained by DX8's deferred state cache
+// until draws complete; it is not a graphics resource handle.
+struct RenderDynamicVertexBinding
+{
+    RenderDynamicVertexBinding() : resource(nullptr), legacyOwner(nullptr),
+        firstVertex(0), vertexCount(0), stride(0), bufferType(0) {}
+    RenderVertexBufferHandle resource;
+    const void * legacyOwner;
+    unsigned short firstVertex, vertexCount;
+    unsigned stride;
+    unsigned bufferType; // Existing W3D dynamic/sorting kind.
+};
+
+struct RenderDynamicIndexBinding
+{
+    RenderDynamicIndexBinding() : resource(nullptr), legacyOwner(nullptr),
+        firstIndex(0), indexCount(0), bufferType(0) {}
+    RenderIndexBufferHandle resource;
+    const void * legacyOwner;
+    unsigned short firstIndex, indexCount;
+    unsigned bufferType;
+};
+
 // The transitional texture format and mip fields carry WW3D's own numeric
 // values, never native D3D8 or DXGI identifiers. Render targets are still
 // ordinary 2D textures with the renderTarget flag set.
@@ -773,7 +798,12 @@ public:
     // sorted transparent geometry. They preserve the existing ring-buffer
     // offset/sorting behavior; their allocations remain legacy-owned until
     // the dynamic access classes are made fully backend-independent.
+    // Prefer the explicit sliced-resource view for migrated W3D callers.
+    // The access-object overload remains for legacy call sites.
+    static void Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & binding);
     static void Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access);
+    static void Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & binding,
+                                           unsigned short baseVertexIndex);
     static void Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
                                            unsigned short baseVertexIndex);
     // Persistent W3D index buffers are distinct from ring-buffer accessors.

@@ -816,15 +816,26 @@ void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVe
     DX8CALL(SetIndices(reinterpret_cast<IDirect3DIndexBuffer8 *>(buffer), baseVertexIndex));
 }
 
+void Renderer::Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & binding)
+{
+    DX8Wrapper::Set_Dynamic_Vertex_Buffer(binding);
+}
+
 void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 {
-    DX8Wrapper::Set_Vertex_Buffer(access);
+    Bind_Dynamic_Vertex_Buffer(access.Get_Render_Binding());
+}
+
+void Renderer::Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & binding,
+                                         unsigned short baseVertexIndex)
+{
+    DX8Wrapper::Set_Dynamic_Index_Buffer(binding, baseVertexIndex);
 }
 
 void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
                                          unsigned short baseVertexIndex)
 {
-    DX8Wrapper::Set_Index_Buffer(access, baseVertexIndex);
+    Bind_Dynamic_Index_Buffer(access.Get_Render_Binding(), baseVertexIndex);
 }
 
 void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,

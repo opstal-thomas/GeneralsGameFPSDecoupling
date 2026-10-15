@@ -29,6 +29,19 @@ FULLY_ROUTED = [
     Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
 ]
 
+DYNAMIC_BINDING_VIEW_CALLERS = [
+    Path("Core/Libraries/Source/WWVegas/WW3D2/sortingrenderer.cpp"),
+    Path("Core/Libraries/Source/WWVegas/WW3D2/ringobj.cpp"),
+    Path("Core/Libraries/Source/WWVegas/WW3D2/line3d.cpp"),
+    Path("Core/Libraries/Source/WWVegas/WW3D2/pointgr.cpp"),
+    Path("Core/Libraries/Source/WWVegas/WW3D2/streakRender.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSnow.cpp"),
+    Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"),
+    Path("Generals/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
+    Path("GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/mesh.cpp"),
+]
+
 CUSTOM_SHADER = Path(
     "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DShaderManager.cpp"
 )
@@ -71,6 +84,10 @@ def main() -> int:
     errors = []
     for path in FULLY_ROUTED:
         errors.extend(check(path, [r"\bDX8Wrapper::"]))
+    for path in DYNAMIC_BINDING_VIEW_CALLERS:
+        errors.extend(check(path, [
+            r"Renderer::Bind_Dynamic_(?:Vertex|Index)_Buffer\s*\(\s*[A-Za-z_]\w*\s*[,)]",
+        ]))
     errors.extend(check(Path("Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp"), [
         r"\bLPDIRECT3DDEVICE8\b",
         r"\bIDirect3DDevice8\b",

@@ -912,7 +912,7 @@ void MeshClass::Render_Material_Pass(MaterialPassClass * pass,IndexBufferClass *
 			pass->Install_Materials();
 
 			Renderer::Set_Transform(RENDER_TRANSFORM_WORLD,Get_Transform());
-			Renderer::Bind_Dynamic_Index_Buffer(dynamic_ib,vertex_offset);
+			Renderer::Bind_Dynamic_Index_Buffer(dynamic_ib.Get_Render_Binding(),vertex_offset);
 
 			Renderer::Draw_Triangles(
 				0,

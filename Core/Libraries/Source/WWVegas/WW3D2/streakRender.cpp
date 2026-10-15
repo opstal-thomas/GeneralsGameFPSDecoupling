@@ -1368,8 +1368,8 @@ void StreakRendererClass::RenderStreak
 		}
 
 
-		Renderer::Bind_Dynamic_Index_Buffer(ib_access,0);
-		Renderer::Bind_Dynamic_Vertex_Buffer(Verts);
+		Renderer::Bind_Dynamic_Index_Buffer(ib_access.Get_Render_Binding(),0);
+		Renderer::Bind_Dynamic_Vertex_Buffer(Verts.Get_Render_Binding());
 		Renderer::Set_Texture(0,Texture);
 		Renderer::Set_Shader(shader);
 

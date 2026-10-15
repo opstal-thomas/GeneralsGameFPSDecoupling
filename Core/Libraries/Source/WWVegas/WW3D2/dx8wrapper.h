@@ -341,8 +341,10 @@ public:
 
 	static void Set_Vertex_Buffer(const VertexBufferClass* vb, unsigned stream=0);
 	static void Set_Vertex_Buffer(const DynamicVBAccessClass& vba);
+	static void Set_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding& binding);
 	static void Set_Index_Buffer(const IndexBufferClass* ib,unsigned short index_base_offset);
 	static void Set_Index_Buffer(const DynamicIBAccessClass& iba,unsigned short index_base_offset);
+	static void Set_Dynamic_Index_Buffer(const RenderDynamicIndexBinding& binding,unsigned short index_base_offset);
 	static void Set_Index_Buffer_Index_Offset(unsigned offset);
 
 	static void Get_Render_State(RenderStateStruct& state);

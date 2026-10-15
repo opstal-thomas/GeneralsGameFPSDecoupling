@@ -713,6 +713,19 @@ DynamicVBAccessClass::DynamicVBAccessClass(unsigned t,unsigned fvf,unsigned shor
 	}
 }
 
+RenderDynamicVertexBinding DynamicVBAccessClass::Get_Render_Binding() const
+{
+    RenderDynamicVertexBinding binding;
+    binding.legacyOwner = VertexBuffer;
+    binding.bufferType = Type;
+    binding.firstVertex = VertexBufferOffset;
+    binding.vertexCount = VertexCount;
+    binding.stride = FVFInfo.Get_FVF_Size();
+    if (Type == BUFFER_TYPE_DYNAMIC_DX8)
+        binding.resource = static_cast<DX8VertexBufferClass*>(VertexBuffer)->Get_Render_Vertex_Buffer();
+    return binding;
+}
+
 DynamicVBAccessClass::~DynamicVBAccessClass()
 {
 	if (Type==BUFFER_TYPE_DYNAMIC_DX8) {

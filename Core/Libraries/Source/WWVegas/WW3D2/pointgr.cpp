@@ -982,7 +982,7 @@ void PointGroupClass::Render(RenderInfoClass &rinfo)
 		}
 
 		Renderer::Bind_Legacy_Index_Buffer(indexbuffer, 0);
-		Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts);
+		Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts.Get_Render_Binding());
 
 		if ( sort )
 		{
@@ -1911,7 +1911,7 @@ void PointGroupClass::RenderVolumeParticle(RenderInfoClass &rinfo, unsigned int 
 			}
 
 			Renderer::Bind_Legacy_Index_Buffer(indexbuffer, 0);
-			Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts);
+			Renderer::Bind_Dynamic_Vertex_Buffer(PointVerts.Get_Render_Binding());
 
 			/// @todo lorenzen sez: precompute these params, above
 
