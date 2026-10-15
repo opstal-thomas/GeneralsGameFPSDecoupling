@@ -161,6 +161,12 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
     if ((bindings.colorTarget && !GetTrackedState(bindings.colorTarget, ignored)) ||
         (bindings.depthTarget && !GetTrackedState(bindings.depthTarget, ignored)))
         return Fail("Render-pass output resource is not registered");
+    if (bindings.colorTarget &&
+        !(bindings.colorTarget->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET))
+        return Fail("Color target was not created as a D3D12 render target");
+    if (bindings.depthTarget &&
+        !(bindings.depthTarget->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+        return Fail("Depth output requires a native D3D12 depth resource");
 
     for (std::size_t i = 0; i < bindings.uavOutputCount; ++i)
     {
@@ -168,6 +174,8 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
         if (!output || output == bindings.colorTarget ||
             output == bindings.depthTarget || !GetTrackedState(output, ignored))
             return Fail("Unregistered or conflicting UAV output");
+        if (!(output->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
+            return Fail("UAV output was not allocated with ALLOW_UNORDERED_ACCESS");
         for (std::size_t j = 0; j < i; ++j)
             if (output == bindings.uavOutputs[j])
                 return Fail("Duplicate UAV write binding in same pass");
@@ -178,6 +186,8 @@ bool DX12W3DPassGraph::BeginPass(DX12W3DPass stage,
         if (!input || input == bindings.colorTarget ||
             input == bindings.depthTarget || !GetTrackedState(input, ignored))
             return Fail("Unregistered input or same-pass read/write resource hazard");
+        if (input->GetDesc().Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)
+            return Fail("Shader input was allocated with DENY_SHADER_RESOURCE");
         for (std::size_t j = 0; j < bindings.uavOutputCount; ++j)
             if (input == bindings.uavOutputs[j])
                 return Fail("Simultaneous UAV write and shader-read hazard");
@@ -222,6 +232,12 @@ bool DX12W3DPassGraph::EndFrame()
     if (!recording_ || !list_ || !backBuffer_)
         return Fail("EndFrame requires an active render-pass graph");
     if (!RequireState(backBuffer_, D3D12_RESOURCE_STATE_PRESENT))
+        return false;
+    // B05 can sample the primary depth target in a later pass; restore the
+    // persistent depth buffer to DEPTH_WRITE before the next native frame
+    // claims that initial state. Without this, the next frame's tracking
+    // would be stale after a shroud or postprocess depth read.
+    if (!RequireState(depthBuffer_, D3D12_RESOURCE_STATE_DEPTH_WRITE))
         return false;
     // No retained resource pointers beyond the frame. Re-register offscreen
     // resources with the *actual* final state next frame (R07 owns lifetime).
