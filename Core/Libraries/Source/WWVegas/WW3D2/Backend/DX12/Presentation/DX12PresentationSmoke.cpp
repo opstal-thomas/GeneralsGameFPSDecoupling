@@ -497,6 +497,21 @@ int wmain(int argc, wchar_t ** argv)
         if (!PresentAndVerify(device, color))
             return 1;
     }
+    // B04: verify a second clear issued *inside* an open frame reaches the GPU.
+    // Also reject calls without a BeginFrame instead of silently succeeding.
+    const std::array<float, 4> initial = {{0.f, 0.f, 0.f, 1.f}};
+    const std::array<float, 4> replacement = {{0.6f, 0.2f, 0.4f, 1.f}};
+    if (device.ClearActiveFrame(true, true, replacement.data(), 1.f))
+    {
+        std::cerr << "ClearActiveFrame accepted a call outside a frame\\n";
+        return 1;
+    }
+    if (!PresentAndVerify(device, initial,
+                          [&]() { return device.ClearActiveFrame(
+                              true, true, replacement.data(), 0.5f); },
+                          &replacement))
+        return 1;
+
     // A minimized window produces zero-sized resize notifications; preserve
     // buffers until a positive client-area size becomes available.
     if (!device.Resize(0, 0) || !device.IsReady())
