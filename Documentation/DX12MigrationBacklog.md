@@ -16,7 +16,8 @@
 ## Completed backend foundations
 
 - **DX12-B01:** [Source-level DX8 dependency inventory](DX8DependencyInventory.md) and a CI regression baseline.
-- **DX12-B02:** [Exclusive DX8/DX12 Renderer selection](DX12ExclusiveBackendBootstrap.md), verified by the [Generals and Zero Hour build matrix](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38809550457) and [DX12 shader/WARP tests](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38809550422). DX12 bootstrap builds are deliberately not playable until B03/B04.
+- **DX12-B02:** [Exclusive DX8/DX12 Renderer selection](DX12ExclusiveBackendBootstrap.md), verified by [Generals and Zero Hour CI](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38809550457).
+- **DX12-B03:** [Primary game-HWND presentation](DX12PrimaryGameWindow.md), verified by [all seven game build/audit jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38814822896) and [Win32/x64 WARP primary-window lifecycle tests](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38814822880). The exclusive DX12 bootstrap still intentionally refuses gameplay initialization pending B04.
 
 ## What already works
 
@@ -45,7 +46,7 @@
 |---|---|---|---|---|---|
 | **DX12-B01** | P0 | S | — | Done (source inventory + CI) | **Inventory every remaining DX8 caller, type, and link dependency.** Implemented with [source inventory](DX8DependencyInventory.md), JSON/Markdown CI artifact and immutable baseline ratchet; binary/runtime proof remains DX12-V07. |
 | **DX12-B02** | P0 | M | `DX12-B01` | Done (exclusive DX12 bootstrap; B03/B04 pending) | **Introduce exclusive DX8 / DX12 renderer build and runtime selection.** [Implemented](DX12ExclusiveBackendBootstrap.md): DX8 and DX12 build choices exclusively compile one Renderer definition set, enforced in Windows compile-command CI; full Generals/Zero Hour DX8, preview and DX12-bootstrap Win32 builds pass. The DX12 bootstrap intentionally rejects game initialization pending B03/B04. |
-| **DX12-B03** | P0 | L | `DX12-B02` | Partial: preview | **Give DX12 ownership of the game's actual HWND and swap chain.** A DX12 device presents to the real gameplay window, not the secondary preview, with correct minimize, restore, resolution, and borderless/windowed behavior. |
+| **DX12-B03** | P0 | L | `DX12-B02` | Done (native main-HWND presentation diagnostic; B04 pending) | **Give DX12 ownership of the game's actual HWND and swap chain.** [Implemented](DX12PrimaryGameWindow.md): the exclusive DX12 backend attaches to the actual game HWND, creates a swap chain and presents a diagnostic frame; client-size changes, minimize/restore, borderless/windowed modes and teardown pass WARP on Win32 and x64. The executable remains fail-closed until B04 supplies native gameplay frame/state rendering. |
 | **DX12-B04** | P0 | L | `DX12-B02`, `DX12-B03` | Boundary only | **Implement native DX12 Renderer frame and state entry points.** Init, Begin_Scene, End_Scene, Clear, viewport, transforms, device queries and basic rendering work without calling DX8Wrapper. |
 | **DX12-B05** | P0 | L | `DX12-B04` | Open | **Define a stable render-pass order and resource-state transitions.** Opaque world, terrain, water, effects, transparency, shroud, UI and postprocessing render in deliberate order with correct D3D12 resource barriers. |
 | **DX12-B06** | P0 | M | `DX12-B03` | Partial: preview | **Implement device loss, GPU timeouts, resize, and safe reset.** Alt-tab, fullscreen/window changes, device removed, suspend/resume and failed initialization recover or report an error without corrupting gameplay. |
