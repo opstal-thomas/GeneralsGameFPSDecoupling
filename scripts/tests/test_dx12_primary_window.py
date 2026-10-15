@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard DX12-B03 primary-game-window wiring and WARP lifecycle test coverage."""
+"""Guard DX12-B03 HWND ownership and DX12-B04 native frame/state wiring."""
 from pathlib import Path
 import re
 import unittest
@@ -11,8 +11,9 @@ DX12 = ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12"
 class PrimaryWindowIntegrationTests(unittest.TestCase):
     def test_game_selected_backend_binds_primary_hwnd_without_fallback(self):
         source = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
-        self.assertIn("primaryWindow.Attach(window, useWarp)", source)
-        self.assertIn("primaryWindow.PresentDiagnostic(diagnosticColor)", source)
+        self.assertIn("primaryWindow.Attach(window, warp)", source)
+        self.assertIn("primaryWindow.BeginScene()", source)
+        self.assertIn("primaryWindow.EndScene(flip_frame, syncInterval)", source)
         self.assertIn("primaryWindow.Shutdown()", source)
         self.assertIn('return false;', source.split("bool Renderer::Init", 1)[1].
                       split("void Renderer::Shutdown", 1)[0])
@@ -37,17 +38,26 @@ class PrimaryWindowIntegrationTests(unittest.TestCase):
         self.assertNotRegex(code_without_comments,
                             r"\b(?:DX8Wrapper|IDirect3DDevice8|Direct3DCreate8)\b")
 
-    def test_b04_native_frame_is_explicitly_opt_in(self):
-        source = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+    def test_b04_native_frame_and_state_are_explicitly_opt_in(self):
+        renderer = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        primary = (DX12 / "DX12PrimaryWindow.cpp").read_text(encoding="utf-8")
         device = (DX12 / "DX12PresentationDevice.cpp").read_text(encoding="utf-8")
-        self.assertIn("W3D_DX12_B04_DIAGNOSTIC", source)
-        self.assertIn("primaryWindow.Presentation().BeginFrame(black)", source)
-        self.assertIn("primaryWindow.Presentation().EndFrame(syncInterval)", source)
-        self.assertIn("primaryWindow.Presentation().ClearActiveFrame(", source)
-        self.assertIn("RSSetViewports(1, &vp)", source)
-        self.assertIn("RSSetScissorRects(1, &scissor)", source)
+        self.assertIn("W3D_DX12_B04_DIAGNOSTIC", renderer)
+        self.assertIn("primaryWindow.BeginScene()", renderer)
+        self.assertIn("primaryWindow.EndScene(flip_frame, syncInterval)", renderer)
+        self.assertIn("primaryWindow.Clear(clear_color, clear_z_stencil, rgba, z)", renderer)
+        self.assertIn("primaryWindow.SetViewport(viewport.x, viewport.y", renderer)
+        self.assertIn("SetNativeResolution(", renderer)
+        self.assertIn("GetAdapterIdentity(", renderer)
+        self.assertIn("IsDeviceHealthy()", renderer)
+        self.assertIn("device_.BeginFrame(rgba_, clearColor_, clearDepth_, clearZ_)", primary)
+        self.assertIn("device_.EndFrame(syncInterval, flipFrame)", primary)
+        self.assertIn("RSSetViewports(1, &viewport)", primary)
+        self.assertIn("RSSetScissorRects(1, &scissor)", primary)
         self.assertIn("ClearRenderTargetView(rtv, rgba", device)
         self.assertIn("ClearDepthStencilView(", device)
+        self.assertRegex(renderer, r"Renderer::Get_Device_Status\\(\\)")
+        self.assertNotRegex(renderer, r"(?m)^.*\\bDX8Wrapper\\s*::")
 
     def test_real_warp_test_and_build_both_include_primary_adapter(self):
         main = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/CMakeLists.txt").read_text(encoding="utf-8")
