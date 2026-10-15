@@ -60,6 +60,14 @@ COMMENT_AND_STRING = re.compile(
     r'//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|'
     r"'(?:\\.|[^'\\])*'"
 )
+# Native COM method calls can bypass DX8Wrapper entirely. Resolve only
+# variables explicitly declared with a concrete D3D8 COM type in this file,
+# rather than guessing that a generic 'device' pointer is D3D8.
+D3D8_COM_DECLARATION = re.compile(
+    r"\b((?:IDirect3D[A-Za-z0-9_]*8|LPDIRECT3D[A-Z0-9_]*8))\b"
+    r"\s*(?:\*\s*)*([A-Za-z_]\w*)"
+)
+POINTER_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*->\s*([A-Za-z_]\w*)\s*\(")
 
 
 def eligible(path: str) -> bool:
@@ -145,6 +153,18 @@ def scan_text(path: str, text: str) -> list[dict]:
                 symbol = re.sub(r"\s*::\s*", "::", match.group(0))
                 spans.append((match.start(), match.end(), kind, symbol))
                 occupied.update(range(match.start(), match.end()))
+        # Report direct methods on explicitly typed D3D8 COM objects. Calls
+        # through aliases declared in another file remain a known limitation.
+        com_variables = {
+            match.group(2): match.group(1)
+            for match in D3D8_COM_DECLARATION.finditer(masked)
+        }
+        for match in POINTER_CALL.finditer(masked):
+            if match.group(1) in com_variables:
+                spans.append((
+                    match.start(), match.end(), "d3d8_com_dispatch",
+                    com_variables[match.group(1)] + "::" + match.group(2)
+                ))
 
     output = []
     source_lines = text.splitlines()

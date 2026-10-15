@@ -38,7 +38,7 @@
 
 | ID | Priority | Effort | Depends on | Current state | Scope and acceptance check |
 |---|---|---|---|---|---|
-| **DX12-B01** | P0 | S | — | Open | **Inventory every remaining DX8 caller, type, and link dependency.** Emit a reproducible machine-readable DX8 call-site and library report; separate backend-only references from runtime blockers; extend boundary CI. |
+| **DX12-B01** | P0 | S | — | Done (source inventory + CI) | **Inventory every remaining DX8 caller, type, and link dependency.** Implemented with [source inventory](DX8DependencyInventory.md), JSON/Markdown CI artifact and immutable baseline ratchet; binary/runtime proof remains DX12-V07. |
 | **DX12-B02** | P0 | M | `DX12-B01` | Open | **Introduce exclusive DX8 / DX12 renderer build and runtime selection.** An explicit DX12-only configuration selects backend implementations without compiling duplicate Renderer symbols; DX8 remains a reference option until retirement. |
 | **DX12-B03** | P0 | L | `DX12-B02` | Partial: preview | **Give DX12 ownership of the game's actual HWND and swap chain.** A DX12 device presents to the real gameplay window, not the secondary preview, with correct minimize, restore, resolution, and borderless/windowed behavior. |
 | **DX12-B04** | P0 | L | `DX12-B02`, `DX12-B03` | Boundary only | **Implement native DX12 Renderer frame and state entry points.** Init, Begin_Scene, End_Scene, Clear, viewport, transforms, device queries and basic rendering work without calling DX8Wrapper. |

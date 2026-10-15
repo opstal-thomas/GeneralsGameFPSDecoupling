@@ -26,7 +26,8 @@ The tool scans tracked C/C++ sources, headers, and build configurations
 (CMake, MSVC project/link files, CI scripts). It detects:
 
 - Direct DX8Wrapper method calls and legacy DX8 renderer types;
-- D3D8 COM types, D3DX legacy symbols and D3D8-era constants;
+- D3D8 COM types and direct method calls on explicitly typed COM variables;
+- D3DX legacy symbols and D3D8-era constants;
 - Direct3D8 and DX8 wrapper includes;
 - DX8 SDK, CMake, and native link/configuration references.
 
@@ -56,7 +57,8 @@ continues to prohibit direct DX8 calls in explicitly migrated sources.
 Lexical analysis is intentionally conservative and cannot prove the absence
 of dependencies hidden behind macros, indirect function calls, arbitrary
 dynamically loaded DLLs, or DX8-owned resources passed through neutral types.
-Unreachable/legacy code is included when still tracked. The actual
+Unreachable/legacy code is included when still tracked. Direct COM calls
+through type aliases declared in another source file are not always resolved. The actual
 absence of D3D8 runtime usage and DLL imports is checked in the later
 DX12-V07 milestone.
 

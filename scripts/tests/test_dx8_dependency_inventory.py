@@ -16,6 +16,7 @@ class DependencyInventoryTests(unittest.TestCase):
         /* IDirect3DDevice8 * hidden; */
         DX8Wrapper::Set_Shader(shader);
         IDirect3DTexture8 * texture = nullptr;
+        texture->LockRect(0, out, nullptr, 0);
         D3DRS_ZWRITEENABLE;
         D3DXMatrixInverse(matrix, det, old);
         D3D12_RESOURCE_DESC desc = {};
@@ -33,6 +34,7 @@ class DependencyInventoryTests(unittest.TestCase):
         self.assertIn(("dx8_include", "dx8wrapper.h"), names)
         self.assertIn(("wrapper_dispatch", "DX8Wrapper::Set_Shader"), names)
         self.assertIn(("direct3d8_com", "IDirect3DTexture8"), names)
+        self.assertIn(("d3d8_com_dispatch", "IDirect3DTexture8::LockRect"), names)
         self.assertIn(("legacy_d3d_type", "D3DRS_ZWRITEENABLE"), names)
         self.assertIn(("d3dx_legacy", "D3DXMatrixInverse"), names)
         self.assertNotIn(("wrapper_dispatch", "DX8Wrapper::Fake"), names)
