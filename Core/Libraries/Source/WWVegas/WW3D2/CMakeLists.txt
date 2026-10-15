@@ -304,12 +304,14 @@ if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW OR
     add_library(w3d_dx12_presentation STATIC EXCLUDE_FROM_ALL
         Backend/DX12/DX12PresentationDevice.h
         Backend/DX12/DX12PresentationDevice.cpp
+        Backend/DX12/DX12PrimaryWindow.h
+        Backend/DX12/DX12PrimaryWindow.cpp
         Backend/DX12/DX12IndexedMeshPass.h
         Backend/DX12/DX12IndexedMeshPass.cpp
     )
     target_compile_features(w3d_dx12_presentation PUBLIC cxx_std_17)
     target_compile_definitions(w3d_dx12_presentation PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_link_libraries(w3d_dx12_presentation PUBLIC d3d12 dxgi dxguid d3dcompiler)
+    target_link_libraries(w3d_dx12_presentation PUBLIC d3d12 dxgi dxguid d3dcompiler user32)
 endif()
 
 

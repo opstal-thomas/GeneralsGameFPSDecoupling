@@ -25,6 +25,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx8_dependency_inventory.py'
       - name: Validate exclusive Renderer backend contract and selection
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_backend_selection.py'
+      - name: Verify DX12 primary-game-window ownership integration
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_primary_window.py'
       - name: Prevent direct DX8 call regressions
         run: python3 scripts/check_w3d_dx8_boundaries.py
       - name: Inventory DX8 symbols and block new runtime dependencies

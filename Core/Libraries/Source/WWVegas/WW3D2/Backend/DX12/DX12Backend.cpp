@@ -6,14 +6,12 @@
 **  version 3 or (at your option) any later version.
 */
 
-// DX12-B02: link-complete bootstrap for exclusive Renderer backend selection.
-//
-// IMPORTANT: B03/B04 have not connected the main HWND, frame lifecycle or
-// engine resource system. Renderer::Init intentionally fails closed instead
-// of secretly constructing an IDirect3D8 device or presenting a blank game.
-// These contract entry points must be replaced incrementally by native DX12
-// behavior before B10; they are NOT valid production rendering fallbacks.
+// DX12-B03: the exclusive backend now binds DX12 presentation to the game's
+// actual application HWND and presents a single native diagnostic frame.
+// Normal game rendering is deliberately blocked until B04 implements frame,
+// render-state and resource submission. No D3D8 fallback is permitted.
 #include "WW3D2/Renderer.h"
+#include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WWMath/vector3.h"
 
 #ifndef NOMINMAX
@@ -31,6 +29,8 @@
 
 namespace
 {
+    DX12PrimaryWindow primaryWindow;
+
     void ReportPending(const char * operation)
     {
         char message[256] = {};
@@ -43,17 +43,49 @@ namespace
 
 bool Renderer::Init(void * window, bool lite)
 {
-    (void)window; (void)lite;
-    // Fail with WW3D_ERROR_INITIALIZATION_FAILED at the existing WW3D::Init
-    // boundary: never fall back to DX8 on a requested DX12-only build.
-    ReportPending("Renderer::Init: main-window DX12 device");
+    // WW3D::Init passes the application's actual HWND. Do not make a second
+    // preview window, alter its window procedure or construct a DX8 device.
+    // Keep the unsupported game-rendering path closed until DX12-B04.
+    if (lite)
+    {
+        ReportPending("Renderer::Init: DX12 lite/headless support");
+        return false;
+    }
+
+    char warpValue[4] = {};
+    const bool useWarp = GetEnvironmentVariableA(
+        "W3D_DX12_GAME_WARP", warpValue, sizeof(warpValue)) == 1 &&
+        warpValue[0] == '1';
+
+    if (!primaryWindow.Attach(window, useWarp))
+    {
+        OutputDebugStringA(primaryWindow.LastError());
+        OutputDebugStringA("\n");
+        primaryWindow.Shutdown();
+        return false;
+    }
+
+    constexpr float diagnosticColor[4] = {0.04f, 0.16f, 0.28f, 1.0f};
+    if (primaryWindow.CurrentStatus() == DX12PrimaryWindow::Status::Ready &&
+        !primaryWindow.PresentDiagnostic(diagnosticColor))
+    {
+        OutputDebugStringA(primaryWindow.LastError());
+        OutputDebugStringA("\n");
+    }
+
+    // B03 verifies primary-HWND device/swapchain ownership and diagnostic
+    // presentation. Returning false is intentional: the game's higher-level
+    // render paths still call unported DX8 facilities, and proceeding would
+    // appear to run DX12 while silently dropping essential drawing.
+    ReportPending("Renderer::Init: DX12 main-HWND presentation ready; "
+                  "normal frame and resource rendering requires B04");
+    primaryWindow.Shutdown();
     return false;
 }
 
 void Renderer::Shutdown()
 {
-    // No DX12 game device is created before B03/B04.
-    ReportPending("Renderer::Shutdown");
+    primaryWindow.Shutdown();
 }
 
 bool Renderer::Is_Initialized()

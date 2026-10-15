@@ -1,8 +1,9 @@
 # DX12-B02 — Exclusive renderer backend selection
 
 **Status:** Build architecture only. The DX12-selected game is intentionally
-**not playable** until [B03](DX12MigrationBacklog.md) takes ownership of the
-real game HWND/swap chain and **B04** implements the native frame/state path.
+**not playable**. [B03](DX12PrimaryGameWindow.md) now owns and tests native
+presentation on the main game HWND, but **B04** must still implement the
+persistent frame/render-state path before gameplay.
 
 ## Selection modes
 
@@ -46,9 +47,10 @@ cmake --build --preset win32
 For the secondary DX12 preview, keep `W3D_RENDER_BACKEND=DX8` and separately
 enable `W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=ON`.
 
-**Expected bootstrap behavior:** `Renderer::Init` emits a diagnostic stating
-that B03/B04 are pending, returns `false`, and `WW3D::Init` returns
-`WW3D_ERROR_INITIALIZATION_FAILED`. It does not create any DX8 rendering
+**Expected bootstrap behavior (updated by B03):** `Renderer::Init` now
+attaches to the actual game HWND, attempts one diagnostic D3D12 present,
+then returns `false`, releases the swap chain, and `WW3D::Init` returns
+`WW3D_ERROR_INITIALIZATION_FAILED`. It does not create a DX8 rendering
 device or silently select the legacy backend. The full game is not ready
 to run in this configuration.
 
@@ -68,9 +70,9 @@ to run in this configuration.
 
 ## Next dependency chain
 
-**B03:** Make the DX12 backend own the actual game window, swap chain,
-resolution handling, and resize/device lifecycle rather than a separate
-preview HWND.
+**B03 (completed for diagnostic presentation):** See
+[primary game-window DX12 ownership](DX12PrimaryGameWindow.md) for the
+HWND-bound swap chain, resize, minimize/restore and borderless tests.
 
 **B04:** Implement native `Renderer::Init`, frame start/end, clear,
 transforms, viewport and minimal valid presentation; replace the bootstrap
