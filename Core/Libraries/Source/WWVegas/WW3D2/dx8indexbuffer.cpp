@@ -46,6 +46,18 @@
 #include "WWLib/thread.h"
 #include "WWDebug/wwmemlog.h"
 
+// R01: these legacy-named W3D buffer containers already allocate and map
+// through backend-neutral Renderer handles. Under exclusive DX12 they must
+// assert the *selected* backend, not the absent Direct3D 8 device/thread.
+// Dynamic sorting/ring allocation remains a separate R02 migration.
+#if defined(W3D_RENDER_BACKEND_DX12)
+#define W3D_GEOMETRY_THREAD_ASSERT() WWASSERT(Renderer::Get_Render_Thread_ID() == ThreadClass::_Get_Current_Thread_ID())
+#define W3D_GEOMETRY_DEVICE_ASSERT() WWASSERT(Renderer::Has_Active_Device())
+#else
+#define W3D_GEOMETRY_THREAD_ASSERT() DX8_THREAD_ASSERT()
+#define W3D_GEOMETRY_DEVICE_ASSERT() DX8_Assert()
+#endif
+
 #define DEFAULT_IB_SIZE 5000
 
 static bool _DynamicSortingIndexArrayInUse=false;
@@ -196,13 +208,13 @@ void IndexBufferClass::Copy(unsigned short* indices,unsigned first_index,unsigne
 
 IndexBufferClass::WriteLockClass::WriteLockClass(IndexBufferClass* index_buffer_, int flags) : index_buffer(index_buffer_)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(index_buffer);
 	WWASSERT(!index_buffer->Engine_Refs());
 	index_buffer->Add_Ref();
 	switch (index_buffer->Type()) {
 	case BUFFER_TYPE_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		indices = static_cast<unsigned short *>(Renderer::Map_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(index_buffer)->Get_Render_Index_Buffer(),
             0, index_buffer->Get_Index_Count() * sizeof(unsigned short),
@@ -224,10 +236,10 @@ IndexBufferClass::WriteLockClass::WriteLockClass(IndexBufferClass* index_buffer_
 
 IndexBufferClass::WriteLockClass::~WriteLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (index_buffer->Type()) {
 	case BUFFER_TYPE_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Renderer::Unmap_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(index_buffer)->Get_Render_Index_Buffer());
 		break;
@@ -246,14 +258,14 @@ IndexBufferClass::AppendLockClass::AppendLockClass(IndexBufferClass* index_buffe
 	:
 	index_buffer(index_buffer_)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(start_index+index_range<=index_buffer->Get_Index_Count());
 	WWASSERT(index_buffer);
 	WWASSERT(!index_buffer->Engine_Refs());
 	index_buffer->Add_Ref();
 	switch (index_buffer->Type()) {
 	case BUFFER_TYPE_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		indices = static_cast<unsigned short *>(Renderer::Map_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(index_buffer)->Get_Render_Index_Buffer(),
             start_index * sizeof(unsigned short),
@@ -272,10 +284,10 @@ IndexBufferClass::AppendLockClass::AppendLockClass(IndexBufferClass* index_buffe
 
 IndexBufferClass::AppendLockClass::~AppendLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (index_buffer->Type()) {
 	case BUFFER_TYPE_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Renderer::Unmap_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(index_buffer)->Get_Render_Index_Buffer());
 		break;
@@ -298,7 +310,7 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 	:
 	IndexBufferClass(BUFFER_TYPE_DX8,index_count_)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(index_count);
 	RenderBufferDescription description;
 	description.byteSize = sizeof(unsigned short) * index_count;
@@ -428,13 +440,13 @@ DynamicIBAccessClass::WriteLockClass::WriteLockClass(DynamicIBAccessClass* ib_ac
 	:
 	DynamicIBAccess(ib_access_)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	DynamicIBAccess->IndexBuffer->Add_Ref();
 	switch (DynamicIBAccess->Get_Type()) {
 	case BUFFER_TYPE_DYNAMIC_DX8:
 		WWASSERT(DynamicIBAccess);
 //		WWASSERT(!dynamic_dx8_index_buffer->Engine_Refs());
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Indices = static_cast<unsigned short *>(Renderer::Map_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(DynamicIBAccess->IndexBuffer)->Get_Render_Index_Buffer(),
             DynamicIBAccess->IndexBufferOffset * sizeof(unsigned short),
@@ -453,10 +465,10 @@ DynamicIBAccessClass::WriteLockClass::WriteLockClass(DynamicIBAccessClass* ib_ac
 
 DynamicIBAccessClass::WriteLockClass::~WriteLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (DynamicIBAccess->Get_Type()) {
 	case BUFFER_TYPE_DYNAMIC_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Renderer::Unmap_Index_Buffer(
             static_cast<DX8IndexBufferClass*>(DynamicIBAccess->IndexBuffer)->Get_Render_Index_Buffer());
 		break;
