@@ -670,6 +670,16 @@ backend still executes the original render-state and `Draw_Strip` calls;
 shroud blending and draw order are unchanged. The boundary audit guards
 this migrated module against future direct DX8 wrapper calls.
 
+### Bridge and bib rendering path decoupling
+
+Both game variants now bind bridge/bib index and vertex buffers, select
+textures/materials/shaders, apply pending state and submit indexed triangles
+through `Renderer`. The DX8 backend performs the exact original deferred
+calls, including the bridge render-state invalidation ordering. The original
+W3D buffer allocations and materials are retained until later lifecycle
+migration; no asset data or draw counts change. Four game-specific source
+files are guarded by the DX8 dispatch boundary audit.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,
