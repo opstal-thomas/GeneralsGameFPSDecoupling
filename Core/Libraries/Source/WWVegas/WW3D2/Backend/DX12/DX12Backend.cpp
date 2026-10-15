@@ -432,14 +432,12 @@ bool Renderer::Set_Render_Device(int device, int width, int height, int bits, in
 
 bool Renderer::Set_Any_Render_Device()
 {
-    ReportPending("Renderer::Set_Any_Render_Device");
-    return {};
+    return Has_Active_Device();
 }
 
 bool Renderer::Set_Next_Render_Device()
 {
-    ReportPending("Renderer::Set_Next_Render_Device");
-    return {};
+    return Has_Active_Device();
 }
 
 int Renderer::Get_Render_Device()
@@ -504,8 +502,8 @@ Renderer::DeviceStatus Renderer::Get_Device_Status()
 
 bool Renderer::Reset_Device()
 {
-    ReportPending("Renderer::Reset_Device");
-    return {};
+    return ready && !recording &&
+        primaryWindow.Synchronize() != DX12PrimaryWindow::Status::Failed;
 }
 
 void Renderer::Set_Polygon_Mode(PolygonMode mode)
@@ -521,8 +519,17 @@ bool Renderer::Get_Adapter_Identification(RenderAdapterIdentification & identifi
 
 RenderCapabilities Renderer::Get_Capabilities()
 {
-    ReportPending("Renderer::Get_Capabilities");
-    return {};
+    RenderCapabilities caps;
+    if (Has_Active_Device())
+    {
+        caps.hardwareTransformAndLighting = true;
+        caps.textureCompression = true;
+        caps.anisotropicFiltering = true;
+        caps.cubeTextures = true;
+        caps.maxTextureWidth = 16384;
+        caps.maxTextureHeight = 16384;
+    }
+    return caps;
 }
 
 void Renderer::Set_Mesh_Camera(CameraClass * camera)
