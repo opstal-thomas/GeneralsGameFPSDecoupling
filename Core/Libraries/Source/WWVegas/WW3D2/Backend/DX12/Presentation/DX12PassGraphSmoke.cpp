@@ -208,6 +208,21 @@ int wmain()
                     IID_PPV_ARGS(&unregistered))), "Create unregistered upload buffer"))
         return 1;
 
+    // A default-heap UAV buffer exercises compute-only pass outputs and
+    // write-after-write memory ordering without executing a W3D shader.
+    D3D12_HEAP_PROPERTIES defaultHeap = {};
+    defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeap.CreationNodeMask = defaultHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC uavDesc = bufferDesc;
+    uavDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    ComPtr<ID3D12Resource> uavBuffer;
+    if (!Check(SUCCEEDED(device.NativeDevice()->CreateCommittedResource(
+                   &defaultHeap, D3D12_HEAP_FLAG_NONE, &uavDesc,
+                   D3D12_RESOURCE_STATE_COMMON, nullptr,
+                   IID_PPV_ARGS(&uavBuffer))), "Create UAV output buffer"))
+        return 1;
+    ID3D12Resource * uavOutputs[] = {uavBuffer.Get()};
+
     const std::array<float, 4> clear = {{0.15f, 0.42f, 0.68f, 1.f}};
     if (!Check(!device.BeginRenderPass(DX12W3DPass::OpaqueWorld, Pass(offscreen.Get())),
                "Reject pass outside frame") ||
@@ -216,6 +231,8 @@ int wmain()
                "Exactly one PRESENT -> RENDER_TARGET transition") ||
         !Check(device.RegisterFrameResource(offscreen.Get(), D3D12_RESOURCE_STATE_COMMON),
                "Register actual offscreen COMMON state") ||
+        !Check(device.RegisterFrameResource(uavBuffer.Get(), D3D12_RESOURCE_STATE_COMMON),
+               "Register actual UAV COMMON state") ||
         !Check(!device.TransitionFrameResource(unregistered.Get(),
                                                D3D12_RESOURCE_STATE_COPY_SOURCE),
                "Reject unregistered resource") ||
@@ -247,6 +264,14 @@ int wmain()
                         inputs, 1)), "Terrain stage can sample opaque offscreen"))
         return 1;
 
+    DX12W3DPassBindings effects = Pass(device.CurrentBackBuffer(), nullptr, inputs, 1);
+    effects.uavOutputs = uavOutputs;
+    effects.uavOutputCount = 1;
+    DX12W3DPassBindings transparency = Pass(
+        device.CurrentBackBuffer(), device.CurrentDepthTarget(), inputs, 1);
+    transparency.uavOutputs = uavOutputs;
+    transparency.uavOutputCount = 1;
+
     if (!Check(device.GetFrameResourceState(offscreen.Get(), tracked) &&
                tracked == (D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
@@ -256,11 +281,13 @@ int wmain()
                "Reject out-of-order opaque pass") ||
         !Check(device.BeginRenderPass(DX12W3DPass::Water,
                    Pass(device.CurrentBackBuffer(), nullptr, inputs, 1)), "Water stage") ||
-        !Check(device.BeginRenderPass(DX12W3DPass::Effects,
-                   Pass(device.CurrentBackBuffer(), nullptr, inputs, 1)), "Effects stage") ||
-        !Check(device.BeginRenderPass(DX12W3DPass::Transparency,
-                   Pass(device.CurrentBackBuffer(), device.CurrentDepthTarget(),
-                        inputs, 1)), "Transparency stage") ||
+        !Check(device.BeginRenderPass(DX12W3DPass::Effects, effects),
+               "Effects stage with UAV output") ||
+        !Check(device.GetFrameResourceState(uavBuffer.Get(), tracked) &&
+               tracked == D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+               "UAV buffer transitioned to native UNORDERED_ACCESS") ||
+        !Check(device.BeginRenderPass(DX12W3DPass::Transparency, transparency),
+               "Transparency stage orders consecutive UAV writes") ||
         !Check(device.BeginRenderPass(DX12W3DPass::Shroud,
                    Pass(device.CurrentBackBuffer(), nullptr, inputs, 1)), "Shroud stage") ||
         !Check(device.BeginRenderPass(DX12W3DPass::UI,
@@ -300,6 +327,16 @@ int wmain()
                "External resource must be re-registered each frame") ||
         !Check(device.BeginRenderPass(DX12W3DPass::UI,
                                      Pass(device.CurrentBackBuffer())), "Skip directly to UI") ||
+        !Check(device.RegisterFrameResource(uavBuffer.Get(),
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+               "Register retained UAV state for following frame") ||
+        !Check(device.BeginRenderPass(DX12W3DPass::PostProcess,
+                    [&]() {
+                        DX12W3DPassBindings compute = {};
+                        compute.uavOutputs = uavOutputs;
+                        compute.uavOutputCount = 1;
+                        return compute;
+                    }()), "Postprocess UAV-only pass without color or depth target") ||
         !Check(device.EndFrame(0, false), "Submit without Present"))
         return 1;
 
@@ -317,9 +354,10 @@ int wmain()
     offscreen.Reset();
     readback.Reset();
     unregistered.Reset();
+    uavBuffer.Reset();
     offscreenRtv.Reset();
     device.Shutdown();
     std::cout << "DX12-B05 PASS: 8 canonical W3D stages, tracked D3D12 barriers, "
-                 "offscreen GPU readback and frame/resize recovery\n";
+                 "offscreen GPU readback, UAV memory ordering and frame/resize recovery\n";
     return 0;
 }
