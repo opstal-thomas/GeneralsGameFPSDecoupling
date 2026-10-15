@@ -48,6 +48,18 @@
 #include "WWDebug/wwmemlog.h"
 #include <d3dx8core.h>
 
+// R01: these legacy-named W3D buffer containers already allocate and map
+// through backend-neutral Renderer handles. Under exclusive DX12 they must
+// assert the *selected* backend, not the absent Direct3D 8 device/thread.
+// Dynamic sorting/ring allocation remains a separate R02 migration.
+#if defined(W3D_RENDER_BACKEND_DX12)
+#define W3D_GEOMETRY_THREAD_ASSERT() WWASSERT(Renderer::Get_Render_Thread_ID() == ThreadClass::_Get_Current_Thread_ID())
+#define W3D_GEOMETRY_DEVICE_ASSERT() WWASSERT(Renderer::Has_Active_Device())
+#else
+#define W3D_GEOMETRY_THREAD_ASSERT() DX8_THREAD_ASSERT()
+#define W3D_GEOMETRY_DEVICE_ASSERT() DX8_Assert()
+#endif
+
 #define DEFAULT_VB_SIZE 5000
 
 static bool _DynamicSortingVertexArrayInUse=false;
@@ -170,7 +182,7 @@ VertexBufferClass::WriteLockClass::WriteLockClass(VertexBufferClass* VertexBuffe
 	:
 	VertexBufferLockClass(VertexBuffer)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(VertexBuffer);
 	WWASSERT(!VertexBuffer->Engine_Refs());
 	VertexBuffer->Add_Ref();
@@ -186,7 +198,7 @@ VertexBufferClass::WriteLockClass::WriteLockClass(VertexBufferClass* VertexBuffe
 			fvf_name));
 		}
 #endif
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Vertices = Renderer::Map_Vertex_Buffer(
             static_cast<DX8VertexBufferClass*>(VertexBuffer)->Get_Render_Vertex_Buffer(),
             0, 0, To_Render_Map_Flags(flags));
@@ -204,13 +216,13 @@ VertexBufferClass::WriteLockClass::WriteLockClass(VertexBufferClass* VertexBuffe
 
 VertexBufferClass::WriteLockClass::~WriteLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (VertexBuffer->Type()) {
 	case BUFFER_TYPE_DX8:
 #ifdef VERTEX_BUFFER_LOG
 		WWDEBUG_SAY(("VertexBuffer->Unlock()"));
 #endif
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Renderer::Unmap_Vertex_Buffer(
             static_cast<DX8VertexBufferClass*>(VertexBuffer)->Get_Render_Vertex_Buffer());
 		break;
@@ -233,7 +245,7 @@ VertexBufferClass::AppendLockClass::AppendLockClass(VertexBufferClass* VertexBuf
 	:
 	VertexBufferLockClass(VertexBuffer)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(VertexBuffer);
 	WWASSERT(!VertexBuffer->Engine_Refs());
 	WWASSERT(start_index+index_range<=VertexBuffer->Get_Vertex_Count());
@@ -251,7 +263,7 @@ VertexBufferClass::AppendLockClass::AppendLockClass(VertexBufferClass* VertexBuf
 			fvf_name));
 		}
 #endif
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Vertices = Renderer::Map_Vertex_Buffer(
             static_cast<DX8VertexBufferClass*>(VertexBuffer)->Get_Render_Vertex_Buffer(),
             start_index * VertexBuffer->FVF_Info().Get_FVF_Size(),
@@ -270,10 +282,10 @@ VertexBufferClass::AppendLockClass::AppendLockClass(VertexBufferClass* VertexBuf
 
 VertexBufferClass::AppendLockClass::~AppendLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (VertexBuffer->Type()) {
 	case BUFFER_TYPE_DX8:
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 #ifdef VERTEX_BUFFER_LOG
 		WWDEBUG_SAY(("VertexBuffer->Unlock()"));
 #endif
@@ -427,7 +439,7 @@ DX8VertexBufferClass::~DX8VertexBufferClass()
 
 void DX8VertexBufferClass::Create_Vertex_Buffer(UsageType usage)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	WWASSERT(!VertexBuffer);
 
 #ifdef VERTEX_BUFFER_LOG
@@ -824,7 +836,7 @@ DynamicVBAccessClass::WriteLockClass::WriteLockClass(DynamicVBAccessClass* dynam
 	:
 	DynamicVBAccess(dynamic_vb_access_)
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (DynamicVBAccess->Get_Type()) {
 	case BUFFER_TYPE_DYNAMIC_DX8:
 #ifdef VERTEX_BUFFER_LOG
@@ -843,7 +855,7 @@ DynamicVBAccessClass::WriteLockClass::WriteLockClass(DynamicVBAccessClass* dynam
 		WWASSERT(_DynamicDX8VertexBuffer);
 //		WWASSERT(!_DynamicDX8VertexBuffer->Engine_Refs());
 
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		// Lock with discard contents if the buffer offset is zero
 		Vertices = static_cast<VertexFormatXYZNDUV2 *>(Renderer::Map_Vertex_Buffer(
             static_cast<DX8VertexBufferClass*>(DynamicVBAccess->VertexBuffer)->Get_Render_Vertex_Buffer(),
@@ -867,7 +879,7 @@ DynamicVBAccessClass::WriteLockClass::WriteLockClass(DynamicVBAccessClass* dynam
 
 DynamicVBAccessClass::WriteLockClass::~WriteLockClass()
 {
-	DX8_THREAD_ASSERT();
+	W3D_GEOMETRY_THREAD_ASSERT();
 	switch (DynamicVBAccess->Get_Type()) {
 	case BUFFER_TYPE_DYNAMIC_DX8:
 #ifdef VERTEX_BUFFER_LOG
@@ -875,7 +887,7 @@ DynamicVBAccessClass::WriteLockClass::~WriteLockClass()
 		WWASSERT(!dx8_lock);
 		WWDEBUG_SAY(("DynamicVertexBuffer->Unlock()"));
 #endif
-		DX8_Assert();
+		W3D_GEOMETRY_DEVICE_ASSERT();
 		Renderer::Unmap_Vertex_Buffer(
             static_cast<DX8VertexBufferClass*>(DynamicVBAccess->VertexBuffer)->Get_Render_Vertex_Buffer());
 		break;
