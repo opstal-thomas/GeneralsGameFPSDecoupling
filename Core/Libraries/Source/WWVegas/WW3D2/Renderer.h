@@ -619,6 +619,15 @@ struct RenderGameplayPreviewVertex
     float uv1[2];
 };
 
+// Explicit diagnostic categories let testers tell absent submission hooks
+// apart from invisible or occluded geometry in the secondary DX12 window.
+enum RenderGameplayPreviewKind
+{
+    RENDER_PREVIEW_MESH,
+    RENDER_PREVIEW_TERRAIN,
+    RENDER_PREVIEW_WATER
+};
+
 class Renderer
 {
 public:
@@ -731,7 +740,8 @@ public:
         const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
         const unsigned short * indices, unsigned indexCount,
         const Matrix3D & modelTransform, RenderTextureHandle texture = nullptr,
-        bool alphaTest = false, bool alphaBlend = false);
+        bool alphaTest = false, bool alphaBlend = false,
+        RenderGameplayPreviewKind kind = RENDER_PREVIEW_MESH);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs

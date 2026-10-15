@@ -2068,7 +2068,7 @@ void WaterRenderObjClass::renderWater()
                             waterTexture = m_riverTexture->Peek_Render_Texture();
                         Renderer::Preview_DX12_Gameplay_Mesh(
                             quad, 4, indices, 6, Matrix3D(true),
-                            waterTexture, false, true);
+                            waterTexture, false, true, RENDER_PREVIEW_WATER);
                     }
 #endif
 
@@ -3035,7 +3035,7 @@ void WaterRenderObjClass::drawRiverWater(PolygonTrigger *pTrig)
             static_cast<unsigned>(dx12RiverVertices.size()),
             dx12RiverIndices.data(),
             static_cast<unsigned>(dx12RiverIndices.size()),
-            Matrix3D(true), riverTexture, false, true);
+            Matrix3D(true), riverTexture, false, true, RENDER_PREVIEW_WATER);
     }
 #endif
 	if (wireframeForDebug) {

@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cwchar>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -114,6 +115,8 @@ struct DX12GameplayPreview::Impl
     bool ready = false;
     bool recording = false;
     unsigned meshesThisFrame = 0;
+    unsigned drawsByKind[3] = {};
+    unsigned skippedDraws = 0;
     std::uint64_t frameSerial = 0;
     std::size_t residentGeometryBytes = 0;
     bool geometryLimitLogged = false;
@@ -257,6 +260,9 @@ void DX12GameplayPreview::Begin_Frame()
     }
     state.recording = true;
     state.meshesThisFrame = 0;
+    for (unsigned & count : state.drawsByKind)
+        count = 0;
+    state.skippedDraws = 0;
     ++state.frameSerial;
     state.geometryLimitLogged = false;
 
@@ -280,15 +286,21 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                                       unsigned indexCount,
                                       const float worldViewProjection[16],
                                       RenderTextureHandle texture,
-                                      bool alphaTest, bool alphaBlend)
+                                      bool alphaTest, bool alphaBlend,
+                                      RenderGameplayPreviewKind kind)
 {
     Impl & state = *impl_;
-    if (!state.recording || state.meshesThisFrame >= MaxMeshesPerFrame ||
+    if (!state.recording)
+        return;
+    if (state.meshesThisFrame >= MaxMeshesPerFrame ||
         !vertices || !indices || !worldViewProjection ||
         vertexCount < 3 || vertexCount > MaxVerticesPerMesh ||
         indexCount < 3 || indexCount > MaxIndicesPerMesh ||
         indexCount % 3 != 0)
+    {
+        ++state.skippedDraws;
         return;
+    }
 
     // Reuse immutable object-space geometry; only WVP and material vary by draw.
     static_assert(sizeof(RenderGameplayPreviewVertex) == sizeof(DX12W3DVertex),
@@ -320,6 +332,7 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                              "cache is full; some W3D meshes are skipped");
                 state.geometryLimitLogged = true;
             }
+            ++state.skippedDraws;
             return;
         }
         Impl::CachedGeometry entry;
@@ -331,6 +344,7 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                                entry.indices.data(), indexCount))
         {
             state.Report("Upload W3D gameplay mesh", entry.gpu->LastError());
+            ++state.skippedDraws;
             return;
         }
         entry.lastUsedFrame = state.frameSerial;
@@ -409,9 +423,12 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                          state.whiteTexture1))
     {
         state.Report("Draw W3D gameplay mesh", state.pass.LastError());
+        ++state.skippedDraws;
         return;
     }
     ++state.meshesThisFrame;
+    if (static_cast<unsigned>(kind) < 3)
+        ++state.drawsByKind[static_cast<unsigned>(kind)];
 }
 
 void DX12GameplayPreview::End_Frame()
@@ -430,6 +447,18 @@ void DX12GameplayPreview::End_Frame()
     // Default-heap buffers remain alive and can be rendered next frame.
     for (auto & pair : state.geometryCache)
         pair.second.gpu->Release_Upload_Buffers();
+    // Visible frame counters: a zero terrain/water count indicates missing
+    // submission, not a texture or depth-buffer problem. Update occasionally.
+    if (state.window && state.frameSerial % 30 == 0)
+    {
+        wchar_t title[128] = {};
+        swprintf_s(title, L"DX12 preview | meshes %u | terrain %u | water %u | skipped %u",
+                   state.drawsByKind[RENDER_PREVIEW_MESH],
+                   state.drawsByKind[RENDER_PREVIEW_TERRAIN],
+                   state.drawsByKind[RENDER_PREVIEW_WATER],
+                   state.skippedDraws);
+        SetWindowTextW(state.window, title);
+    }
 }
 
 void DX12GameplayPreview::Shutdown()

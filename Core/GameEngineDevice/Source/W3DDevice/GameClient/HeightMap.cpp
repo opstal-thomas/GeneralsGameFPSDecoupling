@@ -2122,7 +2122,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 					                        Renderer::Preview_DX12_Gameplay_Mesh(
 					                            vertices.data(), static_cast<unsigned>(vertices.size()),
 					                            indices.data(), static_cast<unsigned>(indices.size()),
-					                            Matrix3D(true), atlas);
+					                            Matrix3D(true), atlas, false, false, RENDER_PREVIEW_TERRAIN);
 					                    }
 					                }
 					#endif
