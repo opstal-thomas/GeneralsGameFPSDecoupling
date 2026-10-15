@@ -267,6 +267,14 @@ int wmain()
     std::memcpy(updatedVertexBytes.data(), vertexBytes.data(), vertexDesc.byteSize);
     std::memcpy(updatedVertexBytes.data() + 12, update, sizeof(update));
 
+    if (!Check(BindVertex(device, nullptr, 1, 0),
+               "Unbind W3D vertex stream without stale IA view") ||
+        !Check(BindIndex(device, nullptr, 0),
+               "Unbind W3D index buffer") ||
+        !Check(device.BoundBaseVertexIndex() == 0,
+               "Unbinding indices resets their base vertex"))
+        return 1;
+
     // Destroy all four opaque handles before ExecuteCommandLists. The actual
     // GPU buffers/staging are held by the presentation frame-fence retirement.
     ReleaseVertex(vertex);
