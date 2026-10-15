@@ -21,7 +21,10 @@
 
 #include <array>
 #include <cstdio>
+#include <deque>
 #include <string>
+#include <utility>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
@@ -57,6 +60,21 @@ struct DX12PresentationDevice::Impl
     unsigned height = 0;
     float sourceAspect = 0.f;
     bool recording = false;
+    // Resources referenced by a submitted command list cannot be released
+    // when their W3D owner is destroyed on the CPU. Keep a per-frame
+    // AddRef until the queue signals its fence; handles may be reused.
+    std::vector<ComPtr<ID3D12Resource>> recordingResources;
+    std::deque<std::pair<UINT64, std::vector<ComPtr<ID3D12Resource>>>> retiredResources;
+    void CollectRetired()
+    {
+        if (!fence)
+            return;
+        const UINT64 done = fence->GetCompletedValue();
+        if (done == UINT64_MAX)
+            return;
+        while (!retiredResources.empty() && retiredResources.front().first <= done)
+            retiredResources.pop_front();
+    }
     DX12W3DPassGraph passGraph;
     std::string lastError;
 
@@ -185,6 +203,8 @@ struct DX12PresentationDevice::Impl
         width = height = 0;
         sourceAspect = 0.f;
         recording = false;
+        recordingResources.clear();
+        retiredResources.clear();
         passGraph.Reset();
     }
 };
@@ -362,6 +382,9 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
     const UINT index = state.currentBuffer;
     if (!state.WaitForFence(state.frameFences[index]))
         return false;
+    state.CollectRetired();
+    if (!state.recordingResources.empty())
+        return state.Fail("Unsubmitted frame resource retention remained", E_FAIL);
     if (!state.Check(state.allocators[index]->Reset(), "Reset frame command allocator"))
         return false;
     if (!state.Check(state.commandList->Reset(state.allocators[index].Get(), nullptr),
@@ -440,8 +463,22 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
     const UINT64 signalValue = state.nextFence++;
     const HRESULT signalled = state.queue->Signal(state.fence.Get(), signalValue);
     if (!state.Check(signalled, "Signal frame fence"))
+    {
+        // ExecuteCommandLists has already queued GPU references; preserve
+        // these until shutdown/device loss, even when queue signaling fails.
+        state.retiredResources.emplace_back(UINT64_MAX,
+            std::move(state.recordingResources));
+        state.recordingResources.clear();
         return false;
+    }
     state.frameFences[state.currentBuffer] = signalValue;
+    if (!state.recordingResources.empty())
+    {
+        state.retiredResources.emplace_back(
+            signalValue, std::move(state.recordingResources));
+        state.recordingResources.clear();
+    }
+    state.CollectRetired();
     return state.Check(presented, "IDXGISwapChain::Present");
 }
 
@@ -518,9 +555,31 @@ bool DX12PresentationDevice::GetAdapterIdentity(
     return true;
 }
 
+bool DX12PresentationDevice::RetainFrameResource(ID3D12Resource * resource)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !resource)
+        return state.Fail("RetainFrameResource requires active recording and resource", E_INVALIDARG);
+    state.recordingResources.emplace_back(resource);
+    return true;
+}
+
+unsigned DX12PresentationDevice::InFlightResourceCount() const
+{
+    std::size_t count = impl_->recordingResources.size();
+    for (const auto & frame : impl_->retiredResources)
+        count += frame.second.size();
+    return static_cast<unsigned>(count);
+}
+
 bool DX12PresentationDevice::WaitForIdle()
 {
-    return impl_->WaitForIdle();
+    // Waiting for queued work does not submit an *open* frame.
+    // Retention for that frame remains protected until EndFrame/Shutdown.
+    if (!impl_->WaitForIdle())
+        return false;
+    impl_->CollectRetired();
+    return true;
 }
 
 bool DX12PresentationDevice::Resize(unsigned width, unsigned height)
@@ -565,6 +624,10 @@ void DX12PresentationDevice::Shutdown()
     state.passGraph.Reset();
     if (state.device && SUCCEEDED(state.device->GetDeviceRemovedReason()))
         state.WaitForIdle();
+    // After GPU idle (or device removal), both retained generations and
+    // unsubmitted staging allocations may be safely disposed.
+    state.recordingResources.clear();
+    state.retiredResources.clear();
     state.ReleaseAll();
 }
 
