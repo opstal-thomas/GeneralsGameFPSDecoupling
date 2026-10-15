@@ -146,9 +146,35 @@ int wmain()
 
     // This call ordering mirrors WW3D::Begin_Render: Clear comes before
     // Begin_Scene. The separate primary-window test validates GPU pixels.
+    // R01: these are the *production neutral Renderer methods*, not a
+    // mock DX12 geometry API. Lock before scene, then bind native IA views.
+    RenderBufferDescription bufferDesc;
+    bufferDesc.byteSize = 36; // XYZ-only * 3
+    bufferDesc.legacyVertexFormat = 0x002;
+    auto gpuVertex = Renderer::Create_Vertex_Buffer(bufferDesc);
+    RenderBufferDescription indexDesc;
+    indexDesc.byteSize = 6; // three R16 indices
+    auto gpuIndex = Renderer::Create_Index_Buffer(indexDesc);
+    if (!Check(gpuVertex && gpuIndex, "Create native W3D vertex/index handles"))
+        return 1;
+    const float vertices[] = {0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.f, 0.f};
+    const unsigned short indices[] = {0, 1, 2};
+    void * vertexMap = Renderer::Map_Vertex_Buffer(gpuVertex, 0, 0);
+    void * indexMap = Renderer::Map_Index_Buffer(gpuIndex, 0, 0);
+    if (!Check(vertexMap && indexMap, "Map static W3D byte buffers"))
+        return 1;
+    std::memcpy(vertexMap, vertices, sizeof(vertices));
+    std::memcpy(indexMap, indices, sizeof(indices));
+    Renderer::Unmap_Vertex_Buffer(gpuVertex);
+    Renderer::Unmap_Index_Buffer(gpuIndex);
+
     Renderer::Clear(true, true, Vector3(0.2f, 0.4f, 0.6f), 1.f);
     Renderer::Begin_Scene();
+    Renderer::Bind_Vertex_Buffer(gpuVertex, 0, 12);
+    Renderer::Bind_Index_Buffer(gpuIndex, 0);
     Renderer::Clear(true, false, Vector3(0.3f, 0.5f, 0.7f), 1.f);
+    Renderer::Release_Vertex_Buffer(gpuVertex); // fence pins in-flight D3D12 buffers
+    Renderer::Release_Index_Buffer(gpuIndex);
     Renderer::End_Scene(false); // command list submission without presentation
     Renderer::Clear(true, true, Vector3(0.1f, 0.3f, 0.5f), 1.f);
     Renderer::Begin_Scene();
@@ -177,6 +203,6 @@ int wmain()
         return 1;
     SetEnvironmentVariableA("W3D_DX12_B04_DIAGNOSTIC", nullptr);
     SetEnvironmentVariableA("W3D_DX12_GAME_WARP", nullptr);
-    std::cout << "B04 Renderer native frame/state and actual game HWND: PASS\\n";
+    std::cout << "B04/R01 Renderer frame, native geometry handles and game HWND: PASS\\n";
     return 0;
 }
