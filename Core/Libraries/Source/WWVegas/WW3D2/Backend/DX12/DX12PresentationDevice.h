@@ -58,6 +58,11 @@ public:
     bool GetFrameResourceState(ID3D12Resource * resource,
                                D3D12_RESOURCE_STATES & result) const;
 
+    // Keep resources referenced by the currently recording command list
+    // alive until its signalled GPU fence completes. R01 relies on this for
+    // buffer generations and upload staging, including released handles.
+    bool RetainFrameResource(ID3D12Resource * resource);
+    unsigned InFlightResourceCount() const;
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
