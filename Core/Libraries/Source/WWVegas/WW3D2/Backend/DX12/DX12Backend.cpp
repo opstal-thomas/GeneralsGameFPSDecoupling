@@ -63,10 +63,17 @@ namespace
 
     bool DiagnosticOptIn()
     {
+#if defined(W3D_DX12_DEVELOPER_CHECKPOINT)
+        // Only the separately built B10 developer executable defines this.
+        // Normal Generals / Zero Hour DX12 builds remain fail-closed until
+        // the rest of the WW3D resource and draw paths are native.
+        return true;
+#else
         char option[4] = {};
         return GetEnvironmentVariableA(
             "W3D_DX12_B04_DIAGNOSTIC", option, sizeof(option)) == 1 &&
             option[0] == '1';
+#endif
     }
 
     unsigned PackChannel(float component)
