@@ -35,6 +35,10 @@
 #include "WWLib/thread.h"
 #include <d3dx8.h>
 
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+#include "WW3D2/Backend/DX12/DX12GameplayPreview.h"
+#endif
+
 static bool Initialized = false;
 static bool Lite = false;
 
@@ -60,6 +64,9 @@ bool Renderer::Init(void * window, bool lite)
 
 void Renderer::Shutdown()
 {
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    DX12GameplayPreview::Instance().Shutdown();
+#endif
     if (Initialized && !Lite)
     {
         DX8Wrapper::Shutdown();
@@ -129,10 +136,18 @@ void Renderer::Set_Hardware_Cursor_Position(int x, int y)
 void Renderer::Begin_Scene()
 {
     DX8Wrapper::Begin_Scene();
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    auto & preview = DX12GameplayPreview::Instance();
+    preview.Try_Initialize();
+    preview.Begin_Frame();
+#endif
 }
 
 void Renderer::End_Scene(bool flip_frame)
 {
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    DX12GameplayPreview::Instance().End_Frame();
+#endif
     DX8Wrapper::End_Scene(flip_frame);
 }
 
@@ -178,6 +193,48 @@ unsigned Renderer::Pack_Color_ARGB(const Vector4 & color)
 unsigned Renderer::Pack_Color_ARGB_Clamp(const Vector4 & color)
 {
     return DX8Wrapper::Convert_Color_Clamp(color);
+}
+
+bool Renderer::Is_DX12_Gameplay_Preview_Recording()
+{
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    return DX12GameplayPreview::Instance().Is_Recording();
+#else
+    return false;
+#endif
+}
+
+void Renderer::Preview_DX12_Gameplay_Mesh(
+    const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
+    const unsigned short * indices, unsigned indexCount,
+    const Matrix3D & modelTransform)
+{
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    auto & preview = DX12GameplayPreview::Instance();
+    if (!preview.Is_Recording())
+        return;
+
+    D3DMATRIX world = To_D3DMATRIX(modelTransform);
+    D3DMATRIX view = {};
+    D3DMATRIX projection = {};
+    DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, view);
+    DX8Wrapper::_Get_DX8_Transform(D3DTS_PROJECTION, projection);
+
+    D3DXMATRIX w, v, p;
+    static_assert(sizeof(w) == sizeof(world), "W3D DX8 world matrix layout");
+    std::memcpy(&w, &world, sizeof(w));
+    std::memcpy(&v, &view, sizeof(v));
+    std::memcpy(&p, &projection, sizeof(p));
+    const D3DXMATRIX worldViewProjection = w * v * p;
+    preview.Submit_Mesh(vertices, vertexCount, indices, indexCount,
+                        reinterpret_cast<const float *>(&worldViewProjection));
+#else
+    (void)vertices;
+    (void)vertexCount;
+    (void)indices;
+    (void)indexCount;
+    (void)modelTransform;
+#endif
 }
 
 void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,

@@ -608,6 +608,17 @@ struct RenderTextureCombinerKey
 // Method names intentionally match the existing DX8Wrapper names so migrating a
 // caller is a mechanical DX8Wrapper::X(...) -> Renderer::X(...) rewrite.
 
+// A narrow, backend-neutral diagnostic mesh stream. It mirrors actual
+// visible W3D object-space triangles into the optional DX12 preview window.
+// No scene data is moved away from the authoritative DX8 gameplay renderer.
+struct RenderGameplayPreviewVertex
+{
+    float position[3];
+    float diffuse[4];
+    float uv0[2];
+    float uv1[2];
+};
+
 class Renderer
 {
 public:
@@ -707,6 +718,16 @@ public:
     // of primitives, matching the legacy DX8 Draw_Strip contract.
     static void Draw_Triangle_Strip(unsigned short startIndex, unsigned short primitiveCount,
                                     unsigned short minVertexIndex, unsigned short vertexCount);
+
+    // Experimental, non-authoritative DX12 gameplay-geometry mirror.
+    // Both entry points are inert in standard DX8 builds. The preview records
+    // only an unlit/opaque mesh subset in a separate window; it is NOT a DX12
+    // gameplay renderer or a replacement for DX8 presentation.
+    static bool Is_DX12_Gameplay_Preview_Recording();
+    static void Preview_DX12_Gameplay_Mesh(
+        const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
+        const unsigned short * indices, unsigned indexCount,
+        const Matrix3D & modelTransform);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs

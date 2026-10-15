@@ -116,6 +116,9 @@
 #include "dx8indexbuffer.h"
 #include "dx8renderer.h"
 #include "WW3D2/Renderer.h"
+#ifdef W3D_ENABLE_DX12_GAMEPLAY_PREVIEW
+#include <vector>
+#endif
 #include "visrasterizer.h"
 #include "WWDebug/wwmemlog.h"
 #include "dx8rendererdebugger.h"
@@ -753,6 +756,72 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 				}
 
 				rendered_something = true;
+
+#ifdef W3D_ENABLE_DX12_GAMEPLAY_PREVIEW
+                // Mirror visible rigid W3D model triangles to an independent
+                // experimental DX12 window. The DX8 draw list stays intact.
+                // Skinning, transparent sorting and per-polygon material
+                // variants are deliberately excluded from this first pass.
+                if (Renderer::Is_DX12_Gameplay_Preview_Recording() &&
+                    !Model->Get_Flag(MeshGeometryClass::SKIN) &&
+                    !Model->Get_Flag(MeshGeometryClass::SORT) &&
+                    !Model->Get_Flag(MeshGeometryClass::ALIGNED) &&
+                    !Model->Get_Flag(MeshGeometryClass::ORIENTED))
+                {
+                    const int vertexCount = Model->Get_Vertex_Count();
+                    const int polygonCount = Model->Get_Polygon_Count();
+                    if (vertexCount >= 3 && vertexCount <= 2048 &&
+                        polygonCount > 0 && polygonCount <= 4096)
+                    {
+                        const Vector3 * positions = Model->Get_Vertex_Array();
+                        const TriIndex * polygons = Model->Get_Polygon_Array();
+                        const Vector2 * uv0 = Model->Get_UV_Array(0, 0);
+                        if (positions && polygons)
+                        {
+                            std::vector<RenderGameplayPreviewVertex> vertices(vertexCount);
+                            std::vector<unsigned short> indices;
+                            indices.reserve(static_cast<size_t>(polygonCount) * 3);
+                            for (int i = 0; i < vertexCount; ++i)
+                            {
+                                const Vector3 & p = positions[i];
+                                auto & dst = vertices[i];
+                                dst.position[0] = p.X;
+                                dst.position[1] = p.Y;
+                                dst.position[2] = p.Z;
+                                dst.diffuse[0] = 0.78f;
+                                dst.diffuse[1] = 0.86f;
+                                dst.diffuse[2] = 1.0f;
+                                dst.diffuse[3] = 1.0f;
+                                dst.uv0[0] = uv0 ? uv0[i].X : 0.0f;
+                                dst.uv0[1] = uv0 ? uv0[i].Y : 0.0f;
+                                dst.uv1[0] = dst.uv0[0];
+                                dst.uv1[1] = dst.uv0[1];
+                            }
+                            bool validIndices = true;
+                            for (int i = 0; i < polygonCount; ++i)
+                            {
+                                const TriIndex & triangle = polygons[i];
+                                if (triangle.I >= static_cast<unsigned>(vertexCount) ||
+                                    triangle.J >= static_cast<unsigned>(vertexCount) ||
+                                    triangle.K >= static_cast<unsigned>(vertexCount))
+                                {
+                                    validIndices = false;
+                                    break;
+                                }
+                                indices.push_back(static_cast<unsigned short>(triangle.I));
+                                indices.push_back(static_cast<unsigned short>(triangle.J));
+                                indices.push_back(static_cast<unsigned short>(triangle.K));
+                            }
+                            if (validIndices)
+                                Renderer::Preview_DX12_Gameplay_Mesh(
+                                    vertices.data(), static_cast<unsigned>(vertexCount),
+                                    indices.data(), static_cast<unsigned>(indices.size()),
+                                    Get_Transform());
+                        }
+                    }
+                }
+#endif
+
 
 			}
 

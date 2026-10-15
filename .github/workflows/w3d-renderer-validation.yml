@@ -36,3 +36,19 @@ jobs:
       tools: false
       extras: false
       tests: true
+
+  dx12-gameplay-preview-build:
+    needs: dx8-boundary-audit
+    name: ${{ matrix.game }} DX12 mesh preview Win32
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [Generals, GeneralsMD]
+    uses: ./.github/workflows/reusable-build-toolchain.yml
+    with:
+      game: ${{ matrix.game }}
+      preset: win32
+      tools: false
+      extras: false
+      tests: false
+      dx12_preview: true

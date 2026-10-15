@@ -41,6 +41,11 @@ on:
         default: false
         type: boolean
         description: "Build the benchmarks"
+      dx12_preview:
+        required: false
+        default: false
+        type: boolean
+        description: "Build opt-in secondary DX12 gameplay mesh preview"
 
 jobs:
   build:
@@ -164,6 +169,7 @@ jobs:
           $buildFlags += "-DRTS_BUILD_OPTION_FFMPEG=${{ inputs.ffmpeg && 'ON' || 'OFF' }}"
           $buildFlags += "-DRTS_BUILD_OPTION_TESTS=${{ inputs.tests && 'ON' || 'OFF' }}"
           $buildFlags += "-DRTS_BUILD_OPTION_BENCHMARKS=${{ inputs.benchmarks && 'ON' || 'OFF' }}"
+          $buildFlags += "-DW3D_ENABLE_DX12_GAMEPLAY_PREVIEW=${{ inputs.dx12_preview && 'ON' || 'OFF' }}"
 
           Write-Host "Build flags: $($buildFlags -join ' | ')"
           cmake --preset ${{ inputs.preset }} $buildFlags
@@ -206,10 +212,18 @@ jobs:
 
           $files | Move-Item -Destination $artifactsDir -Verbose -Force
 
+          # The optional DX12 developer preview compiles W3D shader source at
+          # runtime. Include its HLSL files alongside the executable.
+          if ("${{ inputs.dx12_preview }}" -eq "true") {
+            $shaderDir = "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12"
+            Copy-Item "$shaderDir/W3DLegacyUnlit.hlsl" -Destination $artifactsDir -ErrorAction Stop
+            Copy-Item "$shaderDir/W3DLegacyTextureCombiner.hlsli" -Destination $artifactsDir -ErrorAction Stop
+          }
+
       - name: Upload ${{ inputs.game }} ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ inputs.game }}-${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }}
+          name: ${{ inputs.game }}-${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }}${{ inputs.dx12_preview && '-dx12preview' || '' }}
           path: build\${{ inputs.preset }}\${{ inputs.game }}\artifacts
           retention-days: 30
           if-no-files-found: error

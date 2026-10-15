@@ -256,11 +256,17 @@ target_link_libraries(corei_ww3d2 INTERFACE
 )
 
 
+# Stage-one integration: compile an independent DX12 diagnostic window,
+# receiving real visible gameplay mesh triangles while DX8 remains the
+# authoritative (and default) game renderer. Runtime activation additionally
+# requires W3D_DX12_PREVIEW=1. No new files are needed for ordinary builds.
+option(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW "Build opt-in live W3D geometry mirror using DX12" OFF)
+
 # Experimental D3D12 device/swap-chain implementation in WW3D2.
 # EXCLUDE_FROM_ALL and OFF by default: existing Generals/Zero Hour binaries
 # still compile and link exactly the legacy DX8 Renderer implementation.
 option(W3D_BUILD_DX12_PRESENTATION "Expose opt-in DX12 presentation library target" OFF)
-if(W3D_BUILD_DX12_PRESENTATION)
+if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
     if(NOT WIN32 OR IS_VS6_BUILD)
         message(FATAL_ERROR "Experimental DX12 presentation requires modern MSVC on Windows")
     endif()
@@ -273,4 +279,21 @@ if(W3D_BUILD_DX12_PRESENTATION)
     target_compile_features(w3d_dx12_presentation PUBLIC cxx_std_17)
     target_compile_definitions(w3d_dx12_presentation PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(w3d_dx12_presentation PUBLIC d3d12 dxgi dxguid d3dcompiler)
+endif()
+
+
+if(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    # Compiled only for explicitly configured Win32 developer builds.
+    # The game continues using DX8Backend.cpp for every Renderer method.
+    add_library(w3d_dx12_gameplay_preview STATIC
+        Backend/DX12/DX12GameplayPreview.h
+        Backend/DX12/DX12GameplayPreview.cpp
+    )
+    target_compile_features(w3d_dx12_gameplay_preview PUBLIC cxx_std_17)
+    target_compile_definitions(w3d_dx12_gameplay_preview PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(w3d_dx12_gameplay_preview PUBLIC
+        w3d_dx12_presentation user32
+    )
+    target_link_libraries(corei_ww3d2 INTERFACE w3d_dx12_gameplay_preview)
+    target_compile_definitions(corei_ww3d2 INTERFACE W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=1)
 endif()

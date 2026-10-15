@@ -22,6 +22,66 @@ This does not add any DX12 runtime behavior. Backend-neutral callers must
 not name D3D transform ordinals or call `DX8Wrapper` to select shaders,
 materials, or textures. Legacy raw D3D8 texture-stage states, device
 pointers, buffer types and render targets require separate migrations.
+## DX12 integration stage 1: optional live W3D mesh preview
+
+The first gameplay-data bridge is **experimental and opt-in**. The game keeps
+Direct3D 8 for its authoritative renderer, game window, reset path, UI, water,
+shadows, and simulation. A **separate DX12 window** consumes actual visible
+rigid mesh positions, indices, and UVs captured from both Generals and Zero
+Hour's W3D scene-submission path. These triangles are uploaded and drawn with
+the reusable DX12 indexed-mesh pass and real DX12 presentation device.
+
+The preview intentionally does **not** replace DX8 frame presentation. It
+shows at most 12 visible rigid meshes per frame and skips skinning, translucent
+sorting, billboards, and meshes exceeding the bounded diagnostic upload size.
+This initial preview is **unlit, untextured, and without a depth buffer**, so
+its appearance is not gameplay visual parity. It is a first validation that
+actual W3D scene geometry can cross the renderer boundary and execute as
+DX12 GPU draw calls. Model/view/projection transforms are composed using
+the original DX8 matrix conventions at the DX8 adapter boundary.
+
+This is a separate optional build to prevent accidental production activation:
+
+~~~powershell
+cmake --preset win32 -DRTS_BUILD_GENERALS=ON -DRTS_BUILD_ZEROHOUR=OFF -DW3D_ENABLE_DX12_GAMEPLAY_PREVIEW=ON
+cmake --build --preset win32
+~~~
+
+The feature is still disabled until a developer explicitly sets:
+
+~~~powershell
+$env:W3D_DX12_PREVIEW = "1"
+# Optional software-adapter validation instead of a DX12 hardware adapter:
+$env:W3D_DX12_PREVIEW_WARP = "1"
+~~~
+
+**Deployment:** Alongside the preview-enabled executable, put
+W3DLegacyUnlit.hlsl and W3DLegacyTextureCombiner.hlsli in the same
+directory. The opt-in CI build artifacts include these files. An alternative
+shader location can be selected with W3D_DX12_PREVIEW_SHADER (absolute path);
+the include file must live next to the HLSL source. Without shader files or a
+DX12-capable device, the preview disables itself and DX8 gameplay continues.
+The game should be run in windowed mode while testing the two windows.
+Diagnostics are sent to OutputDebugString.
+
+Ordinary game builds have the feature disabled at **CMake configuration time**
+and require neither the DX12 libraries nor HLSL sidecars. The runtime flag is
+also required for opt-in builds. This two-level gate protects existing DX8
+users and preserves the executable-only replacement workflow unless testing
+the optional preview.
+
+Both game configurations are compiled in an additional DX12-preview CI
+matrix, and the original Win32/Zero Hour builds plus DX8 regression checks
+remain mandatory. Independent WARP mesh/readback and swapchain tests continue
+to validate the DX12 GPU implementation.
+
+**Next steps:** Make DX12 vertex input formats and texture/material bindings
+cover actual W3D formats; add depth, lighting, fog, blending, terrain, water,
+shadows, shroud and UI; replace diagnostic per-frame resource uploads with
+persistent allocations/fences; then add a fully separate DX12 gameplay
+renderer selection with visual-parity checks. **Do not interpret the preview
+as a selectable production DX12 renderer.**
+
 ## Existing architecture
 
 The repository already has `WW3D2/Renderer.h` and
