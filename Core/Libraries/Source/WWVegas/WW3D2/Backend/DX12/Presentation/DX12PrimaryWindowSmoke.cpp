@@ -209,7 +209,18 @@ int wmain()
         !Check(primary.Clear(true, true, deferred.data(), 0.25f), "Queue W3D preframe clear") ||
         !Check(primary.BeginScene(), "Begin native scene with deferred clear") ||
         !Check(primary.IsSceneOpen() && primary.Presentation().IsRecording(),
-               "Active frame state"))
+               "Active frame state") ||
+        !Check(primary.Presentation().CurrentRenderPassOrdinal() ==
+               static_cast<int>(DX12W3DPass::OpaqueWorld),
+               "B05 enters opaque-world stage on the real primary HWND"))
+        return 1;
+    DX12W3DPassBindings terrain = {};
+    terrain.colorTarget = primary.Presentation().CurrentBackBuffer();
+    terrain.depthTarget = primary.Presentation().CurrentDepthTarget();
+    if (!Check(primary.BeginPass(DX12W3DPass::Terrain, terrain),
+               "Native game-HWND advances into terrain stage") ||
+        !Check(!primary.BeginPass(DX12W3DPass::OpaqueWorld, terrain),
+               "No implicit backward pass on primary HWND"))
         return 1;
     ComPtr<ID3D12Resource> captured;
     unsigned rowPitch = 0;
