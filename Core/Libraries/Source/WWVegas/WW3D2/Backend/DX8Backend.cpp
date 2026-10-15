@@ -204,10 +204,93 @@ bool Renderer::Is_DX12_Gameplay_Preview_Recording()
 #endif
 }
 
+// Convert a bounded, already-loaded DX8 texture into an RGBA8 copy for the
+// secondary DX12 preview. Never expose a COM surface or D3D8 format upstream.
+// D3DX handles DXT and legacy packed formats which still exist in game assets.
+bool Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
+    RenderTextureHandle texture, unsigned char * rgba8, unsigned capacity,
+    unsigned & width, unsigned & height)
+{
+    width = height = 0;
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    if (!texture || !rgba8)
+        return false;
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (!device)
+        return false;
+    IDirect3DTexture8 * sourceTexture = reinterpret_cast<IDirect3DTexture8 *>(texture);
+    D3DSURFACE_DESC description = {};
+    if (FAILED(sourceTexture->GetLevelDesc(0, &description)) ||
+        description.Width == 0 || description.Height == 0 ||
+        description.Width > 512 || description.Height > 512 ||
+        static_cast<unsigned long long>(description.Width) * description.Height * 4 > capacity)
+        return false;
+
+    IDirect3DSurface8 * source = nullptr;
+    if (FAILED(sourceTexture->GetSurfaceLevel(0, &source)) || !source)
+        return false;
+    IDirect3DSurface8 * staging = nullptr;
+    const HRESULT created = device->CreateImageSurface(
+        description.Width, description.Height, D3DFMT_A8R8G8B8, &staging);
+    if (FAILED(created) || !staging)
+    {
+        source->Release();
+        return false;
+    }
+
+    // This conversion works for DDS BC1/BC2/BC3 as well as uncompressed
+    // legacy W3D formats. It runs only once per captured texture handle.
+    const HRESULT converted = D3DXLoadSurfaceFromSurface(
+        staging, nullptr, nullptr, source, nullptr, nullptr, D3DX_FILTER_NONE, 0);
+    source->Release();
+    if (FAILED(converted))
+    {
+        staging->Release();
+        return false;
+    }
+
+    D3DLOCKED_RECT mapped = {};
+    if (FAILED(staging->LockRect(&mapped, nullptr, D3DLOCK_READONLY)) ||
+        !mapped.pBits || mapped.Pitch < static_cast<int>(description.Width * 4))
+    {
+        if (mapped.pBits)
+            staging->UnlockRect();
+        staging->Release();
+        return false;
+    }
+
+    const auto * input = static_cast<const unsigned char *>(mapped.pBits);
+    for (unsigned y = 0; y < description.Height; ++y)
+    {
+        const unsigned char * src = input + static_cast<size_t>(y) * mapped.Pitch;
+        unsigned char * dst = rgba8 + static_cast<size_t>(y) * description.Width * 4;
+        for (unsigned x = 0; x < description.Width; ++x)
+        {
+            // D3DFMT_A8R8G8B8 has BGRA byte order in little-endian memory.
+            dst[x * 4 + 0] = src[x * 4 + 2];
+            dst[x * 4 + 1] = src[x * 4 + 1];
+            dst[x * 4 + 2] = src[x * 4 + 0];
+            dst[x * 4 + 3] = src[x * 4 + 3];
+        }
+    }
+    staging->UnlockRect();
+    staging->Release();
+    width = description.Width;
+    height = description.Height;
+    return true;
+#else
+    (void)texture;
+    (void)rgba8;
+    (void)capacity;
+    return false;
+#endif
+}
+
 void Renderer::Preview_DX12_Gameplay_Mesh(
     const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
     const unsigned short * indices, unsigned indexCount,
-    const Matrix3D & modelTransform)
+    const Matrix3D & modelTransform, RenderTextureHandle texture,
+    bool alphaTest)
 {
 #if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
     auto & preview = DX12GameplayPreview::Instance();
@@ -227,13 +310,16 @@ void Renderer::Preview_DX12_Gameplay_Mesh(
     std::memcpy(&p, &projection, sizeof(p));
     const D3DXMATRIX worldViewProjection = w * v * p;
     preview.Submit_Mesh(vertices, vertexCount, indices, indexCount,
-                        reinterpret_cast<const float *>(&worldViewProjection));
+                        reinterpret_cast<const float *>(&worldViewProjection),
+                        texture, alphaTest);
 #else
     (void)vertices;
     (void)vertexCount;
     (void)indices;
     (void)indexCount;
     (void)modelTransform;
+    (void)texture;
+    (void)alphaTest;
 #endif
 }
 

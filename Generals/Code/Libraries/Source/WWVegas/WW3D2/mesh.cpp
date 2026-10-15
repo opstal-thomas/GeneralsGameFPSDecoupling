@@ -751,6 +751,30 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                         const Vector3 * positions = Model->Get_Vertex_Array();
                         const TriIndex * polygons = Model->Get_Polygon_Array();
                         const Vector2 * uv0 = Model->Get_UV_Array(0, 0);
+                        const Vector2 * uv1 = Model->Get_UV_Array(0, 1);
+                        // A complete mesh is only a single-texture material
+                        // when no per-polygon variants or extra passes exist.
+                        // Other meshes continue rendering with diagnostic color.
+                        RenderTextureHandle previewTexture = nullptr;
+                        bool previewAlphaTest = false;
+                        if (Model->Get_Pass_Count() == 1 &&
+                            !Model->Has_Shader_Array(0) &&
+                            !Model->Has_Texture_Array(0, 0) &&
+                            !Model->Has_Texture_Array(0, 1) &&
+                            !Model->Peek_Single_Texture(0, 1))
+                        {
+                            const ShaderClass shader = Model->Get_Single_Shader(0);
+                            TextureClass * texture = Model->Peek_Single_Texture(0, 0);
+                            if (texture && texture->Is_Initialized() &&
+                                shader.Get_Texturing() == ShaderClass::TEXTURING_ENABLE &&
+                                shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_ONE &&
+                                shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ZERO)
+                            {
+                                previewTexture = texture->Peek_Render_Texture();
+                                previewAlphaTest =
+                                    shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE;
+                            }
+                        }
                         if (positions && polygons)
                         {
                             std::vector<RenderGameplayPreviewVertex> vertices(vertexCount);
@@ -769,8 +793,14 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                                 dst.diffuse[3] = 1.0f;
                                 dst.uv0[0] = uv0 ? uv0[i].X : 0.0f;
                                 dst.uv0[1] = uv0 ? uv0[i].Y : 0.0f;
-                                dst.uv1[0] = dst.uv0[0];
-                                dst.uv1[1] = dst.uv0[1];
+                                dst.uv1[0] = uv1 ? uv1[i].X : dst.uv0[0];
+                                dst.uv1[1] = uv1 ? uv1[i].Y : dst.uv0[1];
+                                if (previewTexture)
+                                {
+                                    dst.diffuse[0] = 1.0f;
+                                    dst.diffuse[1] = 1.0f;
+                                    dst.diffuse[2] = 1.0f;
+                                }
                             }
                             bool validIndices = true;
                             for (int i = 0; i < polygonCount; ++i)
@@ -791,7 +821,7 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                                 Renderer::Preview_DX12_Gameplay_Mesh(
                                     vertices.data(), static_cast<unsigned>(vertexCount),
                                     indices.data(), static_cast<unsigned>(indices.size()),
-                                    Get_Transform());
+                                    Get_Transform(), previewTexture, previewAlphaTest);
                         }
                     }
                 }

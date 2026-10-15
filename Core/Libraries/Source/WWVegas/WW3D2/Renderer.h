@@ -720,14 +720,18 @@ public:
                                     unsigned short minVertexIndex, unsigned short vertexCount);
 
     // Experimental, non-authoritative DX12 gameplay-geometry mirror.
-    // Both entry points are inert in standard DX8 builds. The preview records
-    // only an unlit/opaque mesh subset in a separate window; it is NOT a DX12
-    // gameplay renderer or a replacement for DX8 presentation.
+    // The texture snapshot is a diagnostic DX8 adapter until the full texture
+    // resource pipeline can create DX12 textures without a legacy device.
+    // Standard DX8 builds never activate the mirror.
     static bool Is_DX12_Gameplay_Preview_Recording();
+    static bool Snapshot_DX12_Preview_Texture_RGBA8(
+        RenderTextureHandle texture, unsigned char * rgba8, unsigned capacity,
+        unsigned & width, unsigned & height);
     static void Preview_DX12_Gameplay_Mesh(
         const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
         const unsigned short * indices, unsigned indexCount,
-        const Matrix3D & modelTransform);
+        const Matrix3D & modelTransform, RenderTextureHandle texture = nullptr,
+        bool alphaTest = false);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs

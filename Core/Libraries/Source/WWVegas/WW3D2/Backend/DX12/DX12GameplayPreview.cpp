@@ -26,6 +26,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -35,6 +36,8 @@ namespace
     constexpr unsigned MaxMeshesPerFrame = 12;
     constexpr unsigned MaxVerticesPerMesh = 2048;
     constexpr unsigned MaxIndicesPerMesh = 4096 * 3;
+    constexpr unsigned MaxCapturedTextures = 64;
+    constexpr unsigned MaxTextureDimension = 512;
 
     bool EnvironmentEnabled(const wchar_t * name)
     {
@@ -87,6 +90,9 @@ struct DX12GameplayPreview::Impl
     unsigned whiteTexture0 = 0;
     unsigned whiteTexture1 = 0;
     bool texturesUploaded = false;
+    // Cache by the currently loaded render-resource identity. Readbacks and
+    // uploads are bounded; resources stay alive through preview shutdown.
+    std::unordered_map<RenderTextureHandle, unsigned> textureCache;
     DX12PresentationDevice presentation;
     DX12W3DIndexedMeshPass pass;
     // Upload heaps and GPU buffers must outlive the submitted frame. End_Frame
@@ -206,7 +212,9 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                                       unsigned vertexCount,
                                       const unsigned short * indices,
                                       unsigned indexCount,
-                                      const float worldViewProjection[16])
+                                      const float worldViewProjection[16],
+                                      RenderTextureHandle texture,
+                                      bool alphaTest)
 {
     Impl & state = *impl_;
     if (!state.recording || state.meshesThisFrame >= MaxMeshesPerFrame ||
@@ -234,10 +242,52 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         return;
     }
 
-    RenderTextureCombinerKey untextured;
-    RenderBlendState opaque;
-    if (!state.pass.Draw(*mesh, 0, indexCount, untextured, opaque,
-                         worldViewProjection, state.whiteTexture0,
+    unsigned colorTexture = state.whiteTexture0;
+    if (texture)
+    {
+        auto cached = state.textureCache.find(texture);
+        if (cached != state.textureCache.end())
+        {
+            colorTexture = cached->second;
+        }
+        else if (state.textureCache.size() < MaxCapturedTextures)
+        {
+            RenderTextureLevelDescription description;
+            Renderer::Describe_Texture_Level_2D(
+                reinterpret_cast<RenderTexture2DHandle>(texture), 0, description);
+            if (description.width > 0 && description.height > 0 &&
+                description.width <= MaxTextureDimension &&
+                description.height <= MaxTextureDimension)
+            {
+                std::vector<std::uint8_t> pixels(
+                    static_cast<size_t>(description.width) * description.height * 4);
+                unsigned width = 0, height = 0;
+                unsigned uploaded = 0;
+                if (Renderer::Snapshot_DX12_Preview_Texture_RGBA8(
+                        texture, pixels.data(), static_cast<unsigned>(pixels.size()),
+                        width, height) &&
+                    state.pass.UploadTextureRGBA8(pixels.data(), width, height, uploaded))
+                {
+                    colorTexture = uploaded;
+                    state.textureCache.emplace(texture, uploaded);
+                }
+            }
+        }
+    }
+
+    RenderTextureCombinerKey combiner;
+    RenderBlendState material;
+    if (colorTexture != state.whiteTexture0)
+    {
+        combiner.color[0] = RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+        combiner.alpha[0] = RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+        material.alphaTestEnabled = alphaTest;
+    }
+
+    if (!state.pass.Draw(*mesh, 0, indexCount, combiner, material,
+                         worldViewProjection, colorTexture,
                          state.whiteTexture1))
     {
         state.Report("Draw W3D gameplay mesh", state.pass.LastError());
@@ -276,6 +326,7 @@ void DX12GameplayPreview::Shutdown()
     state.recording = false;
     state.ready = false;
     state.meshes.clear();
+    state.textureCache.clear();
     state.pass.Shutdown();
     state.presentation.Shutdown();
     if (state.window && IsWindow(state.window))

@@ -11,8 +11,7 @@
 #pragma once
 
 #include <memory>
-
-struct RenderGameplayPreviewVertex;
+#include "../../Renderer.h"
 
 class DX12GameplayPreview final
 {
@@ -23,7 +22,8 @@ public:
     void Begin_Frame();
     void Submit_Mesh(const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
                      const unsigned short * indices, unsigned indexCount,
-                     const float worldViewProjection[16]);
+                     const float worldViewProjection[16],
+                     RenderTextureHandle texture, bool alphaTest);
     void End_Frame();
     void Shutdown();
 
