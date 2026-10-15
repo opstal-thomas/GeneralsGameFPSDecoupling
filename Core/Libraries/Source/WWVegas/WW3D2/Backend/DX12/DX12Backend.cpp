@@ -11,6 +11,7 @@
 // enabled. This is not a DX12-only playable-game launch (B10).
 #include "WW3D2/Renderer.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
+#include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
 
@@ -622,67 +623,83 @@ void Renderer::Release_Texture_Resources()
 
 RenderVertexBufferHandle Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
 {
-    ReportPending("Renderer::Create_Vertex_Buffer");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DGeometryBuffers::CreateVertex(
+        primaryWindow.Presentation().NativeDevice(), description);
 }
 
 RenderVertexBufferHandle Renderer::Create_Point_Sprite_Vertex_Buffer(unsigned byteSize)
 {
-    ReportPending("Renderer::Create_Point_Sprite_Vertex_Buffer");
-    return {};
+    RenderBufferDescription description;
+    description.byteSize = byteSize;
+    description.legacyVertexFormat = 0x002; // historical W3D XYZ-only FVF identifier
+    description.usageFlags = RENDER_BUFFER_DYNAMIC;
+    return Create_Vertex_Buffer(description);
 }
 
 RenderIndexBufferHandle Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
 {
-    ReportPending("Renderer::Create_Index_Buffer");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DGeometryBuffers::CreateIndex(
+        primaryWindow.Presentation().NativeDevice(), description);
 }
 
 void Renderer::Release_Vertex_Buffer(RenderVertexBufferHandle buffer)
 {
-    ReportPending("Renderer::Release_Vertex_Buffer");
+    DX12W3DGeometryBuffers::ReleaseVertex(buffer);
 }
 
 void Renderer::Release_Index_Buffer(RenderIndexBufferHandle buffer)
 {
-    ReportPending("Renderer::Release_Index_Buffer");
+    DX12W3DGeometryBuffers::ReleaseIndex(buffer);
 }
 
 void Renderer::Discard_Managed_Resources()
 {
-    ReportPending("Renderer::Discard_Managed_Resources");
+    // No D3D8 managed pool. Retired DX12 generations remain alive through
+    // native submission fences, not an implicit legacy resource manager.
 }
 
-void * Renderer::Map_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned offsetBytes, unsigned sizeBytes, unsigned mapFlags)
+void * Renderer::Map_Vertex_Buffer(RenderVertexBufferHandle buffer,
+                                   unsigned offsetBytes, unsigned sizeBytes, unsigned mapFlags)
 {
-    ReportPending("Renderer::Map_Vertex_Buffer");
-    return {};
+    if (!ready || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DGeometryBuffers::MapVertex(buffer, offsetBytes, sizeBytes, mapFlags);
 }
 
-void * Renderer::Map_Index_Buffer(RenderIndexBufferHandle buffer, unsigned offsetBytes, unsigned sizeBytes, unsigned mapFlags)
+void * Renderer::Map_Index_Buffer(RenderIndexBufferHandle buffer,
+                                  unsigned offsetBytes, unsigned sizeBytes, unsigned mapFlags)
 {
-    ReportPending("Renderer::Map_Index_Buffer");
-    return {};
+    if (!ready || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DGeometryBuffers::MapIndex(buffer, offsetBytes, sizeBytes, mapFlags);
 }
 
 void Renderer::Unmap_Vertex_Buffer(RenderVertexBufferHandle buffer)
 {
-    ReportPending("Renderer::Unmap_Vertex_Buffer");
+    if (buffer && !DX12W3DGeometryBuffers::UnmapVertex(buffer))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Unmap_Index_Buffer(RenderIndexBufferHandle buffer)
 {
-    ReportPending("Renderer::Unmap_Index_Buffer");
+    if (buffer && !DX12W3DGeometryBuffers::UnmapIndex(buffer))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride)
 {
-    ReportPending("Renderer::Bind_Vertex_Buffer");
+    if (ready && primaryWindow.IsSceneOpen() &&
+        !DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(), buffer, stream, stride))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Bind_Point_Sprite_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stride)
 {
-    ReportPending("Renderer::Bind_Point_Sprite_Vertex_Buffer");
+    Bind_Vertex_Buffer(buffer, 0, stride);
 }
 
 void Renderer::Draw_Point_List(unsigned firstVertex, unsigned pointCount)
@@ -697,12 +714,19 @@ void Renderer::Set_Point_Sprite_Rendering(bool enabled, float size, float minSiz
 
 void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex)
 {
-    ReportPending("Renderer::Bind_Index_Buffer");
+    if (ready && primaryWindow.IsSceneOpen() &&
+        !DX12W3DGeometryBuffers::BindIndex(
+            primaryWindow.Presentation(), buffer, baseVertexIndex))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & binding)
 {
-    ReportPending("Renderer::Bind_Dynamic_Vertex_Buffer");
+    if (!ready || !primaryWindow.IsSceneOpen())
+        return;
+    if (!DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(),
+        binding.resource, 0, binding.stride, binding.firstVertex, binding.vertexCount))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
@@ -712,7 +736,11 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 
 void Renderer::Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & binding, unsigned short baseVertexIndex)
 {
-    ReportPending("Renderer::Bind_Dynamic_Index_Buffer");
+    if (!ready || !primaryWindow.IsSceneOpen())
+        return;
+    if (!DX12W3DGeometryBuffers::BindIndex(primaryWindow.Presentation(),
+        binding.resource, baseVertexIndex, binding.firstIndex, binding.indexCount))
+        OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
 }
 
 void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)
