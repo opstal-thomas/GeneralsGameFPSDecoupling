@@ -735,8 +735,8 @@ void MeshClass::Render(RenderInfoClass & rinfo)
 #ifdef W3D_ENABLE_DX12_GAMEPLAY_PREVIEW
                 // Mirror visible rigid W3D model triangles to an independent
                 // experimental DX12 window. The DX8 draw list stays intact.
-                // Skinning, transparent sorting and per-polygon material
-                // variants are deliberately excluded from this first pass.
+                // Skinning, per-triangle sorted transparency and per-polygon
+                // material variants remain separate migration tasks.
                 if (Renderer::Is_DX12_Gameplay_Preview_Recording() &&
                     !Model->Get_Flag(MeshGeometryClass::SKIN) &&
                     !Model->Get_Flag(MeshGeometryClass::SORT) &&
@@ -757,6 +757,8 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                         // Other meshes continue rendering with diagnostic color.
                         RenderTextureHandle previewTexture = nullptr;
                         bool previewAlphaTest = false;
+                        bool previewAlphaBlend = false;
+                        bool unsupportedAlphaMaterial = false;
                         if (Model->Get_Pass_Count() == 1 &&
                             !Model->Has_Shader_Array(0) &&
                             !Model->Has_Texture_Array(0, 0) &&
@@ -765,17 +767,26 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                         {
                             const ShaderClass shader = Model->Get_Single_Shader(0);
                             TextureClass * texture = Model->Peek_Single_Texture(0, 0);
+                            const bool opaqueBlend =
+                                shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_ONE &&
+                                shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ZERO;
+                            const bool sourceAlphaBlend =
+                                shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_SRC_ALPHA &&
+                                shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ONE_MINUS_SRC_ALPHA;
                             if (texture && texture->Is_Initialized() &&
                                 shader.Get_Texturing() == ShaderClass::TEXTURING_ENABLE &&
-                                shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_ONE &&
-                                shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ZERO)
+                                (opaqueBlend || sourceAlphaBlend))
                             {
                                 previewTexture = texture->Peek_Render_Texture();
                                 previewAlphaTest =
                                     shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE;
+                                previewAlphaBlend = sourceAlphaBlend;
                             }
+                            // Avoid rendering an unsupported transparent material
+                            // as an opaque diagnostic rectangle in the preview.
+                            unsupportedAlphaMaterial = shader.Uses_Alpha() && !previewTexture;
                         }
-                        if (positions && polygons)
+                        if (positions && polygons && !unsupportedAlphaMaterial)
                         {
                             std::vector<RenderGameplayPreviewVertex> vertices(vertexCount);
                             std::vector<unsigned short> indices;
@@ -821,7 +832,8 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                                 Renderer::Preview_DX12_Gameplay_Mesh(
                                     vertices.data(), static_cast<unsigned>(vertexCount),
                                     indices.data(), static_cast<unsigned>(indices.size()),
-                                    Get_Transform(), previewTexture, previewAlphaTest);
+                                    Get_Transform(), previewTexture, previewAlphaTest,
+                                    previewAlphaBlend);
                         }
                     }
                 }

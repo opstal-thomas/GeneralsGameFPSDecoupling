@@ -138,6 +138,22 @@ struct DX12GameplayPreview::Impl
     // Shared models use one GPU allocation for all instances and subsequent frames.
     std::unordered_multimap<std::uint64_t, CachedGeometry> geometryCache;
 
+    // Transparent materials must be submitted after all opaque meshes and
+    // terrain, irrespective of the legacy W3D caller's submission order.
+    // Each draw's geometry stays protected from cache eviction this frame.
+    struct DeferredBlend
+    {
+        const DX12W3DIndexedMesh * mesh = nullptr;
+        unsigned indexCount = 0;
+        float worldViewProjection[16] = {};
+        RenderTextureCombinerKey combiner;
+        RenderBlendState material;
+        unsigned texture0 = 0;
+        unsigned texture1 = 0;
+        RenderGameplayPreviewKind kind = RENDER_PREVIEW_MESH;
+    };
+    std::vector<DeferredBlend> deferredBlends;
+
     bool MakeRoom(std::size_t bytes)
     {
         if (bytes > MaxResidentGeometryBytes)
@@ -260,6 +276,7 @@ void DX12GameplayPreview::Begin_Frame()
     }
     state.recording = true;
     state.meshesThisFrame = 0;
+    state.deferredBlends.clear();
     for (unsigned & count : state.drawsByKind)
         count = 0;
     state.skippedDraws = 0;
@@ -401,6 +418,16 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         }
     }
 
+    // Do not turn transparent alpha-masked model parts into solid diagnostic
+    // rectangles when their source texture could not be mirrored.
+    // Water deliberately retains its untextured vertex-alpha fallback.
+    if (kind == RENDER_PREVIEW_MESH && texture &&
+        (alphaTest || alphaBlend) && colorTexture == state.whiteTexture0)
+    {
+        ++state.skippedDraws;
+        return;
+    }
+
     RenderTextureCombinerKey combiner;
     RenderBlendState material;
     if (colorTexture != state.whiteTexture0)
@@ -418,11 +445,28 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         material.destination = RENDER_BLEND_INV_SRC_ALPHA;
     }
 
+    if (material.blendEnabled)
+    {
+        Impl::DeferredBlend draw;
+        draw.mesh = resident.gpu.get();
+        draw.indexCount = indexCount;
+        std::memcpy(draw.worldViewProjection, worldViewProjection,
+                    sizeof(draw.worldViewProjection));
+        draw.combiner = combiner;
+        draw.material = material;
+        draw.texture0 = colorTexture;
+        draw.texture1 = state.whiteTexture1;
+        draw.kind = kind;
+        state.deferredBlends.push_back(draw);
+        ++state.meshesThisFrame; // Reserve against the bounded draw budget.
+        return;
+    }
+
     if (!state.pass.Draw(*resident.gpu, 0, indexCount, combiner, material,
                          worldViewProjection, colorTexture,
                          state.whiteTexture1))
     {
-        state.Report("Draw W3D gameplay mesh", state.pass.LastError());
+        state.Report("Draw opaque W3D gameplay mesh", state.pass.LastError());
         ++state.skippedDraws;
         return;
     }
@@ -436,6 +480,27 @@ void DX12GameplayPreview::End_Frame()
     Impl & state = *impl_;
     if (!state.recording)
         return;
+
+    // DX12 alpha blending is order-dependent. Submit water and transparent
+    // single-material W3D meshes after opaque geometry has populated depth.
+    // Deferred draws retain their original W3D submission order for now;
+    // per-triangle sorting and other blend factors remain future work.
+    for (const Impl::DeferredBlend & draw : state.deferredBlends)
+    {
+        if (!state.pass.Draw(*draw.mesh, 0, draw.indexCount,
+                             draw.combiner, draw.material,
+                             draw.worldViewProjection,
+                             draw.texture0, draw.texture1))
+        {
+            state.Report("Draw translucent W3D gameplay mesh", state.pass.LastError());
+            ++state.skippedDraws;
+        }
+        else if (static_cast<unsigned>(draw.kind) < 3)
+        {
+            ++state.drawsByKind[static_cast<unsigned>(draw.kind)];
+        }
+    }
+    state.deferredBlends.clear();
     state.recording = false;
     if (!state.presentation.EndFrame(0) || !state.presentation.WaitForIdle())
     {
@@ -468,6 +533,7 @@ void DX12GameplayPreview::Shutdown()
         state.presentation.WaitForIdle();
     state.recording = false;
     state.ready = false;
+    state.deferredBlends.clear();
     state.geometryCache.clear();
     state.residentGeometryBytes = 0;
     state.textureCache.clear();
