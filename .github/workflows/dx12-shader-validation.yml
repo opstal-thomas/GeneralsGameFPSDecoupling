@@ -6,6 +6,8 @@ on:
       - feature/w3d-renderer-backend-foundation
     paths:
       - 'Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/**'
+      - 'scripts/check_dx12_launch_pe.py'
+      - 'Documentation/DX12OnlyLaunchCheckpoint.md'
       - '.github/workflows/dx12-shader-validation.yml'
   workflow_dispatch:
 
@@ -63,6 +65,8 @@ jobs:
           $source = "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/Presentation"
           $artifacts = Join-Path $env:RUNNER_TEMP "w3d-dx12-presentation-artifacts"
           New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
+          $launchArtifacts = Join-Path $env:RUNNER_TEMP "w3d-dx12-b10-launch-artifacts"
+          New-Item -ItemType Directory -Path $launchArtifacts -Force | Out-Null
           foreach ($architecture in @("Win32", "x64")) {
             $build = Join-Path $env:RUNNER_TEMP "w3d-dx12-presentation-$architecture"
             cmake -S $source -B $build -G "Visual Studio 17 2022" -A $architecture
@@ -71,10 +75,22 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture compilation failed" }
             ctest --test-dir $build -C Release --output-on-failure
             if ($LASTEXITCODE -ne 0) { throw "DX12 swapchain $architecture rendering/present failed" }
+            $checkpoint = Join-Path $build "Release/W3DDX12LaunchCheckpoint.exe"
+            python scripts/check_dx12_launch_pe.py --exe $checkpoint
+            if ($LASTEXITCODE -ne 0) { throw "DX12-only checkpoint imports forbidden D3D8 libraries or lacks D3D12" }
+            Copy-Item -Path $checkpoint -Destination (Join-Path $launchArtifacts "W3DDX12LaunchCheckpoint-$architecture.exe") -ErrorAction Stop
             Copy-Item -Path (Join-Path $build "Release/W3DDX12PresentationSmoke.exe") -Destination (Join-Path $artifacts "W3DDX12PresentationSmoke-$architecture.exe") -ErrorAction Stop
           }
           Copy-Item -Path "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/W3DLegacyUnlit.hlsl" -Destination (Join-Path $artifacts "W3DLegacyUnlit.hlsl") -ErrorAction Stop
           Copy-Item -Path "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/W3DLegacyTextureCombiner.hlsli" -Destination (Join-Path $artifacts "W3DLegacyTextureCombiner.hlsli") -ErrorAction Stop
+          Copy-Item -Path "Documentation/DX12OnlyLaunchCheckpoint.md" -Destination (Join-Path $launchArtifacts "README.md") -ErrorAction Stop
+      - name: Upload DX12-only launch checkpoint executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3d-dx12-b10-launch-checkpoint
+          path: ${{ runner.temp }}/w3d-dx12-b10-launch-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload standalone DX12 presentation smoke tests
         uses: actions/upload-artifact@v4
         with:
