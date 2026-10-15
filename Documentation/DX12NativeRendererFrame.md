@@ -86,7 +86,7 @@ DX8, DX8+preview and exclusive DX12 bootstrap configurations.
 
 ## Deferred milestones
 
-- **B05:** Ordered opaque/transparent/UI/shroud/world passes and barriers.
+- **B05 (native contract implemented):** [Pass ordering, resource-state transitions and UAV synchronization](DX12RenderPassGraph.md) now schedule the canonical stages on the primary native command list. Real game objects still require R01/R04/R07/M01/B07.
 - **B06:** Fullscreen mode policy, device removal/recovery and GPU timeouts.
 - **R01–R04, M01, B07:** Authoritative native buffers, textures, materials
   and all gameplay `Renderer` methods.
