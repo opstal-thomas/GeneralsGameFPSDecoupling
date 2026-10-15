@@ -42,6 +42,10 @@ class DX12B05PassGraphTests(unittest.TestCase):
         self.assertIn("input == bindings.colorTarget", code)
         self.assertIn("input == bindings.depthTarget", code)
         self.assertIn("Resource must be registered", code)
+        self.assertIn("uavOutputs", code)
+        self.assertIn("Simultaneous UAV write and shader-read hazard", code)
+        self.assertIn("UAVBarrier(output)", code)
+        self.assertIn("A pass must declare a color, depth or UAV output", code)
         self.assertIn("states_.clear()", code)
 
     def test_actual_dx12_presentation_owns_transitions(self):
@@ -76,6 +80,8 @@ class DX12B05PassGraphTests(unittest.TestCase):
         self.assertIn("CopyTextureRegion(", smoke)
         self.assertIn("VerifyReadback(", smoke)
         self.assertIn("device.Resize(128, 80)", smoke)
+        self.assertIn("Postprocess UAV-only pass", smoke)
+        self.assertIn("Transparency stage orders consecutive UAV writes", smoke)
         self.assertIn("Reject out-of-order", smoke)
         workflow = (ROOT / ".github/workflows/dx12-shader-validation.yml").read_text(
             encoding="utf-8"
