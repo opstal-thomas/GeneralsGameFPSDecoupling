@@ -32,8 +32,14 @@
 
 namespace
 {
-    constexpr unsigned PreviewWidth = 640;
-    constexpr unsigned PreviewHeight = 480;
+    // Default to HD; custom settings are constrained to sensible windowed
+    // preview sizes. The DX8 game's display mode is not changed.
+    constexpr unsigned PreviewWidth = 1280;
+    constexpr unsigned PreviewHeight = 720;
+    constexpr unsigned MinPreviewWidth = 320;
+    constexpr unsigned MinPreviewHeight = 240;
+    constexpr unsigned MaxPreviewWidth = 3840;
+    constexpr unsigned MaxPreviewHeight = 2160;
     // Increase scene coverage without losing bounded diagnostic resource use.
     // Draw instances, not allocations. A scene may contain many tile meshes.
     constexpr unsigned MaxMeshesPerFrame = 1024;
@@ -71,6 +77,27 @@ namespace
     {
         wchar_t value[8] = {};
         return GetEnvironmentVariableW(name, value, 8) == 1 && value[0] == L'1';
+    }
+
+    unsigned PreviewDimension(const wchar_t * name, unsigned fallback,
+                              unsigned minimum, unsigned maximum)
+    {
+        wchar_t value[16] = {};
+        const DWORD length = GetEnvironmentVariableW(name, value, 16);
+        if (length == 0)
+            return fallback;
+        if (length >= 16)
+            return fallback;
+        unsigned parsed = 0;
+        for (DWORD i = 0; i < length; ++i)
+        {
+            if (value[i] < L'0' || value[i] > L'9')
+                return fallback;
+            parsed = parsed * 10u + static_cast<unsigned>(value[i] - L'0');
+            if (parsed > maximum)
+                return fallback;
+        }
+        return parsed >= minimum ? parsed : fallback;
     }
 
     std::wstring ShaderFile()
@@ -213,22 +240,47 @@ void DX12GameplayPreview::Try_Initialize()
     if (!EnvironmentEnabled(L"W3D_DX12_PREVIEW"))
         return;
 
+    // The requested dimensions refer to the actual client/back-buffer area,
+    // not the outer window including its title bar and borders.
+    const unsigned requestedWidth = PreviewDimension(
+        L"W3D_DX12_PREVIEW_WIDTH", PreviewWidth, MinPreviewWidth, MaxPreviewWidth);
+    const unsigned requestedHeight = PreviewDimension(
+        L"W3D_DX12_PREVIEW_HEIGHT", PreviewHeight, MinPreviewHeight, MaxPreviewHeight);
+    constexpr DWORD style = WS_OVERLAPPEDWINDOW;
+    constexpr DWORD extendedStyle = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+    RECT outer = {0, 0, static_cast<LONG>(requestedWidth),
+                       static_cast<LONG>(requestedHeight)};
+    if (!AdjustWindowRectEx(&outer, style, FALSE, extendedStyle))
+    {
+        state.Report("AdjustWindowRectEx", "could not size the preview client area");
+        return;
+    }
+
     // A separate, non-activating top-level window means DX8 keeps ownership
     // of the gameplay swapchain, window messages and device-reset behavior.
-    state.window = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+    state.window = CreateWindowExW(extendedStyle,
         L"STATIC", L"W3D experimental DX12 gameplay mesh preview",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-        PreviewWidth, PreviewHeight, nullptr, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
+        style, CW_USEDEFAULT, CW_USEDEFAULT,
+        outer.right - outer.left, outer.bottom - outer.top,
+        nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!state.window)
     {
         state.Report("CreateWindowExW", "could not create secondary preview window");
         return;
     }
 
+    RECT client = {};
+    if (!GetClientRect(state.window, &client) ||
+        client.right <= client.left || client.bottom <= client.top)
+    {
+        state.Report("GetClientRect", "preview has no usable client area");
+        Shutdown();
+        return;
+    }
     const bool warp = EnvironmentEnabled(L"W3D_DX12_PREVIEW_WARP");
-    if (!state.presentation.Initialize(
-            state.window, PreviewWidth, PreviewHeight, warp))
+    if (!state.presentation.Initialize(state.window,
+            static_cast<unsigned>(client.right - client.left),
+            static_cast<unsigned>(client.bottom - client.top), warp))
     {
         state.Report("DX12 initialization", state.presentation.LastError());
         Shutdown();
@@ -249,7 +301,7 @@ void DX12GameplayPreview::Try_Initialize()
     Diagnostic("preview enabled (DX8 gameplay remains active)", nullptr);
 }
 
-void DX12GameplayPreview::Begin_Frame()
+void DX12GameplayPreview::Begin_Frame(unsigned sourceWidth, unsigned sourceHeight)
 {
     Impl & state = *impl_;
     if (!state.ready || state.recording)
@@ -267,6 +319,33 @@ void DX12GameplayPreview::Begin_Frame()
         Shutdown();
         return;
     }
+
+    // WM_SIZE is delivered through the window's ordinary message queue.
+    // ResizeBuffers also recreates the D32 depth target and updates the W3D
+    // mesh viewport. Ignore minimized (zero-client) windows until restored.
+    RECT client = {};
+    if (!GetClientRect(state.window, &client))
+    {
+        state.Report("GetClientRect", "could not query preview client area");
+        Shutdown();
+        return;
+    }
+    const LONG clientWidth = client.right - client.left;
+    const LONG clientHeight = client.bottom - client.top;
+    if (clientWidth <= 0 || clientHeight <= 0)
+        return;
+    if (!state.presentation.Resize(static_cast<unsigned>(clientWidth),
+                                    static_cast<unsigned>(clientHeight)))
+    {
+        state.Report("Resize preview swap chain", state.presentation.LastError());
+        Shutdown();
+        return;
+    }
+
+    // The DX8 game camera still decides what's visible. Preserve its aspect
+    // in the independent preview by pillarboxing/letterboxing as necessary,
+    // rather than stretching a 4:3 scene when the preview is 16:9.
+    state.presentation.SetSourceViewport(sourceWidth, sourceHeight);
 
     const float clear[] = {0.025f, 0.04f, 0.075f, 1.0f};
     if (!state.presentation.BeginFrame(clear))

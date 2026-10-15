@@ -19,7 +19,8 @@ public:
     static DX12GameplayPreview & Instance();
 
     void Try_Initialize();
-    void Begin_Frame();
+    // Preserve the active DX8 camera viewport aspect inside the DX12 client.
+    void Begin_Frame(unsigned sourceWidth = 0, unsigned sourceHeight = 0);
     void Submit_Mesh(const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
                      const unsigned short * indices, unsigned indexCount,
                      const float worldViewProjection[16],

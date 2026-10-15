@@ -139,7 +139,12 @@ void Renderer::Begin_Scene()
 #if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
     auto & preview = DX12GameplayPreview::Instance();
     preview.Try_Initialize();
-    preview.Begin_Frame();
+    D3DVIEWPORT8 sourceViewport = {};
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    if (device && SUCCEEDED(device->GetViewport(&sourceViewport)))
+        preview.Begin_Frame(sourceViewport.Width, sourceViewport.Height);
+    else
+        preview.Begin_Frame();
 #endif
 }
 

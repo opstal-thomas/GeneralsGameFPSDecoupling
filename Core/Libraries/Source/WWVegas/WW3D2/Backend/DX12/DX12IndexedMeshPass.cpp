@@ -608,7 +608,27 @@ bool DX12W3DIndexedMeshPass::Draw(const DX12W3DIndexedMesh & mesh,
 
     const float width = static_cast<float>(state.presentation->Width());
     const float height = static_cast<float>(state.presentation->Height());
-    const D3D12_VIEWPORT viewport = {0.f, 0.f, width, height, 0.f, 1.f};
+    float left = 0.f, top = 0.f, viewWidth = width, viewHeight = height;
+    const float cameraAspect = state.presentation->SourceAspect();
+    if (cameraAspect > 0.f && width > 0.f && height > 0.f)
+    {
+        // The WVP matrix is borrowed from the legacy camera. Rendering it
+        // into a differently proportioned DX12 window without pillarboxing
+        // would stretch units, buildings, water and terrain.
+        if (width / height > cameraAspect)
+        {
+            viewWidth = height * cameraAspect;
+            left = (width - viewWidth) * 0.5f;
+        }
+        else
+        {
+            viewHeight = width / cameraAspect;
+            top = (height - viewHeight) * 0.5f;
+        }
+    }
+    const D3D12_VIEWPORT viewport = {
+        left, top, viewWidth, viewHeight, 0.f, 1.f
+    };
     const D3D12_RECT scissor = {0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
     commands->RSSetViewports(1, &viewport);
     commands->RSSetScissorRects(1, &scissor);

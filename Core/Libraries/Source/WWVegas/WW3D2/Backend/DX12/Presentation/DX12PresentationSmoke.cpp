@@ -98,7 +98,8 @@ namespace
     bool PresentAndVerify(DX12PresentationDevice & device,
                           const std::array<float, 4> & color,
                           const std::function<bool()> & recordDraw = {},
-                          const std::array<float, 4> * expectedInside = nullptr)
+                          const std::array<float, 4> * expectedInside = nullptr,
+                          bool expectPillarbox = false)
     {
         const UINT width = device.Width();
         const UINT height = device.Height();
@@ -167,7 +168,31 @@ namespace
         const auto * center = static_cast<const unsigned char *>(mapped) +
                              (height / 2) * pitch + (width / 2) * 4;
         std::array<unsigned char, 4> actual = {center[0], center[1], center[2], center[3]};
+        std::array<unsigned char, 4> leftPixel = {};
+        if (expectPillarbox)
+        {
+            // At 160x90 with a square source camera, x=20 is outside the
+            // centered 90-pixel viewport but inside an unstretched quad.
+            const auto * edge = static_cast<const unsigned char *>(mapped) +
+                                (height / 2) * pitch + (width / 8) * 4;
+            for (unsigned i = 0; i < 4; ++i)
+                leftPixel[i] = edge[i];
+        }
         readback->Unmap(0, nullptr);
+        if (expectPillarbox)
+        {
+            for (unsigned i = 0; i < 4; ++i)
+            {
+                const int expected = static_cast<int>(std::lround(color[i] * 255.f));
+                if (std::abs(int(leftPixel[i]) - expected) > 2)
+                {
+                    std::cerr << "Aspect-preserving pillarbox pixel " << i
+                              << ": expected " << expected
+                              << ", got " << unsigned(leftPixel[i]) << "\n";
+                    return false;
+                }
+            }
+        }
 
         const auto & expectedColor = expectedInside ? *expectedInside : color;
         for (unsigned i = 0; i < 4; ++i)
@@ -297,7 +322,8 @@ namespace
 
         const auto runMaterial = [&](const RenderTextureCombinerKey & combiner,
                                      const RenderBlendState & state,
-                                     const std::array<float, 4> & expected) -> bool
+                                     const std::array<float, 4> & expected,
+                                     bool expectPillarbox = false) -> bool
         {
             window.Pump();
             const auto draw = [&]() -> bool
@@ -317,7 +343,7 @@ namespace
                 }
                 return true;
             };
-            return PresentAndVerify(device, clear, draw, &expected);
+            return PresentAndVerify(device, clear, draw, &expected, expectPillarbox);
         };
 
         if (!runMaterial(singleStage, normal, singlePixel))
@@ -407,6 +433,15 @@ namespace
             std::cerr << "Indexed mesh after resize: " << device.LastError() << "\n";
             return false;
         }
+        // Resize to a 16:9 back buffer while retaining a square game-camera
+        // projection. The center is still textured; side bars remain clear.
+        device.SetSourceViewport(100, 100);
+        if (!runMaterial(singleStage, normal, singlePixel, true))
+        {
+            std::cerr << "DX12 aspect preservation after resize failed\n";
+            return false;
+        }
+        device.SetSourceViewport(0, 0);
         if (pass.PipelineCount() != 4)
         {
             std::cerr << "Unexpected material PSO count: " << pass.PipelineCount() << "\n";

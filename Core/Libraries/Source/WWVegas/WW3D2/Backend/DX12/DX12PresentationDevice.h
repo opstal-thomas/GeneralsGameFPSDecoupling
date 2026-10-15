@@ -38,6 +38,11 @@ public:
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
+    // Size of the original DX8 camera viewport, used to preserve projection
+    // geometry when the separately resizable DX12 window has another aspect.
+    void SetSourceViewport(unsigned sourceWidth, unsigned sourceHeight);
+    float SourceAspect() const;
+
     bool IsReady() const;
     unsigned Width() const;
     unsigned Height() const;

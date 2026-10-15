@@ -67,6 +67,7 @@ struct DX12PresentationDevice::Impl
     UINT currentBuffer = 0;
     unsigned width = 0;
     unsigned height = 0;
+    float sourceAspect = 0.f;
     bool recording = false;
     std::string lastError;
 
@@ -193,6 +194,7 @@ struct DX12PresentationDevice::Impl
         currentBuffer = 0;
         rtvIncrement = 0;
         width = height = 0;
+        sourceAspect = 0.f;
         recording = false;
     }
 };
@@ -463,6 +465,15 @@ void DX12PresentationDevice::Shutdown()
     state.ReleaseAll();
 }
 
+void DX12PresentationDevice::SetSourceViewport(unsigned sourceWidth,
+                                                unsigned sourceHeight)
+{
+    impl_->sourceAspect = sourceWidth != 0 && sourceHeight != 0
+        ? static_cast<float>(sourceWidth) / static_cast<float>(sourceHeight)
+        : 0.f;
+}
+
+float DX12PresentationDevice::SourceAspect() const { return impl_->sourceAspect; }
 unsigned DX12PresentationDevice::Width() const { return impl_->width; }
 unsigned DX12PresentationDevice::Height() const { return impl_->height; }
 const char * DX12PresentationDevice::LastError() const { return impl_->lastError.c_str(); }
