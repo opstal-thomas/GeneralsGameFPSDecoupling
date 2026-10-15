@@ -22,6 +22,8 @@
 #endif
 #include <windows.h>
 #include <cstdio>
+#include <algorithm>
+#include <d3d12.h>
 
 #if !defined(W3D_RENDER_BACKEND_DX12) || defined(W3D_RENDER_BACKEND_DX8)
 #error "DX12Backend.cpp must be compiled exclusively for W3D_RENDER_BACKEND=DX12"
@@ -30,6 +32,11 @@
 namespace
 {
     DX12PrimaryWindow primaryWindow;
+    bool ready = false;
+    bool recording = false;
+    unsigned renderThread = 0;
+    unsigned syncInterval = 0;
+    RenderViewport viewportState = {0, 0, 0, 0, 0.f, 1.f};
 
     void ReportPending(const char * operation)
     {
@@ -79,36 +86,45 @@ bool Renderer::Init(void * window, bool lite)
     // appear to run DX12 while silently dropping essential drawing.
     ReportPending("Renderer::Init: DX12 main-HWND presentation ready; "
                   "normal frame and resource rendering requires B04");
+    // B04 supports only an opt-in native diagnostic until B07/B10 make the
+    // W3D resource and draw API authoritative; do not advertise game parity.
+    char enabled[4] = {};
+    if (GetEnvironmentVariableA("W3D_DX12_B04_DIAGNOSTIC", enabled, sizeof(enabled)) == 1 &&
+        enabled[0] == '1')
+    {
+        ready = true;
+        renderThread = GetCurrentThreadId();
+        return true;
+    }
     primaryWindow.Shutdown();
     return false;
 }
 
 void Renderer::Shutdown()
 {
+    ready = recording = false;
+    renderThread = 0;
     primaryWindow.Shutdown();
 }
 
 bool Renderer::Is_Initialized()
 {
-    ReportPending("Renderer::Is_Initialized");
-    return {};
+    return ready;
 }
 
 unsigned Renderer::Get_Render_Thread_ID()
 {
-    ReportPending("Renderer::Get_Render_Thread_ID");
-    return {};
+    return renderThread;
 }
 
 bool Renderer::Has_Active_Device()
 {
-    ReportPending("Renderer::Has_Active_Device");
-    return {};
+    return ready && primaryWindow.Presentation().IsReady();
 }
 
 bool Renderer::Is_Device_Unavailable_For_Rendering()
 {
-    return true;
+    return !ready || primaryWindow.CurrentStatus() != DX12PrimaryWindow::Status::Ready;
 }
 
 bool Renderer::Is_Debug_Console_Disabled()
@@ -140,32 +156,63 @@ void Renderer::Set_Hardware_Cursor_Position(int x, int y)
 
 void Renderer::Begin_Scene()
 {
-    ReportPending("Renderer::Begin_Scene");
+    if (!ready || recording || renderThread != GetCurrentThreadId()) return;
+    auto status = primaryWindow.Synchronize();
+    if (status == DX12PrimaryWindow::Status::Suspended) return;
+    if (status != DX12PrimaryWindow::Status::Ready) { ready = false; return; }
+    const float black[] = {0.f, 0.f, 0.f, 1.f};
+    if (!primaryWindow.Presentation().BeginFrame(black)) { ready = false; return; }
+    recording = true;
+    Set_Viewport(viewportState);
 }
 
 void Renderer::End_Scene(bool flip_frame)
 {
-    ReportPending("Renderer::End_Scene");
+    (void)flip_frame;
+    if (!recording) return;
+    if (!primaryWindow.Presentation().EndFrame(syncInterval))
+    {
+        OutputDebugStringA(primaryWindow.Presentation().LastError());
+        ready = false;
+    }
+    recording = false;
 }
 
 void Renderer::Flip_To_Primary()
 {
-    ReportPending("Renderer::Flip_To_Primary");
+    // Presentation is already performed by End_Scene.
 }
 
 void Renderer::Clear(bool clear_color, bool clear_z_stencil, const Vector3 & color, float dest_alpha, float z, unsigned int stencil)
 {
-    ReportPending("Renderer::Clear");
+    (void)stencil;
+    if (!recording) return;
+    const float rgba[] = {color.X, color.Y, color.Z, dest_alpha};
+    if (!primaryWindow.Presentation().ClearActiveFrame(clear_color, clear_z_stencil, rgba, z))
+        ready = false;
 }
 
 void Renderer::Set_Viewport(const RenderViewport & viewport)
 {
-    ReportPending("Renderer::Set_Viewport");
+    viewportState = viewport;
+    if (!recording) return;
+    const unsigned width = primaryWindow.Presentation().Width();
+    const unsigned height = primaryWindow.Presentation().Height();
+    const unsigned x = (std::min)(viewport.x, width);
+    const unsigned y = (std::min)(viewport.y, height);
+    const unsigned w = viewport.width ? (std::min)(viewport.width, width - x) : width - x;
+    const unsigned h = viewport.height ? (std::min)(viewport.height, height - y) : height - y;
+    D3D12_VIEWPORT vp = {static_cast<float>(x), static_cast<float>(y),
+        static_cast<float>(w), static_cast<float>(h), viewport.min_z, viewport.max_z};
+    D3D12_RECT scissor = {static_cast<LONG>(x), static_cast<LONG>(y),
+        static_cast<LONG>(x + w), static_cast<LONG>(y + h)};
+    auto * list = primaryWindow.Presentation().ActiveCommandList();
+    if (list) { list->RSSetViewports(1, &vp); list->RSSetScissorRects(1, &scissor); }
 }
 
 void Renderer::Invalidate_Cached_Render_States()
 {
-    ReportPending("Renderer::Invalidate_Cached_Render_States");
+    if (recording) Set_Viewport(viewportState);
 }
 
 unsigned Renderer::Pack_Color_ARGB(const Vector3 & color, float alpha)
@@ -426,25 +473,25 @@ bool Renderer::Set_Device_Resolution(int width, int height, int bits, int window
 
 void Renderer::Get_Device_Resolution(int & width, int & height, int & bits, bool & windowed)
 {
-    width = 0; height = 0; bits = 0; windowed = true;
-    ReportPending("Renderer::Get_Device_Resolution");
+    width = static_cast<int>(primaryWindow.Presentation().Width());
+    height = static_cast<int>(primaryWindow.Presentation().Height());
+    bits = 32;
+    windowed = !primaryWindow.IsBorderless();
 }
 
 void Renderer::Get_Render_Target_Resolution(int & width, int & height, int & bits, bool & windowed)
 {
-    width = 0; height = 0; bits = 0; windowed = true;
-    ReportPending("Renderer::Get_Render_Target_Resolution");
+    Get_Device_Resolution(width, height, bits, windowed);
 }
 
 void Renderer::Set_Swap_Interval(long swap)
 {
-    ReportPending("Renderer::Set_Swap_Interval");
+    syncInterval = static_cast<unsigned>((std::max)(0L, (std::min)(swap, 4L)));
 }
 
 int Renderer::Get_Swap_Interval()
 {
-    ReportPending("Renderer::Get_Swap_Interval");
-    return {};
+    return static_cast<int>(syncInterval);
 }
 
 Renderer::DeviceStatus Renderer::Get_Device_Status()
