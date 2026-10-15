@@ -114,3 +114,16 @@ target_link_libraries(W3DDX12PassGraphSmoke PRIVATE
 add_test(NAME W3D_DX12_WARP_Ordered_Render_Passes
     COMMAND W3DDX12PassGraphSmoke)
 set_tests_properties(W3D_DX12_WARP_Ordered_Render_Passes PROPERTIES TIMEOUT 90)
+
+# R01: native DEFAULT/UPLOAD geometry allocations and byte-range mapping.
+# WARP reads back actual GPU-copied static vertex/index bytes and checks
+# the fence-safe lifetime of buffers released before ExecuteCommandLists.
+add_executable(W3DDX12GeometryBufferSmoke DX12GeometryBufferSmoke.cpp)
+target_compile_features(W3DDX12GeometryBufferSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12GeometryBufferSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12GeometryBufferSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_Geometry_Buffer_Residency
+    COMMAND W3DDX12GeometryBufferSmoke)
+set_tests_properties(W3D_DX12_WARP_Geometry_Buffer_Residency PROPERTIES TIMEOUT 90)
