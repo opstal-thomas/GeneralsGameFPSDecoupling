@@ -41,6 +41,10 @@ struct DX12W3DPassBindings
     ID3D12Resource * depthTarget = nullptr;
     ID3D12Resource * const * shaderInputs = nullptr;
     std::size_t shaderInputCount = 0;
+    // Optional compute/UAV writes for effects, shroud and postprocess.
+    // Same-pass SRV and UAV access to one resource is forbidden.
+    ID3D12Resource * const * uavOutputs = nullptr;
+    std::size_t uavOutputCount = 0;
 };
 
 class DX12W3DPassGraph final
