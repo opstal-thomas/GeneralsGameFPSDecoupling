@@ -23,6 +23,8 @@ jobs:
           fetch-depth: 0 # Required for immutable pre-B01 baseline.
       - name: Test dependency scanner
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx8_dependency_inventory.py'
+      - name: Validate exclusive Renderer backend contract and selection
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_backend_selection.py'
       - name: Prevent direct DX8 call regressions
         run: python3 scripts/check_w3d_dx8_boundaries.py
       - name: Inventory DX8 symbols and block new runtime dependencies
@@ -78,3 +80,23 @@ jobs:
       extras: false
       tests: false
       dx12_preview: true
+
+  # B02 is a build-only bootstrap: Renderer::Init rejects normal gameplay until
+  # B03/B04 move DX12 presentation and the frame lifecycle onto the game's HWND.
+  # Do not install or advertise these artifacts as playable executables.
+  dx12-exclusive-backend-bootstrap:
+    needs: dx8-boundary-audit
+    name: ${{ matrix.game }} DX12 exclusive backend bootstrap (non-playable)
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [Generals, GeneralsMD]
+    uses: ./.github/workflows/reusable-build-toolchain.yml
+    with:
+      game: ${{ matrix.game }}
+      preset: win32-dx12-bootstrap
+      renderer_backend: DX12
+      tools: false
+      extras: false
+      tests: false
+      dx12_preview: false

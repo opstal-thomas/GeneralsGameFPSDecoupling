@@ -1,3 +1,17 @@
+# DX12-B02: select exactly one implementation of the static Renderer API.
+# The default DX8 path and the opt-in DX12 gameplay mirror remain unchanged.
+# DX12 is a non-playable backend bootstrap until B03/B04 are complete.
+set(W3D_RENDER_BACKEND "DX8" CACHE STRING "Authoritative W3D Renderer implementation (DX8 or DX12)")
+set_property(CACHE W3D_RENDER_BACKEND PROPERTY STRINGS DX8 DX12)
+if(NOT W3D_RENDER_BACKEND STREQUAL "DX8" AND
+   NOT W3D_RENDER_BACKEND STREQUAL "DX12")
+    message(FATAL_ERROR "W3D_RENDER_BACKEND must be DX8 or DX12 (got '${W3D_RENDER_BACKEND}')")
+endif()
+if(W3D_RENDER_BACKEND STREQUAL "DX12" AND
+   (NOT WIN32 OR NOT MSVC OR IS_VS6_BUILD))
+    message(FATAL_ERROR "DX12 Renderer bootstrap requires Windows with modern MSVC")
+endif()
+
 set(WW3D2_SRC
     aabtree.cpp
     aabtree.h
@@ -13,7 +27,6 @@ set(WW3D2_SRC
     #assetmgr.h
     assetstatus.cpp
     assetstatus.h
-    Backend/DX8Backend.cpp
     bitmaphandler.cpp
     bitmaphandler.h
     bmp2d.cpp
@@ -235,9 +248,21 @@ set(WW3D2_SRC
     ww3dtrig.h
 )
 
+# The two backends define the same Renderer static API; never compile both.
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    list(APPEND WW3D2_SRC Backend/DX12/DX12Backend.cpp)
+else()
+    list(APPEND WW3D2_SRC Backend/DX8Backend.cpp)
+endif()
+
 add_library(corei_ww3d2 INTERFACE)
 
 target_sources(corei_ww3d2 INTERFACE ${WW3D2_SRC})
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    target_compile_definitions(corei_ww3d2 INTERFACE W3D_RENDER_BACKEND_DX12=1)
+else()
+    target_compile_definitions(corei_ww3d2 INTERFACE W3D_RENDER_BACKEND_DX8=1)
+endif()
 
 target_include_directories(corei_ww3d2 INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -261,12 +286,18 @@ target_link_libraries(corei_ww3d2 INTERFACE
 # authoritative (and default) game renderer. Runtime activation additionally
 # requires W3D_DX12_PREVIEW=1. No new files are needed for ordinary builds.
 option(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW "Build opt-in live W3D geometry mirror using DX12" OFF)
+if(W3D_RENDER_BACKEND STREQUAL "DX12" AND W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+    message(FATAL_ERROR
+        "W3D_ENABLE_DX12_GAMEPLAY_PREVIEW requires W3D_RENDER_BACKEND=DX8. "
+        "The exclusive DX12 backend cannot mirror an absent DX8 renderer.")
+endif()
 
 # Experimental D3D12 device/swap-chain implementation in WW3D2.
 # EXCLUDE_FROM_ALL and OFF by default: existing Generals/Zero Hour binaries
 # still compile and link exactly the legacy DX8 Renderer implementation.
 option(W3D_BUILD_DX12_PRESENTATION "Expose opt-in DX12 presentation library target" OFF)
-if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW OR
+   W3D_RENDER_BACKEND STREQUAL "DX12")
     if(NOT WIN32 OR IS_VS6_BUILD)
         message(FATAL_ERROR "Experimental DX12 presentation requires modern MSVC on Windows")
     endif()
@@ -297,3 +328,13 @@ if(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
     target_link_libraries(corei_ww3d2 INTERFACE w3d_dx12_gameplay_preview)
     target_compile_definitions(corei_ww3d2 INTERFACE W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=1)
 endif()
+
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    # B03/B04 will use this already linked DX12 device on the game's HWND.
+    # The B02 bootstrap intentionally fails Init instead of falling back.
+    target_link_libraries(corei_ww3d2 INTERFACE w3d_dx12_presentation)
+    message(STATUS "W3D Renderer: DX12 exclusive backend bootstrap (non-playable; B03/B04 pending)")
+else()
+    message(STATUS "W3D Renderer: DX8 legacy backend")
+endif()
+

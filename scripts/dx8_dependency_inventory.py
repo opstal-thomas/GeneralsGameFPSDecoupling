@@ -123,17 +123,17 @@ def scan_text(path: str, text: str) -> list[dict]:
         for match in BUILD_PATTERN.finditer(prepared):
             spans.append((match.start(), match.end(), "sdk_build_reference",
                           match.group(0).lower()))
-        # Plain 'dx8' is a real CMake/MSVC link target, whereas its appearance
-        # in a CI job title is not a dependency. Only inspect build files.
-        if Path(path).name in BUILD_FILENAMES or Path(path).suffix.lower() in {
-            ".cmake", ".vcxproj", ".vcproj", ".props", ".targets", ".mk"
-        }:
-            occupied = set()
-            for start, end, _, _ in spans:
-                occupied.update(range(start, end))
-            for match in re.finditer(r"(?i)\bdx8\b", prepared):
-                if not any(i in occupied for i in range(match.start(), match.end())):
-                    spans.append((match.start(), match.end(),
+        # Bare 'DX8' is also a legitimate *backend selector value* and not a
+        # new DX8 link dependency. Detect it only in target_link_libraries(),
+        # where it identifies a literal target. Other SDK/link tokens above
+        # remain scanned across all build files.
+        if Path(path).name in BUILD_FILENAMES or Path(path).suffix.lower() == ".cmake":
+            for libraries in re.finditer(
+                r"(?is)\btarget_link_libraries\s*\([^)]*\)", prepared
+            ):
+                for match in re.finditer(r"(?i)\bdx8\b", libraries.group(0)):
+                    index = libraries.start() + match.start()
+                    spans.append((index, index + len(match.group(0)),
                                   "sdk_build_reference", "dx8"))
     else:
         masked = mask_comments_and_strings(text)

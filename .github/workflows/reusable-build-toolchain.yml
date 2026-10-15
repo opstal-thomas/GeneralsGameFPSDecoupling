@@ -46,6 +46,11 @@ on:
         default: false
         type: boolean
         description: "Build opt-in secondary DX12 gameplay mesh preview"
+      renderer_backend:
+        required: false
+        default: "DX8"
+        type: string
+        description: "W3D authoritative backend (DX8, DX12 bootstrap)"
 
 jobs:
   build:
@@ -170,9 +175,33 @@ jobs:
           $buildFlags += "-DRTS_BUILD_OPTION_TESTS=${{ inputs.tests && 'ON' || 'OFF' }}"
           $buildFlags += "-DRTS_BUILD_OPTION_BENCHMARKS=${{ inputs.benchmarks && 'ON' || 'OFF' }}"
           $buildFlags += "-DW3D_ENABLE_DX12_GAMEPLAY_PREVIEW=${{ inputs.dx12_preview && 'ON' || 'OFF' }}"
+          $buildFlags += "-DW3D_RENDER_BACKEND=${{ inputs.renderer_backend }}"
 
           Write-Host "Build flags: $($buildFlags -join ' | ')"
           cmake --preset ${{ inputs.preset }} $buildFlags
+
+      # Check the real configured translation units, not just CMake source-list
+      # text. Both backends define Renderer:: methods and MUST be mutually exclusive.
+      - name: Verify exclusive W3D Renderer compilation
+        if: startsWith(inputs.preset, 'win32')
+        shell: pwsh
+        run: |
+          $database = "build\${{ inputs.preset }}\compile_commands.json"
+          if (-not (Test-Path $database)) {
+            throw "Missing compile_commands.json, cannot verify backend selection"
+          }
+          $files = @(Get-Content $database -Raw | ConvertFrom-Json |
+            ForEach-Object { [string]$_.file })
+          $dx8 = @($files | Where-Object { $_ -match '[/\\]Backend[/\\]DX8Backend\.cpp$' })
+          $dx12 = @($files | Where-Object { $_ -match '[/\\]Backend[/\\]DX12[/\\]DX12Backend\.cpp$' })
+          Write-Host "Renderer backend compilation: DX8=$($dx8.Count), DX12=$($dx12.Count)"
+          if ("${{ inputs.renderer_backend }}" -eq "DX12") {
+            if ($dx12.Count -eq 0 -or $dx8.Count -ne 0) {
+              throw "DX12 Renderer backend must be present, DX8 backend must be absent"
+            }
+          } elseif ($dx8.Count -eq 0 -or $dx12.Count -ne 0) {
+            throw "DX8 Renderer backend must be present, DX12 backend must be absent"
+          }
 
       - name: Build ${{ inputs.game }} with CMake Using ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Preset
         shell: pwsh
@@ -223,7 +252,7 @@ jobs:
       - name: Upload ${{ inputs.game }} ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ inputs.game }}-${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }}${{ inputs.dx12_preview && '-dx12preview' || '' }}
+          name: ${{ inputs.game }}-${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }}${{ inputs.dx12_preview && '-dx12preview' || '' }}${{ inputs.renderer_backend == 'DX12' && '-dx12bootstrap-NOT-PLAYABLE' || '' }}
           path: build\${{ inputs.preset }}\${{ inputs.game }}\artifacts
           retention-days: 30
           if-no-files-found: error

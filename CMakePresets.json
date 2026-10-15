@@ -105,6 +105,16 @@
             }
         },
         {
+            "name": "win32-dx12-bootstrap",
+            "displayName": "Windows 32bit DX12 exclusive renderer bootstrap (not yet playable)",
+            "description": "Build-only DX12 Renderer selection; B03/B04 must implement main-HWND and frame lifecycle.",
+            "inherits": "win32",
+            "cacheVariables": {
+                "W3D_RENDER_BACKEND": "DX12",
+                "W3D_ENABLE_DX12_GAMEPLAY_PREVIEW": "OFF"
+            }
+        },
+        {
             "name": "win32-profile",
             "inherits": "win32",
             "displayName": "Windows 32bit Profile",
@@ -229,6 +239,12 @@
             "configurePreset": "win32",
             "displayName": "Build Windows 32bit Release",
             "description": "Build Windows 32bit Release",
+            "configuration": "Release"
+        },
+        {
+            "name": "win32-dx12-bootstrap",
+            "configurePreset": "win32-dx12-bootstrap",
+            "displayName": "Build Windows 32bit DX12 Renderer bootstrap (non-playable)",
             "configuration": "Release"
         },
         {

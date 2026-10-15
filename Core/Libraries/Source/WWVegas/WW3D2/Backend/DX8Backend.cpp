@@ -22,6 +22,10 @@
 
 #include "WW3D2/Renderer.h"
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+#error "DX8Backend.cpp cannot be compiled with W3D_RENDER_BACKEND=DX12"
+#endif
+
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/vertmaterial.h"
 #include <cstring>
