@@ -407,6 +407,13 @@ enum RenderBlendFactor
     RENDER_BLEND_INV_DEST_ALPHA
 };
 
+// DX12 PSOs can represent these blend equations directly.
+enum RenderBlendOperation
+{
+    RENDER_BLEND_OPERATION_ADD,
+    RENDER_BLEND_OPERATION_REVERSE_SUBTRACT
+};
+
 enum RenderCompareFunc
 {
     RENDER_COMPARE_NEVER,
@@ -942,6 +949,7 @@ public:
     // ordering without applying or resetting other blend/depth fields.
     static void Set_Source_Blend(RenderBlendFactor factor);
     static void Set_Destination_Blend(RenderBlendFactor factor);
+    static void Set_Blend_Operation(RenderBlendOperation operation);
     static void Set_Blending_Enabled(bool enabled);
     static void Set_Texture_Factor(unsigned packedARGB);
     // Select whether the render target writes RGB channels and alpha.

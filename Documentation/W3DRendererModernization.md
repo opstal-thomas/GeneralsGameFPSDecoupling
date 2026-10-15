@@ -680,6 +680,16 @@ W3D buffer allocations and materials are retained until later lifecycle
 migration; no asset data or draw counts change. Four game-specific source
 files are guarded by the DX8 dispatch boundary audit.
 
+### Team-dot geometry and scripted fade blending
+
+Both game variants now submit the status circle and scripted screen-fade
+triangles through `Renderer`. Fade modes retain their original draw counts,
+source/destination factors, reverse-subtract equation and explicit restoration
+to additive blending. The renderer exposes a semantic blend-operation enum
+instead of accepting D3DBLENDOP constants; DX8 applies the same cached render
+state changes. Team-dot world transforms and buffer ownership are unchanged,
+and both callers are included in the DX8 boundary regression audit.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,

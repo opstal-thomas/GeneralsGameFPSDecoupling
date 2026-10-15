@@ -1782,6 +1782,13 @@ void Renderer::Set_Destination_Blend(RenderBlendFactor factor)
     DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND, To_DX8_Blend(factor));
 }
 
+void Renderer::Set_Blend_Operation(RenderBlendOperation operation)
+{
+    DX8Wrapper::Set_DX8_Render_State(D3DRS_BLENDOP,
+        operation == RENDER_BLEND_OPERATION_REVERSE_SUBTRACT
+            ? D3DBLENDOP_REVSUBTRACT : D3DBLENDOP_ADD);
+}
+
 void Renderer::Set_Blending_Enabled(bool enabled)
 {
     DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE, enabled);

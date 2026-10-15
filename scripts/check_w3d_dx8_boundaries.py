@@ -51,6 +51,8 @@ DYNAMIC_BINDING_VIEW_CALLERS = [
     Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DBibBuffer.cpp"),
     Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DBridgeBuffer.cpp"),
     Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DBridgeBuffer.cpp"),
+    Path("Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DStatusCircle.cpp"),
+    Path("GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/W3DStatusCircle.cpp"),
 ]
 
 CUSTOM_SHADER = Path(
