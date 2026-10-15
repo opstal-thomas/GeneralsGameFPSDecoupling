@@ -344,9 +344,11 @@ struct DX12W3DIndexedMeshPass::Impl
         target.BlendOpAlpha = D3D12_BLEND_OP_ADD;
         target.LogicOp = D3D12_LOGIC_OP_NOOP;
         target.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        desc.DepthStencilState.DepthEnable = FALSE;
-        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-        desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        // Opaque W3D geometry is depth tested irrespective of submission order.
+        desc.DepthStencilState.DepthEnable = TRUE;
+        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         desc.SampleMask = UINT_MAX;
         desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         desc.NumRenderTargets = 1;

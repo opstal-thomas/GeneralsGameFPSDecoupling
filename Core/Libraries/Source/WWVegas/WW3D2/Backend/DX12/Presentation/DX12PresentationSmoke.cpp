@@ -194,6 +194,7 @@ namespace
         }
 
         DX12W3DIndexedMesh mesh;
+        DX12W3DIndexedMesh depthMesh;
         const DX12W3DVertex vertices[] = {
             {{-0.8f, -0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
             {{-0.8f,  0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
@@ -201,6 +202,22 @@ namespace
             {{ 0.8f,  0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}}
         };
         const std::uint16_t indices[] = {0, 1, 2, 2, 1, 3};
+        DX12W3DVertex depthVertices[8] = {};
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            depthVertices[i] = vertices[i];
+            depthVertices[i].position[2] = 0.2f;
+            depthVertices[i].diffuse[0] = 0.f;
+            depthVertices[i].diffuse[1] = 1.f;
+            depthVertices[i].diffuse[2] = 0.f;
+            depthVertices[i + 4] = vertices[i];
+            depthVertices[i + 4].position[2] = 0.8f;
+            depthVertices[i + 4].diffuse[0] = 0.f;
+            depthVertices[i + 4].diffuse[1] = 0.f;
+            depthVertices[i + 4].diffuse[2] = 1.f;
+        }
+        const std::uint16_t depthIndices[] = {0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
+        bool depthUploaded = false;
         const std::uint8_t texel0[] = {128, 255, 255, 255};
         const std::uint8_t texel1[] = {128, 255, 255, 255};
         unsigned texture0 = 0, texture1 = 0;
@@ -297,8 +314,42 @@ namespace
             !runMaterial(singleStage, rejected, clear))
             return false;
 
+        // A near green quad must occlude a far blue quad in both draw orders.
+        const std::array<float, 4> nearPixel = {{0.f, 1.f, 0.f, 1.f}};
+        const auto runDepth = [&](bool nearFirst) -> bool
+        {
+            window.Pump();
+            const auto draw = [&]() -> bool
+            {
+                if (!depthUploaded)
+                {
+                    if (!depthMesh.Upload(device, depthVertices, 8, depthIndices, 12))
+                    {
+                        std::cerr << "Depth geometry upload: " << depthMesh.LastError() << "\n";
+                        return false;
+                    }
+                    depthUploaded = true;
+                }
+                for (unsigned i = 0; i < 2; ++i)
+                {
+                    const unsigned first = (nearFirst ? i : 1 - i) * 6;
+                    if (!pass.Draw(depthMesh, first, 6, untextured, normal,
+                                   identity, texture0, texture1))
+                    {
+                        std::cerr << "Depth indexed draw: " << pass.LastError() << "\n";
+                        return false;
+                    }
+                }
+                return true;
+            };
+            return PresentAndVerify(device, clear, draw, &nearPixel);
+        };
+        if (!runDepth(true) || !runDepth(false))
+            return false;
+
         // The same default-heap geometry and textures survive ResizeBuffers.
-        if (!device.Resize(160, 90) || !runMaterial(singleStage, normal, singlePixel))
+        if (!device.Resize(160, 90) || !runMaterial(singleStage, normal, singlePixel) ||
+            !runDepth(true) || !runDepth(false))
         {
             std::cerr << "Indexed mesh after resize: " << device.LastError() << "\n";
             return false;
@@ -311,8 +362,9 @@ namespace
         if (!device.WaitForIdle())
             return false;
         mesh.Reset();
+        depthMesh.Reset();
         pass.Shutdown();
-        std::cout << "DX12 indexed W3D geometry, textured PSOs, alpha test and resize: PASS\n";
+        std::cout << "DX12 indexed W3D geometry, textured PSOs, depth, alpha test and resize: PASS\n";
         return true;
     }
 }

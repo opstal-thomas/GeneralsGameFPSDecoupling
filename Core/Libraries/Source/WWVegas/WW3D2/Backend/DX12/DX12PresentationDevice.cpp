@@ -29,6 +29,7 @@ namespace
 {
     constexpr UINT BufferCount = 2;
     constexpr DXGI_FORMAT BackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    constexpr DXGI_FORMAT DepthBufferFormat = DXGI_FORMAT_D32_FLOAT;
     constexpr DWORD FenceTimeoutMs = 30000;
 
     D3D12_RESOURCE_BARRIER Transition(ID3D12Resource * resource,
@@ -53,6 +54,8 @@ struct DX12PresentationDevice::Impl
     ComPtr<ID3D12CommandQueue> queue;
     ComPtr<IDXGISwapChain3> swapChain;
     ComPtr<ID3D12DescriptorHeap> rtvHeap;
+    ComPtr<ID3D12DescriptorHeap> dsvHeap;
+    ComPtr<ID3D12Resource> depthBuffer;
     std::array<ComPtr<ID3D12Resource>, BufferCount> buffers;
     std::array<ComPtr<ID3D12CommandAllocator>, BufferCount> allocators;
     ComPtr<ID3D12GraphicsCommandList> commandList;
@@ -135,6 +138,35 @@ struct DX12PresentationDevice::Impl
         return true;
     }
 
+    bool CreateDepthTarget(unsigned w, unsigned h)
+    {
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = w;
+        desc.Height = h;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DepthBufferFormat;
+        desc.SampleDesc.Count = 1;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        D3D12_HEAP_PROPERTIES heap = {};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heap.CreationNodeMask = heap.VisibleNodeMask = 1;
+        D3D12_CLEAR_VALUE clear = {};
+        clear.Format = DepthBufferFormat;
+        clear.DepthStencil.Depth = 1.f;
+        if (!Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE,
+                       &desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear,
+                       IID_PPV_ARGS(&depthBuffer)), "Create D32 depth target"))
+            return false;
+        D3D12_DEPTH_STENCIL_VIEW_DESC view = {};
+        view.Format = DepthBufferFormat;
+        view.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        device->CreateDepthStencilView(depthBuffer.Get(), &view,
+                                      dsvHeap->GetCPUDescriptorHandleForHeapStart());
+        return true;
+    }
+
     void ReleaseAll()
     {
         for (auto & buffer : buffers)
@@ -142,6 +174,8 @@ struct DX12PresentationDevice::Impl
         for (auto & allocator : allocators)
             allocator.Reset();
         commandList.Reset();
+        depthBuffer.Reset();
+        dsvHeap.Reset();
         rtvHeap.Reset();
         swapChain.Reset();
         if (fenceEvent)
@@ -268,6 +302,13 @@ bool DX12PresentationDevice::Initialize(void * nativeWindow, unsigned width,
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         if (!state.CreateRenderTargets())
             break;
+        D3D12_DESCRIPTOR_HEAP_DESC dsvDesc = {};
+        dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        dsvDesc.NumDescriptors = 1;
+        if (!state.Check(state.device->CreateDescriptorHeap(&dsvDesc,
+                          IID_PPV_ARGS(&state.dsvHeap)), "Create depth view heap") ||
+            !state.CreateDepthTarget(width, height))
+            break;
 
         bool allocatorsReady = true;
         for (auto & allocator : state.allocators)
@@ -310,7 +351,7 @@ bool DX12PresentationDevice::Initialize(void * nativeWindow, unsigned width,
 
 bool DX12PresentationDevice::IsReady() const
 {
-    return impl_->device && impl_->swapChain &&
+    return impl_->device && impl_->swapChain && impl_->depthBuffer &&
            impl_->buffers[0] && impl_->buffers[1];
 }
 
@@ -339,8 +380,12 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4])
     state.commandList->ResourceBarrier(1, &barrier);
     D3D12_CPU_DESCRIPTOR_HANDLE rtv = state.rtvHeap->GetCPUDescriptorHandleForHeapStart();
     rtv.ptr += static_cast<SIZE_T>(index) * state.rtvIncrement;
-    state.commandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv =
+        state.dsvHeap->GetCPUDescriptorHandleForHeapStart();
+    state.commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
     state.commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+    state.commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH,
+                                             1.f, 0, 0, nullptr);
     state.recording = true;
     return true;
 }
@@ -388,9 +433,10 @@ bool DX12PresentationDevice::Resize(unsigned width, unsigned height)
 
     for (auto & buffer : state.buffers)
         buffer.Reset();
+    state.depthBuffer.Reset();
     if (!state.Check(state.swapChain->ResizeBuffers(BufferCount, width, height,
                       BackBufferFormat, 0), "IDXGISwapChain::ResizeBuffers") ||
-        !state.CreateRenderTargets())
+        !state.CreateRenderTargets() || !state.CreateDepthTarget(width, height))
     {
         Shutdown();
         return false;
