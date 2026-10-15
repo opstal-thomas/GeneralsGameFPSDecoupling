@@ -235,6 +235,38 @@ int wmain()
         !Check(device.InFlightResourceCount() >= 6, "Old generations and staging pinned"))
         return 1;
 
+    // A partial static write after binding must not modify the version
+    // referenced by the earlier GPU readback or the first indexed draw.
+    // The replacement DEFAULT allocation is uploaded on this same list.
+    auto * patch = static_cast<unsigned char *>(
+        MapVertex(vertex, 12, 4, RENDER_MAP_NONE));
+    if (!Check(patch != nullptr, "Map partial static vertex range"))
+        return 1;
+    const unsigned char update[] = {0x35, 0x76, 0xA2, 0x19};
+    std::memcpy(patch, update, sizeof(update));
+    if (!Check(UnmapVertex(vertex), "Commit partial static update"))
+        return 1;
+    ID3D12Resource * previousStatic = NativeVertexResource(vertex);
+    ComPtr<ID3D12Resource> updatedReadback;
+    if (!Check(MakeReadback(device.NativeDevice(), vertexDesc.byteSize, updatedReadback) &&
+               BindVertex(device, vertex, 0, 12), "Re-upload changed static geometry") ||
+        !Check(NativeVertexResource(vertex) != previousStatic,
+               "Static updates allocate a new DEFAULT resource generation") ||
+        !Check(device.TransitionFrameResource(
+                   NativeVertexResource(vertex), D3D12_RESOURCE_STATE_COPY_SOURCE),
+               "Transition updated static GPU resource to readback"))
+        return 1;
+    device.ActiveCommandList()->CopyBufferRegion(
+        updatedReadback.Get(), 0, NativeVertexResource(vertex), 0, vertexDesc.byteSize);
+    if (!Check(device.TransitionFrameResource(
+                   NativeVertexResource(vertex),
+                   D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER),
+               "Restore updated static geometry state"))
+        return 1;
+    std::array<unsigned char, 48> updatedVertexBytes = {};
+    std::memcpy(updatedVertexBytes.data(), vertexBytes.data(), vertexDesc.byteSize);
+    std::memcpy(updatedVertexBytes.data() + 12, update, sizeof(update));
+
     // Destroy all four opaque handles before ExecuteCommandLists. The actual
     // GPU buffers/staging are held by the presentation frame-fence retirement.
     ReleaseVertex(vertex);
@@ -247,6 +279,9 @@ int wmain()
                "DEFAULT heap vertex bytes match source on WARP") ||
         !Check(VerifyBytes(indexReadback.Get(), indices.data(), indexDesc.byteSize),
                "DEFAULT heap index bytes match source on WARP") ||
+        !Check(VerifyBytes(updatedReadback.Get(), updatedVertexBytes.data(),
+                           vertexDesc.byteSize),
+               "Partial static update matches new GPU allocation without corrupting old version") ||
         !Check(device.InFlightResourceCount() == 0,
                "GPU frame-fence retirement has released staging generations"))
     {
