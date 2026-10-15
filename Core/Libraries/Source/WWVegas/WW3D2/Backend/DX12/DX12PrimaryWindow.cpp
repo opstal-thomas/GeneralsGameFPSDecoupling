@@ -213,7 +213,32 @@ bool DX12PrimaryWindow::BeginScene()
     }
     sceneOpen_ = true;
     clearColor_ = clearDepth_ = false;
+    // Begin the first canonical W3D stage. The later stages are explicit
+    // backend pass calls: B05 never pretends to draw unported game content.
+    DX12W3DPassBindings mainPass = {};
+    mainPass.colorTarget = device_.CurrentBackBuffer();
+    mainPass.depthTarget = device_.CurrentDepthTarget();
+    if (!BeginPass(DX12W3DPass::OpaqueWorld, mainPass))
+        return false;
     return ApplyViewport();
+}
+
+bool DX12PrimaryWindow::BeginPass(
+    DX12W3DPass stage, const DX12W3DPassBindings & bindings)
+{
+    if (!sceneOpen_)
+    {
+        error_ = "Cannot advance DX12 W3D pass outside an open scene";
+        return false;
+    }
+    if (!device_.BeginRenderPass(stage, bindings))
+    {
+        error_ = device_.LastError();
+        // A rejected pass is a programmer error, not a GPU device loss.
+        // Keep the current valid pass and command list for EndScene.
+        return false;
+    }
+    return true;
 }
 
 bool DX12PrimaryWindow::EndScene(bool flipFrame, unsigned syncInterval)
