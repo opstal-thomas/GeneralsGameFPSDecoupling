@@ -392,6 +392,25 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4])
     return true;
 }
 
+bool DX12PresentationDevice::ClearActiveFrame(bool color, bool depth, const float rgba[4], float z)
+{
+    Impl & state = *impl_;
+    if (!state.recording || (color && !rgba) || z < 0.f || z > 1.f)
+        return state.Fail("ClearActiveFrame invalid state", E_INVALIDARG);
+
+    if (color)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = state.rtvHeap->GetCPUDescriptorHandleForHeapStart();
+        rtv.ptr += static_cast<SIZE_T>(state.currentBuffer) * state.rtvIncrement;
+        state.commandList->ClearRenderTargetView(rtv, rgba, 0, nullptr);
+    }
+    if (depth)
+        state.commandList->ClearDepthStencilView(
+            state.dsvHeap->GetCPUDescriptorHandleForHeapStart(),
+            D3D12_CLEAR_FLAG_DEPTH, z, 0, 0, nullptr);
+    return true;
+}
+
 bool DX12PresentationDevice::EndFrame(unsigned syncInterval)
 {
     Impl & state = *impl_;
