@@ -1,0 +1,4 @@
+# Known-good source tree before DX12-B01. Never use a moving branch name.
+# All current direct DX8 dependencies are inventory debt; newly added runtime
+# dependencies are rejected, while the retained DX8 backend remains available.
+f86fb79f88bcc04123e28e2e83a13c8576903137

@@ -15,12 +15,38 @@ concurrency:
 
 jobs:
   dx8-boundary-audit:
-    name: Migrated W3D caller boundary audit
+    name: Full DX8 dependency inventory and boundary audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for immutable pre-B01 baseline.
+      - name: Test dependency scanner
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx8_dependency_inventory.py'
       - name: Prevent direct DX8 call regressions
         run: python3 scripts/check_w3d_dx8_boundaries.py
+      - name: Inventory DX8 symbols and block new runtime dependencies
+        run: |
+          python3 scripts/dx8_dependency_inventory.py --check \
+            --json-out "$RUNNER_TEMP/dx8-inventory.json" \
+            --markdown-out "$RUNNER_TEMP/dx8-inventory.md"
+      - name: Add inventory to GitHub job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/dx8-inventory.md" ]; then
+            cat "$RUNNER_TEMP/dx8-inventory.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload complete DX8 dependency inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dx8-dependency-inventory
+          path: |
+            ${{ runner.temp }}/dx8-inventory.json
+            ${{ runner.temp }}/dx8-inventory.md
+          if-no-files-found: warn
+          retention-days: 30
 
   build-and-test:
     needs: dx8-boundary-audit
