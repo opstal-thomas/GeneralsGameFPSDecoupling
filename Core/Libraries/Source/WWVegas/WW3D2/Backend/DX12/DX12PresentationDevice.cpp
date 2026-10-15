@@ -32,18 +32,6 @@ namespace
     constexpr DXGI_FORMAT DepthBufferFormat = DXGI_FORMAT_D32_FLOAT;
     constexpr DWORD FenceTimeoutMs = 30000;
 
-    D3D12_RESOURCE_BARRIER Transition(ID3D12Resource * resource,
-                                       D3D12_RESOURCE_STATES before,
-                                       D3D12_RESOURCE_STATES after)
-    {
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = resource;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = before;
-        barrier.Transition.StateAfter = after;
-        return barrier;
-    }
 }
 
 struct DX12PresentationDevice::Impl
@@ -69,6 +57,7 @@ struct DX12PresentationDevice::Impl
     unsigned height = 0;
     float sourceAspect = 0.f;
     bool recording = false;
+    DX12W3DPassGraph passGraph;
     std::string lastError;
 
     bool Fail(const char * operation, HRESULT hr)
@@ -196,6 +185,7 @@ struct DX12PresentationDevice::Impl
         width = height = 0;
         sourceAspect = 0.f;
         recording = false;
+        passGraph.Reset();
     }
 };
 
@@ -378,10 +368,16 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
                      "Reset frame command list"))
         return false;
 
-    const auto barrier = Transition(state.buffers[index].Get(),
-                                    D3D12_RESOURCE_STATE_PRESENT,
-                                    D3D12_RESOURCE_STATE_RENDER_TARGET);
-    state.commandList->ResourceBarrier(1, &barrier);
+    // The B05 graph owns the back-buffer transition for this command list.
+    // It also knows the persistent depth target's initial DEPTH_WRITE state.
+    if (!state.passGraph.BeginFrame(state.commandList.Get(),
+                                    state.buffers[index].Get(),
+                                    state.depthBuffer.Get()))
+    {
+        const std::string error = state.passGraph.LastError();
+        state.commandList->Close();
+        return state.Fail(("Begin DX12 W3D pass graph: " + error).c_str(), E_FAIL);
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE rtv = state.rtvHeap->GetCPUDescriptorHandleForHeapStart();
     rtv.ptr += static_cast<SIZE_T>(index) * state.rtvIncrement;
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv =
@@ -403,6 +399,14 @@ bool DX12PresentationDevice::ClearActiveFrame(bool color, bool depth, const floa
         (depth && !(z >= 0.f && z <= 1.f)))
         return state.Fail("ClearActiveFrame invalid state", E_INVALIDARG);
 
+    if (color && !state.passGraph.RequireState(
+                       state.buffers[state.currentBuffer].Get(),
+                       D3D12_RESOURCE_STATE_RENDER_TARGET))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+    if (depth && !state.passGraph.RequireState(
+                       state.depthBuffer.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+
     if (color)
     {
         D3D12_CPU_DESCRIPTOR_HANDLE rtv = state.rtvHeap->GetCPUDescriptorHandleForHeapStart();
@@ -422,10 +426,10 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
     if (!state.recording || syncInterval > 4)
         return state.Fail("EndFrame invalid state or sync interval", E_INVALIDARG);
 
-    const auto barrier = Transition(state.buffers[state.currentBuffer].Get(),
-                                    D3D12_RESOURCE_STATE_RENDER_TARGET,
-                                    D3D12_RESOURCE_STATE_PRESENT);
-    state.commandList->ResourceBarrier(1, &barrier);
+    // Always return to PRESENT from the graph's *actual* tracked state,
+    // including frames with offscreen passes or temporary COPY_SOURCE reads.
+    if (!state.passGraph.EndFrame())
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
     state.recording = false;
     if (!state.Check(state.commandList->Close(), "Close frame command list"))
         return false;
@@ -439,6 +443,57 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
         return false;
     state.frameFences[state.currentBuffer] = signalValue;
     return state.Check(presented, "IDXGISwapChain::Present");
+}
+
+bool DX12PresentationDevice::RegisterFrameResource(
+    ID3D12Resource * resource, D3D12_RESOURCE_STATES initial)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !state.passGraph.RegisterResource(resource, initial))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+    return true;
+}
+
+bool DX12PresentationDevice::TransitionFrameResource(
+    ID3D12Resource * resource, D3D12_RESOURCE_STATES desired)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !state.passGraph.RequireState(resource, desired))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+    return true;
+}
+
+bool DX12PresentationDevice::BarrierFrameUAV(ID3D12Resource * resource)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !state.passGraph.UAVBarrier(resource))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+    return true;
+}
+
+bool DX12PresentationDevice::BeginRenderPass(
+    DX12W3DPass stage, const DX12W3DPassBindings & bindings)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !state.passGraph.BeginPass(stage, bindings))
+        return state.Fail(state.passGraph.LastError(), E_INVALIDARG);
+    return true;
+}
+
+int DX12PresentationDevice::CurrentRenderPassOrdinal() const
+{
+    return impl_->passGraph.CurrentPassOrdinal();
+}
+
+unsigned DX12PresentationDevice::FrameBarrierCount() const
+{
+    return impl_->passGraph.BarrierCount();
+}
+
+bool DX12PresentationDevice::GetFrameResourceState(
+    ID3D12Resource * resource, D3D12_RESOURCE_STATES & result) const
+{
+    return impl_->passGraph.GetTrackedState(resource, result);
 }
 
 bool DX12PresentationDevice::IsRecording() const { return impl_->recording; }
@@ -478,6 +533,7 @@ bool DX12PresentationDevice::Resize(unsigned width, unsigned height)
         return true;
     if (!WaitForIdle())
         return false;
+    state.passGraph.Reset(); // never retain pre-resize ID3D12Resource pointers
 
     for (auto & buffer : state.buffers)
         buffer.Reset();
@@ -506,6 +562,7 @@ void DX12PresentationDevice::Shutdown()
         state.commandList->Close();
         state.recording = false;
     }
+    state.passGraph.Reset();
     if (state.device && SUCCEEDED(state.device->GetDeviceRemovedReason()))
         state.WaitForIdle();
     state.ReleaseAll();
@@ -531,4 +588,8 @@ ID3D12GraphicsCommandList * DX12PresentationDevice::ActiveCommandList() const
 ID3D12Resource * DX12PresentationDevice::CurrentBackBuffer() const
 {
     return impl_->recording ? impl_->buffers[impl_->currentBuffer].Get() : nullptr;
+}
+ID3D12Resource * DX12PresentationDevice::CurrentDepthTarget() const
+{
+    return impl_->recording ? impl_->depthBuffer.Get() : nullptr;
 }
