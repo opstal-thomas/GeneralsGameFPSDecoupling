@@ -37,6 +37,9 @@ public:
     bool SetViewport(unsigned x, unsigned y, unsigned width, unsigned height,
                      float minDepth, float maxDepth);
     bool BeginScene();
+    // Native backend integrations can advance to later W3D render passes.
+    // Rendering objects/assets themselves remains R01/M01/B07 work.
+    bool BeginPass(DX12W3DPass stage, const DX12W3DPassBindings & bindings);
     bool EndScene(bool flipFrame, unsigned syncInterval);
     bool IsSceneOpen() const { return sceneOpen_; }
     void Shutdown();
