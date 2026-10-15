@@ -10,6 +10,7 @@ on:
       - 'scripts/tests/test_dx12_launch_checkpoint.py'
       - 'scripts/tests/test_dx12_backend_selection.py'
       - 'scripts/tests/test_dx12_primary_window.py'
+      - 'scripts/tests/test_dx12_pass_graph.py'
       - 'Documentation/DX12OnlyLaunchCheckpoint.md'
       - '.github/workflows/dx12-shader-validation.yml'
   workflow_dispatch:
@@ -29,6 +30,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_primary_window.py'
       - name: Verify B10 launch, PE import-checker fixtures and DX8 exclusion
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_launch_checkpoint.py'
+      - name: Verify B05 W3D pass ordering and D3D12 barriers
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_pass_graph.py'
 
   compile-shaders:
     runs-on: windows-latest
