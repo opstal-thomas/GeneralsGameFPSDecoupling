@@ -1,5 +1,7 @@
 # W3D renderer modernization
 
+> **Current DX12 completion tracker:** [DX12 Migration Backlog](DX12MigrationBacklog.md). This historical implementation log includes descriptions of earlier preview limitations and is not the latest DX12 readiness status.
+
 ## Objective
 
 Modernize Command & Conquer: Generals and Zero Hour's W3D rendering engine
