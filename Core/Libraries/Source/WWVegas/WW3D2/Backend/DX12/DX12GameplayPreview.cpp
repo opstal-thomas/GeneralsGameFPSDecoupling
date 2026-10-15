@@ -144,6 +144,7 @@ struct DX12GameplayPreview::Impl
     struct DeferredBlend
     {
         const DX12W3DIndexedMesh * mesh = nullptr;
+        unsigned firstIndex = 0;
         unsigned indexCount = 0;
         float worldViewProjection[16] = {};
         RenderTextureCombinerKey combiner;
@@ -304,16 +305,22 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                                       const float worldViewProjection[16],
                                       RenderTextureHandle texture,
                                       bool alphaTest, bool alphaBlend,
-                                      RenderGameplayPreviewKind kind)
+                                      RenderGameplayPreviewKind kind,
+                                      unsigned firstIndex, unsigned drawIndexCount)
 {
     Impl & state = *impl_;
     if (!state.recording)
         return;
+
+    // All submeshes share the same immutable vertex/index allocation.
+    const unsigned effectiveCount = drawIndexCount ? drawIndexCount : indexCount;
     if (state.meshesThisFrame >= MaxMeshesPerFrame ||
         !vertices || !indices || !worldViewProjection ||
         vertexCount < 3 || vertexCount > MaxVerticesPerMesh ||
         indexCount < 3 || indexCount > MaxIndicesPerMesh ||
-        indexCount % 3 != 0)
+        indexCount % 3 != 0 ||
+        firstIndex > indexCount || effectiveCount < 3 ||
+        effectiveCount % 3 != 0 || effectiveCount > indexCount - firstIndex)
     {
         ++state.skippedDraws;
         return;
@@ -449,7 +456,8 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
     {
         Impl::DeferredBlend draw;
         draw.mesh = resident.gpu.get();
-        draw.indexCount = indexCount;
+        draw.firstIndex = firstIndex;
+        draw.indexCount = effectiveCount;
         std::memcpy(draw.worldViewProjection, worldViewProjection,
                     sizeof(draw.worldViewProjection));
         draw.combiner = combiner;
@@ -462,7 +470,7 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         return;
     }
 
-    if (!state.pass.Draw(*resident.gpu, 0, indexCount, combiner, material,
+    if (!state.pass.Draw(*resident.gpu, firstIndex, effectiveCount, combiner, material,
                          worldViewProjection, colorTexture,
                          state.whiteTexture1))
     {
@@ -487,7 +495,7 @@ void DX12GameplayPreview::End_Frame()
     // per-triangle sorting and other blend factors remain future work.
     for (const Impl::DeferredBlend & draw : state.deferredBlends)
     {
-        if (!state.pass.Draw(*draw.mesh, 0, draw.indexCount,
+        if (!state.pass.Draw(*draw.mesh, draw.firstIndex, draw.indexCount,
                              draw.combiner, draw.material,
                              draw.worldViewProjection,
                              draw.texture0, draw.texture1))

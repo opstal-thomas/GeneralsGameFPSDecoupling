@@ -311,7 +311,8 @@ void Renderer::Preview_DX12_Gameplay_Mesh(
     const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
     const unsigned short * indices, unsigned indexCount,
     const Matrix3D & modelTransform, RenderTextureHandle texture,
-    bool alphaTest, bool alphaBlend, RenderGameplayPreviewKind kind)
+    bool alphaTest, bool alphaBlend, RenderGameplayPreviewKind kind,
+    unsigned firstIndex, unsigned drawIndexCount)
 {
 #if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
     auto & preview = DX12GameplayPreview::Instance();
@@ -332,7 +333,8 @@ void Renderer::Preview_DX12_Gameplay_Mesh(
     const D3DXMATRIX worldViewProjection = w * v * p;
     preview.Submit_Mesh(vertices, vertexCount, indices, indexCount,
                         reinterpret_cast<const float *>(&worldViewProjection),
-                        texture, alphaTest, alphaBlend, kind);
+                        texture, alphaTest, alphaBlend, kind,
+                        firstIndex, drawIndexCount);
 #else
     (void)vertices;
     (void)vertexCount;
@@ -343,6 +345,8 @@ void Renderer::Preview_DX12_Gameplay_Mesh(
     (void)alphaTest;
     (void)alphaBlend;
     (void)kind;
+    (void)firstIndex;
+    (void)drawIndexCount;
 #endif
 }
 

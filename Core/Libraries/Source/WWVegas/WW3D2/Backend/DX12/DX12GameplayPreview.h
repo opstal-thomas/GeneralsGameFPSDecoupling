@@ -24,7 +24,8 @@ public:
                      const unsigned short * indices, unsigned indexCount,
                      const float worldViewProjection[16],
                      RenderTextureHandle texture, bool alphaTest, bool alphaBlend,
-                     RenderGameplayPreviewKind kind);
+                     RenderGameplayPreviewKind kind,
+                     unsigned firstIndex, unsigned drawIndexCount);
     void End_Frame();
     void Shutdown();
 

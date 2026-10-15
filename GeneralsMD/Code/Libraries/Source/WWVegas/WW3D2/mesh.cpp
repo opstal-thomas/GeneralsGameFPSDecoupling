@@ -854,11 +854,122 @@ void MeshClass::Render(RenderInfoClass & rinfo)
                                 indices.push_back(static_cast<unsigned short>(triangle.K));
                             }
                             if (validIndices)
-                                Renderer::Preview_DX12_Gameplay_Mesh(
-                                    vertices.data(), static_cast<unsigned>(vertexCount),
-                                    indices.data(), static_cast<unsigned>(indices.size()),
-                                    Get_Transform(), previewTexture, previewAlphaTest,
-                                    previewAlphaBlend);
+                            {
+                                // Single-pass polygon shader and texture arrays need
+                                // more than one DX12 draw. Build material-contiguous
+                                // index ranges while uploading the geometry once.
+                                const bool polygonMaterials =
+                                    Model->Get_Pass_Count() == 1 &&
+                                    (Model->Has_Shader_Array(0) ||
+                                     Model->Has_Texture_Array(0, 0)) &&
+                                    !Model->Has_Texture_Array(0, 1) &&
+                                    !Model->Peek_Single_Texture(0, 1);
+                                if (polygonMaterials)
+                                {
+                                    struct PreviewMaterialGroup
+                                    {
+                                        TextureClass * texture = nullptr; // borrowed from model
+                                        bool alphaTest = false;
+                                        bool alphaBlend = false;
+                                        unsigned firstIndex = 0;
+                                        std::vector<unsigned short> indices;
+                                    };
+                                    std::vector<PreviewMaterialGroup> groups;
+                                    groups.reserve(8);
+                                    const size_t MaxPreviewMaterialGroups = 64;
+                                    for (int polygon = 0; polygon < polygonCount; ++polygon)
+                                    {
+                                        const ShaderClass shader = Model->Get_Shader(polygon, 0);
+                                        const bool opaque =
+                                            shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_ONE &&
+                                            shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ZERO;
+                                        const bool sourceAlpha =
+                                            shader.Get_Src_Blend_Func() == ShaderClass::SRCBLEND_SRC_ALPHA &&
+                                            shader.Get_Dst_Blend_Func() == ShaderClass::DSTBLEND_ONE_MINUS_SRC_ALPHA;
+                                        if (!opaque && !sourceAlpha)
+                                            continue; // unsupported blend equation
+                                        TextureClass * texture = nullptr;
+                                        if (shader.Get_Texturing() == ShaderClass::TEXTURING_ENABLE)
+                                        {
+                                            texture = Model->Peek_Texture(polygon, 0, 0);
+                                            if (!texture || !texture->Is_Initialized())
+                                                continue;
+                                        }
+                                        else if (shader.Uses_Alpha())
+                                        {
+                                            // Untextured material alpha needs an
+                                            // independent vertex-opacity conversion.
+                                            continue;
+                                        }
+
+                                        const bool alphaTest =
+                                            shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE;
+                                        auto match = groups.end();
+                                        for (auto it = groups.begin(); it != groups.end(); ++it)
+                                        {
+                                            if (it->texture == texture &&
+                                                it->alphaTest == alphaTest &&
+                                                it->alphaBlend == sourceAlpha)
+                                            {
+                                                match = it;
+                                                break;
+                                            }
+                                        }
+                                        if (match == groups.end())
+                                        {
+                                            if (groups.size() == MaxPreviewMaterialGroups)
+                                                continue; // bounded developer preview
+                                            groups.emplace_back();
+                                            match = groups.end() - 1;
+                                            match->texture = texture;
+                                            match->alphaTest = alphaTest;
+                                            match->alphaBlend = sourceAlpha;
+                                        }
+                                        const unsigned short * triangle =
+                                            indices.data() + static_cast<size_t>(polygon) * 3;
+                                        match->indices.insert(match->indices.end(),
+                                                              triangle, triangle + 3);
+                                    }
+                                    if (!groups.empty())
+                                    {
+                                        std::vector<unsigned short> groupedIndices;
+                                        groupedIndices.reserve(indices.size());
+                                        for (auto & group : groups)
+                                        {
+                                            group.firstIndex =
+                                                static_cast<unsigned>(groupedIndices.size());
+                                            groupedIndices.insert(groupedIndices.end(),
+                                                                  group.indices.begin(),
+                                                                  group.indices.end());
+                                        }
+                                        // Reuse this SAME combined index stream and vertex
+                                        // array for each submesh range: one GPU residency
+                                        // cache entry, different texture and material.
+                                        for (const auto & group : groups)
+                                        {
+                                            RenderTextureHandle handle = group.texture
+                                                ? group.texture->Peek_Render_Texture() : nullptr;
+                                            Renderer::Preview_DX12_Gameplay_Mesh(
+                                                vertices.data(), static_cast<unsigned>(vertexCount),
+                                                groupedIndices.data(),
+                                                static_cast<unsigned>(groupedIndices.size()),
+                                                Get_Transform(), handle, group.alphaTest,
+                                                group.alphaBlend, RENDER_PREVIEW_MESH,
+                                                group.firstIndex,
+                                                static_cast<unsigned>(group.indices.size()));
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // Preserve the previous single-material behavior.
+                                    Renderer::Preview_DX12_Gameplay_Mesh(
+                                        vertices.data(), static_cast<unsigned>(vertexCount),
+                                        indices.data(), static_cast<unsigned>(indices.size()),
+                                        Get_Transform(), previewTexture, previewAlphaTest,
+                                        previewAlphaBlend);
+                                }
+                            }
                         }
                     }
                 }

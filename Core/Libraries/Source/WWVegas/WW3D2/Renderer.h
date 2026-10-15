@@ -741,7 +741,8 @@ public:
         const unsigned short * indices, unsigned indexCount,
         const Matrix3D & modelTransform, RenderTextureHandle texture = nullptr,
         bool alphaTest = false, bool alphaBlend = false,
-        RenderGameplayPreviewKind kind = RENDER_PREVIEW_MESH);
+        RenderGameplayPreviewKind kind = RENDER_PREVIEW_MESH,
+        unsigned firstIndex = 0, unsigned drawIndexCount = 0);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs
