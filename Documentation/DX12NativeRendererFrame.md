@@ -92,5 +92,7 @@ DX8, DX8+preview and exclusive DX12 bootstrap configurations.
   and all gameplay `Renderer` methods.
 - **B09:** Precompiled production shader permutations (the experimental
   mesh pass still compiles loose HLSL).
-- **B10:** Dedicated DX12-only executable launch checkpoint.
-  It is not implied by this diagnostic.
+- **B10 (implemented separately):** The [DX12-only developer launcher](DX12OnlyLaunchCheckpoint.md)
+  compiles the same Renderer source in an isolated GUI process, creates its
+  main HWND, presents native frames, and verifies absence of D3D8 imports.
+  This does not remove the remaining W3D gameplay dependencies.
