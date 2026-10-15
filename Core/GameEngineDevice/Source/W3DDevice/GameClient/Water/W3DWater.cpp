@@ -2036,6 +2036,38 @@ void WaterRenderObjClass::renderWater()
 					points[2].Set(pt2.x, pt2.y, pt2.z);
 					points[3].Set(pt3.x, pt3.y, pt3.z);
 
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+                    // Render the translucent standing-water footprint once.
+                    // DX8 still handles all feather layers and specialized
+                    // reflection passes; those are not mirrored yet.
+                    if (Renderer::Is_DX12_Gameplay_Preview_Recording())
+                    {
+                        RenderGameplayPreviewVertex quad[4] = {};
+                        const unsigned diffuse = m_settings[m_tod].waterDiffuse;
+                        for (unsigned vertex = 0; vertex < 4; ++vertex)
+                        {
+                            quad[vertex].position[0] = points[vertex].X;
+                            quad[vertex].position[1] = points[vertex].Y;
+                            quad[vertex].position[2] = points[vertex].Z;
+                            quad[vertex].diffuse[0] = ((diffuse >> 16) & 255u) / 255.f;
+                            quad[vertex].diffuse[1] = ((diffuse >> 8) & 255u) / 255.f;
+                            quad[vertex].diffuse[2] = (diffuse & 255u) / 255.f;
+                            quad[vertex].diffuse[3] = ((diffuse >> 24) & 255u) / 255.f;
+                            quad[vertex].uv0[0] = points[vertex].X / 150.f;
+                            quad[vertex].uv0[1] = points[vertex].Y / 150.f;
+                            quad[vertex].uv1[0] = quad[vertex].uv0[0];
+                            quad[vertex].uv1[1] = quad[vertex].uv0[1];
+                        }
+                        const unsigned short indices[6] = {0, 1, 2, 0, 2, 3};
+                        RenderTextureHandle waterTexture = nullptr;
+                        if (m_riverTexture && m_riverTexture->Is_Initialized())
+                            waterTexture = m_riverTexture->Peek_Render_Texture();
+                        Renderer::Preview_DX12_Gameplay_Mesh(
+                            quad, 4, indices, 6, Matrix3D(true),
+                            waterTexture, false, true);
+                    }
+#endif
+
 					if ( TheGlobalData->m_featherWater )
 					{
 						for (int r = 0; r < TheGlobalData->m_featherWater; ++r)

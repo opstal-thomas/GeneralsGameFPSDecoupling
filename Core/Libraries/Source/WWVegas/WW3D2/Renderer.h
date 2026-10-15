@@ -731,7 +731,7 @@ public:
         const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
         const unsigned short * indices, unsigned indexCount,
         const Matrix3D & modelTransform, RenderTextureHandle texture = nullptr,
-        bool alphaTest = false);
+        bool alphaTest = false, bool alphaBlend = false);
 
     // The W3D sorting pool still stores legacy render-state snapshots.
     // Keep capture, temporary restoration, and engine-owned buffer refs

@@ -23,7 +23,7 @@ public:
     void Submit_Mesh(const RenderGameplayPreviewVertex * vertices, unsigned vertexCount,
                      const unsigned short * indices, unsigned indexCount,
                      const float worldViewProjection[16],
-                     RenderTextureHandle texture, bool alphaTest);
+                     RenderTextureHandle texture, bool alphaTest, bool alphaBlend);
     void End_Frame();
     void Shutdown();
 

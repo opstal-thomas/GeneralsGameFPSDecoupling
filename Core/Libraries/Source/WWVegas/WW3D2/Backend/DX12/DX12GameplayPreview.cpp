@@ -280,7 +280,7 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
                                       unsigned indexCount,
                                       const float worldViewProjection[16],
                                       RenderTextureHandle texture,
-                                      bool alphaTest)
+                                      bool alphaTest, bool alphaBlend)
 {
     Impl & state = *impl_;
     if (!state.recording || state.meshesThisFrame >= MaxMeshesPerFrame ||
@@ -396,6 +396,12 @@ void DX12GameplayPreview::Submit_Mesh(const RenderGameplayPreviewVertex * vertic
         combiner.alpha[0] = RenderTextureStageChannel(
             RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
         material.alphaTestEnabled = alphaTest;
+    }
+    if (alphaBlend)
+    {
+        material.blendEnabled = true;
+        material.source = RENDER_BLEND_SRC_ALPHA;
+        material.destination = RENDER_BLEND_INV_SRC_ALPHA;
     }
 
     if (!state.pass.Draw(*resident.gpu, 0, indexCount, combiner, material,

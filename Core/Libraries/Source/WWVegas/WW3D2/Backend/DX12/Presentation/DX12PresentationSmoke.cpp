@@ -195,6 +195,7 @@ namespace
 
         DX12W3DIndexedMesh mesh;
         DX12W3DIndexedMesh depthMesh;
+        DX12W3DIndexedMesh translucentMesh;
         const DX12W3DVertex vertices[] = {
             {{-0.8f, -0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
             {{-0.8f,  0.8f, 0.f}, {1.f, 0.25f, 0.5f, 1.f}, {0.f, 0.f}, {0.f, 0.f}},
@@ -218,6 +219,17 @@ namespace
         }
         const std::uint16_t depthIndices[] = {0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
         bool depthUploaded = false;
+        DX12W3DVertex translucentVertices[4] = {};
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            translucentVertices[i] = vertices[i];
+            translucentVertices[i].position[2] = 0.2f;
+            translucentVertices[i].diffuse[0] = 1.f;
+            translucentVertices[i].diffuse[1] = 0.f;
+            translucentVertices[i].diffuse[2] = 0.f;
+            translucentVertices[i].diffuse[3] = 0.5f;
+        }
+        bool translucentUploaded = false;
         const std::uint8_t texel0[] = {128, 255, 255, 255};
         const std::uint8_t texel1[] = {128, 255, 255, 255};
         unsigned texture0 = 0, texture1 = 0;
@@ -352,14 +364,50 @@ namespace
             return false;
         depthMesh.Release_Upload_Buffers();
 
+        RenderBlendState translucent;
+        translucent.blendEnabled = true;
+        translucent.source = RENDER_BLEND_SRC_ALPHA;
+        translucent.destination = RENDER_BLEND_INV_SRC_ALPHA;
+        const std::array<float, 4> blendedPixel = {{0.5f, 0.f, 0.5f, 1.f}};
+        const auto runBlend = [&]() -> bool
+        {
+            window.Pump();
+            const auto draw = [&]() -> bool
+            {
+                if (!translucentUploaded)
+                {
+                    if (!translucentMesh.Upload(device, translucentVertices, 4, indices, 6))
+                    {
+                        std::cerr << "Water blend geometry: "
+                                  << translucentMesh.LastError() << "\n";
+                        return false;
+                    }
+                    translucentUploaded = true;
+                }
+                if (!pass.Draw(depthMesh, 6, 6, untextured, normal,
+                               identity, texture0, texture1) ||
+                    !pass.Draw(translucentMesh, 0, 6, untextured, translucent,
+                               identity, texture0, texture1))
+                {
+                    std::cerr << "Water blend draw: " << pass.LastError() << "\n";
+                    return false;
+                }
+                return true;
+            };
+            return PresentAndVerify(device, clear, draw, &blendedPixel);
+        };
+        if (!runBlend())
+            return false;
+        translucentMesh.Release_Upload_Buffers();
+
         // The same default-heap geometry and textures survive ResizeBuffers.
         if (!device.Resize(160, 90) || !runMaterial(singleStage, normal, singlePixel) ||
-            !runDepth(true) || !runDepth(false))
+            !runDepth(true) || !runDepth(false) || !runBlend())
         {
             std::cerr << "Indexed mesh after resize: " << device.LastError() << "\n";
             return false;
         }
-        if (pass.PipelineCount() != 3)
+        if (pass.PipelineCount() != 4)
         {
             std::cerr << "Unexpected material PSO count: " << pass.PipelineCount() << "\n";
             return false;
@@ -368,8 +416,9 @@ namespace
             return false;
         mesh.Reset();
         depthMesh.Reset();
+        translucentMesh.Reset();
         pass.Shutdown();
-        std::cout << "DX12 indexed W3D geometry, textured PSOs, depth, alpha test and resize: PASS\n";
+        std::cout << "DX12 indexed W3D geometry, textures, depth, alpha test, blending and resize: PASS\n";
         return true;
     }
 }

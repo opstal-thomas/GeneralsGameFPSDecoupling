@@ -289,7 +289,8 @@ struct DX12W3DIndexedMeshPass::Impl
     ComPtr<ID3D12DescriptorHeap> texturesHeap;
     UINT descriptorStride = 0;
     std::vector<TextureRecord> textures;
-    std::unordered_map<UINT, ComPtr<ID3D12PipelineState>> pipelines;
+    // Material combiner key alone cannot identify the blend/depth-write PSO.
+    std::unordered_map<std::uint64_t, ComPtr<ID3D12PipelineState>> pipelines;
     std::string error;
 
     bool CheckResult(HRESULT hr, const char * label)
@@ -302,9 +303,11 @@ struct DX12W3DIndexedMeshPass::Impl
         return presentation ? presentation->NativeDevice() : nullptr;
     }
 
-    ID3D12PipelineState * GetPipeline(UINT key)
+    ID3D12PipelineState * GetPipeline(UINT key, bool alphaBlend)
     {
-        const auto found = pipelines.find(key);
+        const std::uint64_t pipelineKey =
+            (static_cast<std::uint64_t>(key) << 1) | (alphaBlend ? 1u : 0u);
+        const auto found = pipelines.find(pipelineKey);
         if (found != pipelines.end())
             return found->second.Get();
 
@@ -354,6 +357,16 @@ struct DX12W3DIndexedMeshPass::Impl
         desc.DepthStencilState.DepthEnable = TRUE;
         desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
         desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        if (alphaBlend)
+        {
+            target.BlendEnable = TRUE;
+            target.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+            target.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+            target.SrcBlendAlpha = D3D12_BLEND_ONE;
+            target.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+            // Water can hide terrain in color but must not occlude later draws.
+            desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        }
         desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         desc.SampleMask = UINT_MAX;
         desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -365,7 +378,7 @@ struct DX12W3DIndexedMeshPass::Impl
         if (!CheckResult(Device()->CreateGraphicsPipelineState(
                              &desc, IID_PPV_ARGS(&pipeline)), "Create indexed mesh PSO"))
             return nullptr;
-        return pipelines.emplace(key, std::move(pipeline)).first->second.Get();
+        return pipelines.emplace(pipelineKey, std::move(pipeline)).first->second.Get();
     }
 };
 
@@ -558,14 +571,16 @@ bool DX12W3DIndexedMeshPass::Draw(const DX12W3DIndexedMesh & mesh,
         state.error = "Draw requires active DX12 frame, uploaded indexed mesh, textures and valid submesh range";
         return false;
     }
-    if (combiner.Requires_Bump_Shader() || blend.blendEnabled ||
-        !blend.colorWriteEnabled)
+    if (combiner.Requires_Bump_Shader() || !blend.colorWriteEnabled ||
+        (blend.blendEnabled &&
+         (blend.source != RENDER_BLEND_SRC_ALPHA ||
+          blend.destination != RENDER_BLEND_INV_SRC_ALPHA)))
     {
-        state.error = "Unsupported W3D material: bump mapping, blending or color-write state";
+        state.error = "Unsupported W3D material: bump mapping, nonstandard blending or disabled color writes";
         return false;
     }
     const UINT key = combiner.Encode();
-    ID3D12PipelineState * pipeline = state.GetPipeline(key);
+    ID3D12PipelineState * pipeline = state.GetPipeline(key, blend.blendEnabled);
     if (!pipeline)
         return false;
 
