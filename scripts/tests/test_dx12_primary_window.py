@@ -37,6 +37,18 @@ class PrimaryWindowIntegrationTests(unittest.TestCase):
         self.assertNotRegex(code_without_comments,
                             r"\b(?:DX8Wrapper|IDirect3DDevice8|Direct3DCreate8)\b")
 
+    def test_b04_native_frame_is_explicitly_opt_in(self):
+        source = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        device = (DX12 / "DX12PresentationDevice.cpp").read_text(encoding="utf-8")
+        self.assertIn("W3D_DX12_B04_DIAGNOSTIC", source)
+        self.assertIn("primaryWindow.Presentation().BeginFrame(black)", source)
+        self.assertIn("primaryWindow.Presentation().EndFrame(syncInterval)", source)
+        self.assertIn("primaryWindow.Presentation().ClearActiveFrame(", source)
+        self.assertIn("RSSetViewports(1, &vp)", source)
+        self.assertIn("RSSetScissorRects(1, &scissor)", source)
+        self.assertIn("ClearRenderTargetView(rtv, rgba", device)
+        self.assertIn("ClearDepthStencilView(", device)
+
     def test_real_warp_test_and_build_both_include_primary_adapter(self):
         main = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/CMakeLists.txt").read_text(encoding="utf-8")
         smoke = (DX12 / "Presentation/CMakeLists.txt").read_text(encoding="utf-8")
