@@ -35,6 +35,9 @@ public:
     // The back buffer must be in RENDER_TARGET state when EndFrame is called.
     bool BeginFrame(const float clearColor[4]);
     bool EndFrame(unsigned syncInterval);
+    // Record an in-frame clear on the active game back buffer. Unlike BeginFrame,
+    // this can be invoked after other frame state has been established.
+    bool ClearActiveFrame(bool color, bool depth, const float rgba[4], float z);
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
