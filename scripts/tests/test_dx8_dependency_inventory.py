@@ -19,6 +19,12 @@ class DependencyInventoryTests(unittest.TestCase):
         D3DRS_ZWRITEENABLE;
         D3DXMatrixInverse(matrix, det, old);
         D3D12_RESOURCE_DESC desc = {};
+        D3D_FEATURE_LEVEL_11_0;
+        D3D_SHADER_MACRO macros;
+        D3D_COMPILE_STANDARD_FILE_INCLUDE;
+        D3DCOMPILE_OPTIMIZATION_LEVEL3;
+        D3D_ROOT_SIGNATURE_VERSION_1;
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
         """
         findings = audit.scan_text(
             "Core/GameEngineDevice/Source/W3DDevice/GameClient/example.cpp", contents
@@ -30,7 +36,12 @@ class DependencyInventoryTests(unittest.TestCase):
         self.assertIn(("legacy_d3d_type", "D3DRS_ZWRITEENABLE"), names)
         self.assertIn(("d3dx_legacy", "D3DXMatrixInverse"), names)
         self.assertNotIn(("wrapper_dispatch", "DX8Wrapper::Fake"), names)
-        self.assertFalse(any("D3D12" in f["symbol"] for f in findings))
+        self.assertFalse(any(
+            x in f["symbol"] for f in findings
+            for x in ("D3D12", "D3D_FEATURE_LEVEL", "D3D_SHADER_MACRO",
+                      "D3D_COMPILE", "D3DCOMPILE", "D3D_ROOT_SIGNATURE",
+                      "D3D_PRIMITIVE_TOPOLOGY")
+        ))
         self.assertEqual(findings[0]["line"], 1)
         self.assertEqual({f["scope"] for f in findings}, {"game_runtime"})
 
@@ -44,12 +55,12 @@ class DependencyInventoryTests(unittest.TestCase):
     def test_cmake_linkage_counts_and_comments_do_not(self):
         content = """# d3d8.lib unused
         include(cmake/dx8.cmake)
-        target_link_libraries(game d3d8 d3dx8.lib)
+        target_link_libraries(game dx8 d3d8 d3dx8.lib)
         # dx8backend.cpp
         """
         findings = audit.scan_text("CMakeLists.txt", content)
         self.assertEqual(
-            [f["symbol"] for f in findings], ["dx8.cmake", "d3d8", "d3dx8.lib"]
+            [f["symbol"] for f in findings], ["dx8.cmake", "dx8", "d3d8", "d3dx8.lib"]
         )
         self.assertEqual({f["scope"] for f in findings}, {"build_configuration"})
 

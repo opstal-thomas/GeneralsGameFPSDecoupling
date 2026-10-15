@@ -43,8 +43,8 @@ SOURCE_PATTERNS = (
     ("d3dx_legacy", re.compile(r"\bD3DX[A-Za-z0-9_]*\b")),
     ("legacy_renderer_type", re.compile(r"\bDX8[A-Za-z0-9_]*\b")),
     ("legacy_d3d_type", re.compile(
-        r"\bD3D(?!12|11|10|9|_FEATURE_LEVEL\b|_COMPILE\b|_SHADER_MODEL\b|"
-        r"_PRIMITIVE_TOPOLOGY\b)[A-Z0-9_]+\b"
+        r"\bD3D(?!12|11|10|9|_FEATURE_LEVEL|_COMPILE|COMPILE|"
+        r"_SHADER_|_ROOT_SIGNATURE|_PRIMITIVE_TOPOLOGY)[A-Z0-9_]+\b"
     )),
 )
 INCLUDE_PATTERN = re.compile(
@@ -115,6 +115,18 @@ def scan_text(path: str, text: str) -> list[dict]:
         for match in BUILD_PATTERN.finditer(prepared):
             spans.append((match.start(), match.end(), "sdk_build_reference",
                           match.group(0).lower()))
+        # Plain 'dx8' is a real CMake/MSVC link target, whereas its appearance
+        # in a CI job title is not a dependency. Only inspect build files.
+        if Path(path).name in BUILD_FILENAMES or Path(path).suffix.lower() in {
+            ".cmake", ".vcxproj", ".vcproj", ".props", ".targets", ".mk"
+        }:
+            occupied = set()
+            for start, end, _, _ in spans:
+                occupied.update(range(start, end))
+            for match in re.finditer(r"(?i)\bdx8\b", prepared):
+                if not any(i in occupied for i in range(match.start(), match.end())):
+                    spans.append((match.start(), match.end(),
+                                  "sdk_build_reference", "dx8"))
     else:
         masked = mask_comments_and_strings(text)
         # Original include filename is masked as a string; check only if the
