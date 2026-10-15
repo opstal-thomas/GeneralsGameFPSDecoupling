@@ -1,9 +1,10 @@
 # DX12-B02 — Exclusive renderer backend selection
 
-**Status:** Build architecture only. The DX12-selected game is intentionally
-**not playable**. [B03](DX12PrimaryGameWindow.md) now owns and tests native
-presentation on the main game HWND, but **B04** must still implement the
-persistent frame/render-state path before gameplay.
+**Status:** Exclusive build selection complete. The DX12-selected game is
+**not playable**. [B03](DX12PrimaryGameWindow.md) implements game-HWND
+presentation; [B04](DX12NativeRendererFrame.md) adds persistent native frame
+and state APIs under a developer diagnostic opt-in. Full resource parity
+and the launch checkpoint are still pending (B07/B10).
 
 ## Selection modes
 
@@ -13,11 +14,11 @@ persistent frame/render-state path before gameplay.
 | --- | --- | --- |
 | `DX8` (default) | `Backend/DX8Backend.cpp` | Original Generals / Zero Hour renderer; unchanged and usable |
 | `DX8` + `W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=ON` | `Backend/DX8Backend.cpp` | DX8 game plus optional secondary experimental DX12 preview |
-| `DX12` | `Backend/DX12/DX12Backend.cpp` | Exclusive DX12 Renderer symbol provider; **intentionally rejects Renderer::Init** until B03/B04 |
+| `DX12` | `Backend/DX12/DX12Backend.cpp` | Exclusive DX12 Renderer; **normal game initialization remains fail-closed** until the native WW3D resource/draw migration; B04 developer diagnostic available |
 
 Selecting DX12 while enabling the DX8-dependent gameplay preview is a
 configuration error. DX12 selection requires modern MSVC on Windows and links
-the existing DX12 presentation library in preparation for B03.
+the native DX12 primary-window presentation library.
 
 This is **not** yet a DX12-only application. Non-Renderer engine subsystems
 still compile legacy DX8 dependencies (see [DX8 dependency inventory](DX8DependencyInventory.md)).
@@ -47,12 +48,14 @@ cmake --build --preset win32
 For the secondary DX12 preview, keep `W3D_RENDER_BACKEND=DX8` and separately
 enable `W3D_ENABLE_DX12_GAMEPLAY_PREVIEW=ON`.
 
-**Expected bootstrap behavior (updated by B03):** `Renderer::Init` now
-attaches to the actual game HWND, attempts one diagnostic D3D12 present,
-then returns `false`, releases the swap chain, and `WW3D::Init` returns
-`WW3D_ERROR_INITIALIZATION_FAILED`. It does not create a DX8 rendering
-device or silently select the legacy backend. The full game is not ready
-to run in this configuration.
+**Expected bootstrap behavior (updated by B04):** `Renderer::Init`
+attaches the DX12 device to the actual game HWND. Without
+`W3D_DX12_B04_DIAGNOSTIC=1`, it intentionally returns `false` and releases
+the swap chain, so `WW3D::Init` reports initialization failure. With
+the explicit developer-only opt-in, B04 keeps the primary device alive
+and provides frame/clear/viewport/transform APIs. **This does not make
+normal gameplay playable**: numerous W3D resources and draws are still
+unsupported and the game must not be shipped in this mode.
 
 ## Build and CI acceptance gates
 
@@ -64,9 +67,10 @@ to run in this configuration.
   if the selected translation unit is absent or its opposite is present.
 - The normal DX8 builds, secondary DX12-preview builds, and two new
   `win32-dx12-bootstrap` builds are independently validated.
-- The bootstrap still **does not implement rendering**. Its temporary
-  diagnostic stubs are deliberate and must be replaced, not treated as
-  acceptable fallbacks, under B03/B04/B07.
+- B04 implements **native frame/state and clear operations**, validated
+  against WARP. Native W3D geometry/resources and the launch checkpoint
+  remain unfinished under R01/M01/B07/B10; unsupported methods remain explicit
+  rather than silently falling back.
 
 ## Next dependency chain
 
@@ -74,10 +78,11 @@ to run in this configuration.
 [primary game-window DX12 ownership](DX12PrimaryGameWindow.md) for the
 HWND-bound swap chain, resize, minimize/restore and borderless tests.
 
-**B04:** Implement native `Renderer::Init`, frame start/end, clear,
-transforms, viewport and minimal valid presentation; replace the bootstrap
-diagnostic implementations. Do not convert unsupported methods into silent
-success.
+**B04 (complete native diagnostic):** See [native Renderer frame/state
+checkpoint](DX12NativeRendererFrame.md) for `Renderer::Init`, selective
+pre-frame clearing, conditional present, transforms, viewport and native
+device queries. The developer-only gate prevents unsupported gameplay
+paths from being treated as complete.
 
 **B10:** Only after B03/B04, demonstrate a real game-window DX12-only
 frame without creating a Direct3D8 device. B01 inventory still needs to
