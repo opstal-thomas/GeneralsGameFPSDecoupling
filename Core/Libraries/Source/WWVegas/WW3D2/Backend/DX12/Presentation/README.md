@@ -85,3 +85,21 @@ draw calls, and advance stages explicitly. A dedicated
 `W3DDX12PassGraphSmoke` Win32/x64 WARP test exercises the full sequence,
 compute-style UAV barriers, GPU offscreen readback and resize recovery.
 See [B05 specification](../../../../../../../../Documentation/DX12RenderPassGraph.md).
+
+## DX12-R01 — Native W3D vertex/index buffers
+
+The selected DX12 `Renderer` now delegates its neutral geometry handles to
+`DX12W3DGeometryBuffers`. It uploads static geometry into GPU-local D3D12
+DEFAULT buffers and keeps dynamic generations in CPU-visible UPLOAD buffers.
+Both issue genuine IA vertex/index bindings, and the presentation queue
+retains uploaded GPU generations until their submission fence completes.
+
+`W3DDX12GeometryBufferSmoke` validates map/unmap, partial updates,
+16-bit index binding, stale-view unbinding, in-flight resource lifetime
+and actual GPU-readback contents on both Win32 and x64 WARP.
+`W3DDX12RendererFrameSmoke` exercises the same path through the public
+W3D `Renderer` API on the primary HWND.
+
+See [R01 native geometry guide](../../../../../../../../Documentation/DX12NativeGeometryBuffers.md).
+The authoritative W3D draw pipeline is still B07/M01; dynamically
+suballocated index/vertex rings are scheduled separately under R02.
