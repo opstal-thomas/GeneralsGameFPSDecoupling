@@ -8,6 +8,7 @@
 
 #include <wrl/client.h>
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -306,7 +307,9 @@ namespace DX12W3DGeometryBuffers
             ? static_cast<unsigned long long>(vertexCount) * stride > available
                   ? 0 : vertexCount * stride
             : available;
-        if (!countBytes || !handle->state.Prepare(device, false))
+        if (!countBytes)
+            return Fail("Vertex buffer slice exceeds mapped W3D allocation");
+        if (!handle->state.Prepare(device, false))
             return false;
         D3D12_VERTEX_BUFFER_VIEW view = {};
         view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + offset;
@@ -329,7 +332,9 @@ namespace DX12W3DGeometryBuffers
         const unsigned countBytes = indexCount
             ? static_cast<unsigned long long>(indexCount) * 2 > available ? 0 : indexCount * 2
             : available;
-        if (!countBytes || !handle->state.Prepare(device, true))
+        if (!countBytes)
+            return Fail("Index buffer slice exceeds mapped W3D allocation");
+        if (!handle->state.Prepare(device, true))
             return false;
         D3D12_INDEX_BUFFER_VIEW view = {};
         view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + offset;
