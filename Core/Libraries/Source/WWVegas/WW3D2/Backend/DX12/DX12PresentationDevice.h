@@ -33,8 +33,12 @@ public:
     // Begins recording commands into the current swap-chain back buffer.
     // Future DX12 W3D draws can append commands through ActiveCommandList().
     // The back buffer must be in RENDER_TARGET state when EndFrame is called.
-    bool BeginFrame(const float clearColor[4]);
-    bool EndFrame(unsigned syncInterval);
+    // Clears are optional because W3D may request only depth, only color or
+    // neither. W3D queues Clear before Begin_Scene.
+    bool BeginFrame(const float clearColor[4], bool clearColorTarget = true,
+                    bool clearDepthTarget = true, float clearDepthValue = 1.f);
+    // A non-flipping End_Scene must submit the command list without Present.
+    bool EndFrame(unsigned syncInterval, bool present = true);
     // Record an in-frame clear on the active game back buffer. Unlike BeginFrame,
     // this can be invoked after other frame state has been established.
     bool ClearActiveFrame(bool color, bool depth, const float rgba[4], float z);
@@ -47,6 +51,10 @@ public:
     float SourceAspect() const;
 
     bool IsReady() const;
+    bool IsRecording() const;
+    bool IsDeviceHealthy() const;
+    bool GetAdapterIdentity(unsigned & vendorId, unsigned & deviceId,
+                            unsigned long long & driverVersion) const;
     unsigned Width() const;
     unsigned Height() const;
     const char * LastError() const;
