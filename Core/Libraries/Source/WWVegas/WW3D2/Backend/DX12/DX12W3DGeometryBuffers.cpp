@@ -304,8 +304,7 @@ namespace DX12W3DGeometryBuffers
         {
             // Legacy SetStreamSource(stream, nullptr, stride) removes a stream.
             // Do not accidentally leave the previous W3D vertex view bound.
-            D3D12_VERTEX_BUFFER_VIEW empty = {};
-            device.ActiveCommandList()->IASetVertexBuffers(stream, 1, &empty);
+            device.ActiveCommandList()->IASetVertexBuffers(stream, 1, nullptr);
             return true;
         }
         if (!stride ||
