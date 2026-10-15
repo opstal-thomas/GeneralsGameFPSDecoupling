@@ -298,8 +298,18 @@ namespace DX12W3DGeometryBuffers
                     unsigned firstVertex, unsigned vertexCount)
     {
         lastError.clear();
-        if (!handle || !stride || stream >= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT ||
-            (static_cast<unsigned long long>(firstVertex) * stride >= handle->state.shadow.size()))
+        if (!device.ActiveCommandList() || stream >= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
+            return Fail("Vertex binding requires a native frame and valid stream");
+        if (!handle)
+        {
+            // Legacy SetStreamSource(stream, nullptr, stride) removes a stream.
+            // Do not accidentally leave the previous W3D vertex view bound.
+            D3D12_VERTEX_BUFFER_VIEW empty = {};
+            device.ActiveCommandList()->IASetVertexBuffers(stream, 1, &empty);
+            return true;
+        }
+        if (!stride ||
+            static_cast<unsigned long long>(firstVertex) * stride >= handle->state.shadow.size())
             return Fail("Invalid W3D DX12 vertex stream, stride or first vertex");
         const unsigned offset = firstVertex * stride;
         const unsigned available = static_cast<unsigned>(handle->state.shadow.size()) - offset;
@@ -324,9 +334,17 @@ namespace DX12W3DGeometryBuffers
                    unsigned firstIndex, unsigned indexCount)
     {
         lastError.clear();
-        if (!handle || static_cast<unsigned long long>(firstIndex) * sizeof(std::uint16_t) >=
-                           handle->state.shadow.size())
-            return Fail("Invalid W3D index range or null handle");
+        if (!device.ActiveCommandList())
+            return Fail("Index binding requires a native DX12 frame");
+        if (!handle)
+        {
+            device.ActiveCommandList()->IASetIndexBuffer(nullptr);
+            device.SetBoundBaseVertexIndex(0);
+            return true;
+        }
+        if (static_cast<unsigned long long>(firstIndex) * sizeof(std::uint16_t) >=
+            handle->state.shadow.size())
+            return Fail("Invalid W3D index range");
         const unsigned offset = firstIndex * sizeof(std::uint16_t);
         const unsigned available = static_cast<unsigned>(handle->state.shadow.size()) - offset;
         const unsigned countBytes = indexCount
