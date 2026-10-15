@@ -231,6 +231,33 @@ void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_st
     }
 }
 
+RenderSortingMatrix Renderer::Multiply_Sorting_World_View(
+    const RenderSortingMatrix & world, const RenderSortingMatrix & view)
+{
+    static_assert(sizeof(RenderSortingMatrix) == sizeof(D3DXMATRIX), "D3DX sorting matrix size");
+    D3DXMATRIX nativeWorld, nativeView;
+    std::memcpy(&nativeWorld, &world, sizeof(nativeWorld));
+    std::memcpy(&nativeView, &view, sizeof(nativeView));
+    // Retain the exact historical matrix multiplication and order.
+    D3DXMATRIX combined = nativeWorld * nativeView;
+    RenderSortingMatrix result;
+    std::memcpy(&result, &combined, sizeof(result));
+    return result;
+}
+
+Vector3 Renderer::Transform_Sorting_Center(
+    const RenderSortingMatrix & world, const RenderSortingMatrix & view,
+    const Vector3 & center)
+{
+    RenderSortingMatrix combined = Multiply_Sorting_World_View(world, view);
+    D3DXMATRIX native;
+    std::memcpy(&native, &combined, sizeof(native));
+    D3DXVECTOR3 input(center.X, center.Y, center.Z);
+    D3DXVECTOR4 output;
+    D3DXVec3Transform(&output, &input, &native);
+    return Vector3(output[0], output[1], output[2]);
+}
+
 bool Renderer::Is_Triangle_Draw_Enabled()
 {
     return DX8Wrapper::_Is_Triangle_Draw_Enabled();

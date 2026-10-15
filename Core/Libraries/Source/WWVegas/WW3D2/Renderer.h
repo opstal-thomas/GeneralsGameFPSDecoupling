@@ -700,6 +700,14 @@ public:
     static void Restore_Sorting_State(const RenderStateStruct & state);
     static void Release_Sorting_State();
     static void Apply_Sorting_Transforms_And_Lights(RenderStateStruct & state);
+    // Preserve the historical world*view ordering and D3DX CPU sorting
+    // projection within the backend until a portable sorting math path
+    // has parity tests. The W3D sorting caller sees only neutral values.
+    static RenderSortingMatrix Multiply_Sorting_World_View(
+        const RenderSortingMatrix & world, const RenderSortingMatrix & view);
+    static Vector3 Transform_Sorting_Center(
+        const RenderSortingMatrix & world, const RenderSortingMatrix & view,
+        const Vector3 & center);
     static bool Is_Triangle_Draw_Enabled();
     static void Set_Triangle_Draw_Enabled(bool enabled);
     static void Unbind_Sorting_Geometry();

@@ -637,6 +637,16 @@ remain unchanged. Primitives, sorting, effects, terrain particles, and both
 game variants' meshes now pass explicit views. The legacy access-object
 overloads remain as temporary compatibility shims.
 
+### Sorted geometry CPU projection boundary
+
+The sorting pool now passes neutral saved world/view transforms to `Renderer`
+for world-view multiplication and bounding-center projection. The DX8
+backend still executes the exact D3DX matrix multiplication and
+`D3DXVec3Transform` behavior; the sorting depth key, triangle projection
+order, and existing vertex copies are unchanged. This removes direct D3DX
+math calls from the W3D sorting source while leaving the current GPU
+sorting buffers and DX8 reference cache intact.
+
 ### Known remaining Direct3D 8 dependencies
 
 - `WW3D2/dx8wrapper.h` is still accessed directly by mesh, material, texture,
