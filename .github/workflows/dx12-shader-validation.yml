@@ -7,6 +7,9 @@ on:
     paths:
       - 'Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/**'
       - 'scripts/check_dx12_launch_pe.py'
+      - 'scripts/tests/test_dx12_launch_checkpoint.py'
+      - 'scripts/tests/test_dx12_backend_selection.py'
+      - 'scripts/tests/test_dx12_primary_window.py'
       - 'Documentation/DX12OnlyLaunchCheckpoint.md'
       - '.github/workflows/dx12-shader-validation.yml'
   workflow_dispatch:
@@ -15,6 +18,18 @@ permissions:
   contents: read
 
 jobs:
+  dx12-only-launch-contract:
+    name: DX12-only Renderer contract and launch invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exclusive DX12 Renderer definitions and backend selection
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_backend_selection.py'
+      - name: Verify game-HWND ownership and native frame contract
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_primary_window.py'
+      - name: Verify B10 launch, PE import-checker fixtures and DX8 exclusion
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_launch_checkpoint.py'
+
   compile-shaders:
     runs-on: windows-latest
     steps:
