@@ -58,6 +58,10 @@ target_include_directories(W3DDX12RendererFrameSmoke PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../../../Dependencies/Utility"
 )
 target_compile_features(W3DDX12RendererFrameSmoke PRIVATE cxx_std_17)
+# WWLib's C++98 std::move compatibility shim branches on __cplusplus.
+# MSVC reports 199711L by default even with /std:c++17, so expose the
+# actual language version to prevent injecting that shim into the STL.
+target_compile_options(W3DDX12RendererFrameSmoke PRIVATE /Zc:__cplusplus)
 target_compile_definitions(W3DDX12RendererFrameSmoke PRIVATE
     W3D_RENDER_BACKEND_DX12=1 NOMINMAX WIN32_LEAN_AND_MEAN
 )
