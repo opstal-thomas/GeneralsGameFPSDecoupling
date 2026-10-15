@@ -1,6 +1,6 @@
 # DX12-B02: select exactly one implementation of the static Renderer API.
 # The default DX8 path and the opt-in DX12 gameplay mirror remain unchanged.
-# DX12 is a non-playable backend bootstrap until B03/B04 are complete.
+# DX12 includes B04 native frame diagnostics, but game rendering is non-playable until B07/B10.
 set(W3D_RENDER_BACKEND "DX8" CACHE STRING "Authoritative W3D Renderer implementation (DX8 or DX12)")
 set_property(CACHE W3D_RENDER_BACKEND PROPERTY STRINGS DX8 DX12)
 if(NOT W3D_RENDER_BACKEND STREQUAL "DX8" AND
@@ -332,10 +332,10 @@ if(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
 endif()
 
 if(W3D_RENDER_BACKEND STREQUAL "DX12")
-    # B03/B04 will use this already linked DX12 device on the game's HWND.
-    # The B02 bootstrap intentionally fails Init instead of falling back.
+    # B03/B04 use this native DX12 device on the game's HWND.
+    # Until B07/B10, game initialization fails closed without an explicit B04 diagnostic opt-in.
     target_link_libraries(corei_ww3d2 INTERFACE w3d_dx12_presentation)
-    message(STATUS "W3D Renderer: DX12 exclusive backend bootstrap (non-playable; B03/B04 pending)")
+    message(STATUS "W3D Renderer: DX12 native frame diagnostic (B04 complete; gameplay not yet supported)")
 else()
     message(STATUS "W3D Renderer: DX8 legacy backend")
 endif()
