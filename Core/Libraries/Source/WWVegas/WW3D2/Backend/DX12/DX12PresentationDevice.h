@@ -10,6 +10,7 @@
 // from gameplay; Renderer.h remains the backend-neutral integration boundary.
 #pragma once
 
+#include "DX12W3DPassGraph.h"
 #include <memory>
 
 struct ID3D12Device;
@@ -42,6 +43,21 @@ public:
     // Record an in-frame clear on the active game back buffer. Unlike BeginFrame,
     // this can be invoked after other frame state has been established.
     bool ClearActiveFrame(bool color, bool depth, const float rgba[4], float z);
+
+    // B05: resource transitions and pass scheduling on the *same* real
+    // command list owned by this frame; future native draw paths call these.
+    bool RegisterFrameResource(ID3D12Resource * resource,
+                               D3D12_RESOURCE_STATES state);
+    bool TransitionFrameResource(ID3D12Resource * resource,
+                                 D3D12_RESOURCE_STATES desired);
+    bool BarrierFrameUAV(ID3D12Resource * resource);
+    bool BeginRenderPass(DX12W3DPass stage,
+                         const DX12W3DPassBindings & bindings);
+    int CurrentRenderPassOrdinal() const;
+    unsigned FrameBarrierCount() const;
+    bool GetFrameResourceState(ID3D12Resource * resource,
+                               D3D12_RESOURCE_STATES & result) const;
+
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
@@ -63,6 +79,7 @@ public:
     ID3D12Device * NativeDevice() const;
     ID3D12GraphicsCommandList * ActiveCommandList() const;
     ID3D12Resource * CurrentBackBuffer() const;
+    ID3D12Resource * CurrentDepthTarget() const;
 
 private:
     struct Impl;
