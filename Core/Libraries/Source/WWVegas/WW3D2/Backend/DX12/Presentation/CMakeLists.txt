@@ -44,3 +44,24 @@ target_link_libraries(W3DDX12PrimaryWindowSmoke PRIVATE W3DDX12PresentationDevic
 add_test(NAME W3D_DX12_WARP_PrimaryWindow_Lifecycle
     COMMAND W3DDX12PrimaryWindowSmoke)
 set_tests_properties(W3D_DX12_WARP_PrimaryWindow_Lifecycle PROPERTIES TIMEOUT 90)
+
+# B04: compile the actual selected Renderer translation unit into a standalone
+# WARP smoke test. This exercises Renderer::Init/Begin_Scene/End_Scene/Clear
+# and mode/transform queries against the game's HWND, without any DX8 code.
+add_executable(W3DDX12RendererFrameSmoke
+    DX12RendererFrameSmoke.cpp
+    ../DX12Backend.cpp
+)
+target_include_directories(W3DDX12RendererFrameSmoke PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../.."
+)
+target_compile_features(W3DDX12RendererFrameSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12RendererFrameSmoke PRIVATE
+    W3D_RENDER_BACKEND_DX12=1 NOMINMAX WIN32_LEAN_AND_MEAN
+)
+target_link_libraries(W3DDX12RendererFrameSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_Renderer_Frame_State
+    COMMAND W3DDX12RendererFrameSmoke)
+set_tests_properties(W3D_DX12_WARP_Renderer_Frame_State PROPERTIES TIMEOUT 90)
