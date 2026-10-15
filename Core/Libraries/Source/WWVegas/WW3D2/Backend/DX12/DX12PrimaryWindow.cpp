@@ -12,11 +12,15 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <d3d12.h>
+#include <algorithm>
+#include <cstring>
 
 DX12PrimaryWindow::Status DX12PrimaryWindow::Fail(const char * message)
 {
     error_ = message ? message : "DX12 primary-window presentation error";
     status_ = Status::Failed;
+    sceneOpen_ = false;
     device_.Shutdown();
     return status_;
 }
@@ -47,6 +51,8 @@ bool DX12PrimaryWindow::Attach(void * applicationWindow, bool useWarp)
 DX12PrimaryWindow::Status DX12PrimaryWindow::Synchronize()
 {
     HWND hwnd = static_cast<HWND>(window_);
+    if (status_ == Status::Failed)
+        return status_; // require explicit Shutdown/Attach after terminal failure
     if (!hwnd)
         return Fail("No primary game window attached");
     if (!IsWindow(hwnd))
@@ -107,6 +113,123 @@ bool DX12PrimaryWindow::PresentDiagnostic(const float clearColor[4])
     return true;
 }
 
+bool DX12PrimaryWindow::Clear(bool color, bool depth, const float rgba[4], float z)
+{
+    if ((!rgba && color) || (depth && !(z >= 0.f && z <= 1.f)))
+    {
+        error_ = "Invalid frame clear parameters";
+        return false;
+    }
+    if (!color && !depth)
+        return true;
+    if (sceneOpen_)
+    {
+        if (!device_.ClearActiveFrame(color, depth, rgba, z))
+        {
+            const std::string error = device_.LastError();
+            Fail(("Native DX12 clear: " + error).c_str());
+            return false;
+        }
+        return true;
+    }
+    if (!window_ || status_ == Status::Failed)
+    {
+        error_ = "No active DX12 primary window for deferred clear";
+        return false;
+    }
+    if (color)
+    {
+        std::memcpy(rgba_, rgba, sizeof(rgba_));
+        clearColor_ = true;
+    }
+    if (depth)
+    {
+        clearZ_ = z;
+        clearDepth_ = true;
+    }
+    return true;
+}
+
+bool DX12PrimaryWindow::ApplyViewport()
+{
+    if (!sceneOpen_)
+        return true;
+    const unsigned targetWidth = device_.Width();
+    const unsigned targetHeight = device_.Height();
+    const unsigned x = (std::min)(viewportX_, targetWidth);
+    const unsigned y = (std::min)(viewportY_, targetHeight);
+    const unsigned width = viewportWidth_ ?
+        (std::min)(viewportWidth_, targetWidth - x) : targetWidth - x;
+    const unsigned height = viewportHeight_ ?
+        (std::min)(viewportHeight_, targetHeight - y) : targetHeight - y;
+    D3D12_VIEWPORT viewport = {};
+    viewport.TopLeftX = static_cast<float>(x);
+    viewport.TopLeftY = static_cast<float>(y);
+    viewport.Width = static_cast<float>(width);
+    viewport.Height = static_cast<float>(height);
+    viewport.MinDepth = minDepth_;
+    viewport.MaxDepth = maxDepth_;
+    D3D12_RECT scissor = {static_cast<LONG>(x), static_cast<LONG>(y),
+                          static_cast<LONG>(x + width), static_cast<LONG>(y + height)};
+    ID3D12GraphicsCommandList * list = device_.ActiveCommandList();
+    if (!list)
+    {
+        Fail("No active DX12 command list for viewport");
+        return false;
+    }
+    list->RSSetViewports(1, &viewport);
+    list->RSSetScissorRects(1, &scissor);
+    return true;
+}
+
+bool DX12PrimaryWindow::SetViewport(unsigned x, unsigned y, unsigned width,
+                                     unsigned height, float minDepth, float maxDepth)
+{
+    if (!(minDepth >= 0.f && maxDepth <= 1.f && minDepth <= maxDepth))
+    {
+        error_ = "Invalid viewport depth range";
+        return false;
+    }
+    viewportX_ = x;
+    viewportY_ = y;
+    viewportWidth_ = width;
+    viewportHeight_ = height;
+    minDepth_ = minDepth;
+    maxDepth_ = maxDepth;
+    return ApplyViewport();
+}
+
+bool DX12PrimaryWindow::BeginScene()
+{
+    if (sceneOpen_ || status_ == Status::Failed)
+        return false;
+    if (Synchronize() != Status::Ready)
+        return false; // minimized/zero-sized HWND: no present, no GPU failure
+    if (!device_.BeginFrame(rgba_, clearColor_, clearDepth_, clearZ_))
+    {
+        const std::string error = device_.LastError();
+        Fail(("Begin native DX12 game frame: " + error).c_str());
+        return false;
+    }
+    sceneOpen_ = true;
+    clearColor_ = clearDepth_ = false;
+    return ApplyViewport();
+}
+
+bool DX12PrimaryWindow::EndScene(bool flipFrame, unsigned syncInterval)
+{
+    if (!sceneOpen_)
+        return false;
+    sceneOpen_ = false;
+    if (!device_.EndFrame(syncInterval, flipFrame))
+    {
+        const std::string error = device_.LastError();
+        Fail(("End native DX12 game frame: " + error).c_str());
+        return false;
+    }
+    return true;
+}
+
 bool DX12PrimaryWindow::IsBorderless() const
 {
     HWND hwnd = static_cast<HWND>(window_);
@@ -119,6 +242,12 @@ bool DX12PrimaryWindow::IsBorderless() const
 void DX12PrimaryWindow::Shutdown()
 {
     device_.Shutdown();
+    sceneOpen_ = clearColor_ = clearDepth_ = false;
+    rgba_[0] = rgba_[1] = rgba_[2] = 0.f;
+    rgba_[3] = clearZ_ = 1.f;
+    viewportX_ = viewportY_ = viewportWidth_ = viewportHeight_ = 0;
+    minDepth_ = 0.f;
+    maxDepth_ = 1.f;
     window_ = nullptr;
     warp_ = false;
     status_ = Status::Unavailable;
