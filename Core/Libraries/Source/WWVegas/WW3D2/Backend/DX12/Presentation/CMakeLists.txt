@@ -156,3 +156,16 @@ target_link_libraries(W3DDX12DescriptorSmoke PRIVATE
 add_test(NAME W3D_DX12_WARP_Texture_Descriptor_Binding
     COMMAND W3DDX12DescriptorSmoke)
 set_tests_properties(W3D_DX12_WARP_Texture_Descriptor_Binding PROPERTIES TIMEOUT 90)
+
+# R07: exercise the real W3D offscreen target manager, D24S8 stencil,
+# MSAA resolve, B05 barriers, WARP GPU pixel readback, swapchain resizing
+# and device-reset rehydration, on both Win32 and x64.
+add_executable(W3DDX12RenderTargetSmoke DX12RenderTargetSmoke.cpp)
+target_compile_features(W3DDX12RenderTargetSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12RenderTargetSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12RenderTargetSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_Offscreen_Render_Targets
+    COMMAND W3DDX12RenderTargetSmoke)
+set_tests_properties(W3D_DX12_WARP_Offscreen_Render_Targets PROPERTIES TIMEOUT 90)
