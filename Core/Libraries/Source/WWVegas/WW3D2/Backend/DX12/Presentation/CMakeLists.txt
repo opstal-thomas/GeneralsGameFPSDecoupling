@@ -128,3 +128,16 @@ target_link_libraries(W3DDX12GeometryBufferSmoke PRIVATE
 add_test(NAME W3D_DX12_WARP_Geometry_Buffer_Residency
     COMMAND W3DDX12GeometryBufferSmoke)
 set_tests_properties(W3D_DX12_WARP_Geometry_Buffer_Residency PROPERTIES TIMEOUT 90)
+
+# R04: native W3D texture subsystem. The test copies BGRA8 and compressed
+# BC1/BC3 mipmaps through a real WARP GPU, maps cube/volume subresources,
+# expands indexed palettes, and verifies reset/lifetime behavior on x86/x64.
+add_executable(W3DDX12TextureSmoke DX12TextureSmoke.cpp)
+target_compile_features(W3DDX12TextureSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12TextureSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12TextureSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_W3D_Texture_Upload
+    COMMAND W3DDX12TextureSmoke)
+set_tests_properties(W3D_DX12_WARP_W3D_Texture_Upload PROPERTIES TIMEOUT 90)
