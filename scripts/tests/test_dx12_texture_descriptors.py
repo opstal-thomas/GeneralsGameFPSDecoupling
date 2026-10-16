@@ -19,6 +19,8 @@ class DX12TextureDescriptorTests(unittest.TestCase):
         self.assertIn("textureStages.PrepareBound(primaryWindow.Presentation())", backend)
         self.assertIn("textureStages.Clear()", backend)
         self.assertIn("DX12W3DRendererTextureStages()", backend)
+        immediate = backend.split("void Renderer::Bind_Immediate_Texture(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("Bind_Texture(stage, texture)", immediate)
         self.assertIn("BindForDraw(DX12PresentationDevice & frame", header)
         self.assertIn("static constexpr unsigned StageCount = 8", header)
         self.assertIn("static void Bind_Texture(unsigned stage, RenderTextureHandle texture)", renderer)
