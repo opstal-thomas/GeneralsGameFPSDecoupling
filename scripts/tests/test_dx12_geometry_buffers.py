@@ -88,7 +88,8 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn(token, header)
         self.assertIn("GetCompletedValue()", presentation)
         self.assertIn("const D3D12_RANGE written = {nativeOffset,", geometry)
-        self.assertNotIn("newNative->Map(", geometry)
+        # The page must be mapped to copy the immutable generation into its slice.
+        self.assertIn("newNative->Map(0, &noRead, &mappedBytes)", geometry)
 
     def test_old_w3d_buffer_classes_use_selected_renderer(self):
         for filename in ("dx8vertexbuffer.cpp", "dx8indexbuffer.cpp"):
