@@ -70,7 +70,13 @@ void LightEnvironmentClass::InputLightStruct::Init
 	const Vector3 & object_center
 )
 {
-	m_point = false;
+    m_point = false;
+    m_type = light.Get_Type() == LightClass::POINT ? 1u :
+        light.Get_Type() == LightClass::SPOT ? 2u : 0u;
+    light.Get_Specular(&m_specular);
+    m_spotDirection.Set(0.f, 0.f, -1.f);
+    m_spotCos = -1.f;
+    m_attenuationEnabled = false;
 	switch(light.Get_Type())
 	{
 	case LightClass::POINT:
@@ -131,7 +137,10 @@ void LightEnvironmentClass::InputLightStruct::Init_From_Point_Or_Spot_Light
 
 		Vector3 spot_dir;
 		light.Get_Spot_Direction(spot_dir);
-		Matrix3D::Rotate_Vector(light.Get_Transform(),spot_dir,&spot_dir);
+        Matrix3D::Rotate_Vector(light.Get_Transform(),spot_dir,&spot_dir);
+        m_spotDirection = spot_dir;
+        m_spotDirection.Normalize();
+        m_spotCos = light.Get_Spot_Angle_Cos();
 
 		float spot_angle_cos = light.Get_Spot_Angle_Cos();
 		atten *= (Vector3::Dot_Product(-spot_dir,Direction) - spot_angle_cos) / (1.0f - spot_angle_cos);
@@ -146,9 +155,11 @@ void LightEnvironmentClass::InputLightStruct::Init_From_Point_Or_Spot_Light
 	light.Get_Ambient(&Ambient);
 	light.Get_Diffuse(&Diffuse);
 	Ambient *= light.Get_Intensity();  //(gth) CNC3 obey the intensity parameter
-	Diffuse *= light.Get_Intensity();
+    Diffuse *= light.Get_Intensity();
+    m_specular *= light.Get_Intensity();
 
-	m_point = (light.Get_Type() == LightClass::POINT);
+    m_point = (light.Get_Type() == LightClass::POINT);
+    m_attenuationEnabled = light.Get_Flag(LightClass::FAR_ATTENUATION);
 	m_center = light.Get_Position();
 	m_innerRadius = atten_start;
 	m_outerRadius = atten_end;
@@ -417,8 +428,11 @@ void LightEnvironmentClass::Calculate_Fill_Light()
 	FillLight.Ambient.Set(0.0f, 0.0f, 0.0f);
 
 	// now we set the fill light direction to be opposite the average light
-	FillLight.Direction = average_light.Direction * (-1.0f);
-	FillLight.DiffuseRejected = false;
+    FillLight.Direction = average_light.Direction * (-1.0f);
+    FillLight.DiffuseRejected = false;
+    FillLight.m_type = 0u;
+    FillLight.m_point = false;
+    FillLight.m_specular.Set(0.f, 0.f, 0.f);
 
 	// Add the fill light into the InputLights list
 	Add_Fill_Light();

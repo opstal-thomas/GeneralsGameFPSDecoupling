@@ -192,14 +192,37 @@ void Renderer::Set_Light_Environment(LightEnvironmentClass * light_env)
             count < 0 ? 0 : (count > 4 ? 4 : count));
         for (unsigned i = 0; i < lighting.lightCount; ++i)
         {
+            RenderDirectionalLight & output = lighting.lights[i];
+            output.type = light_env->Get_Light_Type(i);
             const Vector3 & direction = light_env->Get_Light_Direction(i);
-            const Vector3 & diffuse = light_env->Get_Light_Diffuse(i);
-            lighting.lights[i].direction[0] = direction.X;
-            lighting.lights[i].direction[1] = direction.Y;
-            lighting.lights[i].direction[2] = direction.Z;
-            lighting.lights[i].diffuse[0] = diffuse.X;
-            lighting.lights[i].diffuse[1] = diffuse.Y;
-            lighting.lights[i].diffuse[2] = diffuse.Z;
+            const Vector3 & diffuse = output.type == 0u ?
+                light_env->Get_Light_Diffuse(i) :
+                light_env->Get_Light_Raw_Diffuse(i);
+            const Vector3 & specular = light_env->Get_Light_Specular(i);
+            output.direction[0] = direction.X;
+            output.direction[1] = direction.Y;
+            output.direction[2] = direction.Z;
+            output.diffuse[0] = diffuse.X;
+            output.diffuse[1] = diffuse.Y;
+            output.diffuse[2] = diffuse.Z;
+            output.specular[0] = specular.X;
+            output.specular[1] = specular.Y;
+            output.specular[2] = specular.Z;
+            if (output.type != 0u)
+            {
+                const Vector3 & position = light_env->Get_Light_Position(i);
+                const Vector3 & spot = light_env->Get_Light_Spot_Direction(i);
+                output.position[0] = position.X;
+                output.position[1] = position.Y;
+                output.position[2] = position.Z;
+                output.spotDirection[0] = spot.X;
+                output.spotDirection[1] = spot.Y;
+                output.spotDirection[2] = spot.Z;
+                output.attenuation[0] = light_env->Get_Light_Range_Start(i);
+                output.attenuation[1] = light_env->Get_Light_Range_End(i);
+                output.attenuation[2] = light_env->Get_Light_Attenuation_Enabled(i) ? 1.f : 0.f;
+                output.attenuation[3] = light_env->Get_Light_Spot_Cos(i);
+            }
         }
     }
     DX12W3DApplyLightingEnvironment(lighting);

@@ -95,6 +95,16 @@ public:
 	const Vector3 &	Get_Light_Direction(int i)	const				{ return InputLights[i].Direction; }
 	const Vector3 &	Get_Light_Diffuse(int i) const				{ return InputLights[i].Diffuse; }
 
+    unsigned Get_Light_Type(int i) const { return InputLights[i].m_type; }
+    const Vector3 & Get_Light_Position(int i) const { return InputLights[i].m_center; }
+    const Vector3 & Get_Light_Raw_Diffuse(int i) const { return InputLights[i].m_diffuse; }
+    const Vector3 & Get_Light_Specular(int i) const { return InputLights[i].m_specular; }
+    const Vector3 & Get_Light_Spot_Direction(int i) const { return InputLights[i].m_spotDirection; }
+    float Get_Light_Spot_Cos(int i) const { return InputLights[i].m_spotCos; }
+    float Get_Light_Range_Start(int i) const { return InputLights[i].m_innerRadius; }
+    float Get_Light_Range_End(int i) const { return InputLights[i].m_outerRadius; }
+    bool Get_Light_Attenuation_Enabled(int i) const { return InputLights[i].m_attenuationEnabled; }
+
 	bool isPointLight(int i) const {return InputLights[i].m_point;}
 	float getPointIrad(int i) const {return InputLights[i].m_innerRadius;}
 	float getPointOrad(int i) const {return InputLights[i].m_outerRadius;}
@@ -126,7 +136,12 @@ protected:
 		Vector3			Diffuse;
 		bool				DiffuseRejected;
 
-		bool				m_point;
+        bool                m_point;
+        unsigned            m_type;
+        Vector3             m_specular;
+        Vector3             m_spotDirection;
+        float               m_spotCos;
+        bool                m_attenuationEnabled;
 		Vector3			m_center;
 		float				m_innerRadius;
 		float				m_outerRadius;

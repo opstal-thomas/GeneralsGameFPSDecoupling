@@ -518,16 +518,22 @@ struct RenderVertexMaterialDescription
     float power;
 };
 
-// M01/B07 native vertex lighting keeps the game's light approximation
-// independent of D3D8's D3DLIGHT8. LightEnvironmentClass already combines
-// point/spot attenuation into at most four directional contributors.
+// Directional compatibility alongside the original point/spot parameters.
+// A full value copy is retained by deferred transparent sorting nodes.
 struct RenderDirectionalLight
 {
     RenderDirectionalLight() : direction{0.f, 0.f, 1.f, 0.f},
-        diffuse{0.f, 0.f, 0.f, 0.f} {}
+        diffuse{0.f, 0.f, 0.f, 0.f}, specular{0.f, 0.f, 0.f, 0.f},
+        position{0.f, 0.f, 0.f, 1.f}, spotDirection{0.f, 0.f, -1.f, 0.f},
+        attenuation{0.f, 1.f, 0.f, -1.f}, type(0) {}
 
-    float direction[4]; // world-space vector toward the light
-    float diffuse[4];   // linear color after per-object attenuation
+    float direction[4];      // world-space direction toward light
+    float diffuse[4];        // raw color for local lights, preattenuated otherwise
+    float specular[4];       // original light specular contribution
+    float position[4];       // world-space point/spot origin
+    float spotDirection[4];  // world-space cone axis away from light
+    float attenuation[4];    // near, far, enabled, cone cosine
+    unsigned type;           // 0 directional, 1 point, 2 spot
 };
 
 struct RenderLightingEnvironmentDescription
