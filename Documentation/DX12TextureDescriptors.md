@@ -86,8 +86,15 @@ also exercises this shared native binding path.
 The DX12 shader CI workflow runs the complete smoke suite on **Win32 and
 x64**. `scripts/tests/test_dx12_texture_descriptors.py` checks shared
 preview/Renderer integration, stable GPU generations, null descriptors,
-fence retention and overflow coverage. All standard DX8 game builds
-continue using the unchanged DX8 backend.
+fence retention and overflow coverage. **Verification (2026-10-16):** [all nine WARP tests passed on
+Win32 and x64](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38859754051),
+including texture descriptor paging, real GPU sampled-pixel comparisons,
+indexed-mesh preview, resource releases and device recovery.
+[All seven Generals/Zero Hour Windows jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38859891696)
+also passed: DX8 default builds, DX12 preview, exclusive DX12
+bootstrap and the full DX8 dependency audit.
+
+All standard DX8 game builds continue using the unchanged DX8 backend.
 
 ## Deliberate exclusions
 
