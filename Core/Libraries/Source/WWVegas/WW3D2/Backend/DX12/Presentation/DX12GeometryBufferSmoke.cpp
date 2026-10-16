@@ -230,8 +230,8 @@ int wmain()
     std::memset(changed, 0x5A, 8);
     if (!Check(UnmapVertex(dynamicVertex) &&
                BindVertex(device, dynamicVertex, 1, 12), "Rebind new dynamic generation") ||
-        !Check(firstGpu != NativeVertexResource(dynamicVertex),
-               "Dynamic write never overwrites in-flight resource") ||
+        !Check(firstGpu == NativeVertexResource(dynamicVertex),
+               "Dynamic writes share an upload page with distinct offsets") ||
         !Check(device.InFlightResourceCount() >= 6, "Old generations and staging pinned"))
         return 1;
 
