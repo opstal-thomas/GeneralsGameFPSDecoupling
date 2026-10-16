@@ -13,6 +13,7 @@
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
+#include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
 
@@ -810,12 +811,10 @@ RenderTexture2DHandle Renderer::Create_Texture_2D(const RenderTexture2DDescripti
 
 RenderTexture2DHandle Renderer::Create_Texture_From_Surface( RenderSurfaceHandle surface, unsigned mipLevels)
 {
-    // Image surfaces remain an R04 follow-up to the W3D SurfaceClass DX8
-    // decoupling; never reinterpret an IDirect3DSurface8 as a DX12 resource.
-    (void)surface;
-    (void)mipLevels;
-    ReportPending("Renderer::Create_Texture_From_Surface: W3D surface migration");
-    return nullptr;
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DSurfaces::ToTexture(
+        primaryWindow.Presentation().NativeDevice(), surface, mipLevels);
 }
 
 unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
@@ -1006,8 +1005,7 @@ RenderTextureVolumeHandle Renderer::Create_Texture_Volume(const RenderTextureVol
 
 RenderSurfaceHandle Renderer::Create_Surface(const RenderSurfaceDescription & description)
 {
-    ReportPending("Renderer::Create_Surface");
-    return {};
+    return DX12W3DSurfaces::Create(description);
 }
 
 RenderSurfaceHandle Renderer::Load_Surface(const char * filename)
@@ -1018,39 +1016,42 @@ RenderSurfaceHandle Renderer::Load_Surface(const char * filename)
 
 void Renderer::Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description)
 {
-    (void)surface; description = RenderSurfaceDescription();
-    ReportPending("Renderer::Describe_Surface");
+    if (!DX12W3DSurfaces::Describe(surface, description))
+        OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Retain_Surface(RenderSurfaceHandle surface)
 {
-    ReportPending("Renderer::Retain_Surface");
+    DX12W3DSurfaces::Retain(surface);
 }
 
 void Renderer::Release_Surface(RenderSurfaceHandle surface)
 {
-    ReportPending("Renderer::Release_Surface");
+    DX12W3DSurfaces::Release(surface);
 }
 
 void Renderer::Lock_Surface(RenderSurfaceHandle surface, RenderSurfaceMap & map, const RenderSurfaceRect * region, bool readOnly)
 {
-    map = RenderSurfaceMap();
-    ReportPending("Renderer::Lock_Surface");
+    if (!DX12W3DSurfaces::Lock(surface, map, region, readOnly))
+        OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Unlock_Surface(RenderSurfaceHandle surface)
 {
-    ReportPending("Renderer::Unlock_Surface");
+    if (!DX12W3DSurfaces::Unlock(surface))
+        OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect * sourceRect, RenderSurfaceHandle destination, const RenderSurfacePoint * destinationPoint)
 {
-    ReportPending("Renderer::Copy_Surface");
+    if (!DX12W3DSurfaces::Copy(source, sourceRect, destination, destinationPoint))
+        OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect & sourceRect, RenderSurfaceHandle destination, const RenderSurfaceRect & destinationRect, RenderSurfaceBlitFilter filter)
 {
-    ReportPending("Renderer::Blit_Surface");
+    if (!DX12W3DSurfaces::Blit(source, sourceRect, destination, destinationRect, filter))
+        OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler)
