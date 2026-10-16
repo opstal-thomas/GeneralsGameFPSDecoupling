@@ -314,6 +314,8 @@ if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW OR
         Backend/DX12/DX12W3DTextureStages.cpp
         Backend/DX12/DX12W3DSurfaces.h
         Backend/DX12/DX12W3DSurfaces.cpp
+        Backend/DX12/DX12W3DRenderTargets.h
+        Backend/DX12/DX12W3DRenderTargets.cpp
         Backend/DX12/DX12PrimaryWindow.h
         Backend/DX12/DX12PrimaryWindow.cpp
         Backend/DX12/DX12IndexedMeshPass.h
