@@ -18,6 +18,8 @@ DX12 = WW3D / "Backend/DX12/DX12Backend.cpp"
 DX12_DYNAMIC_ADAPTERS = [
     WW3D / "dx8vertexbuffer.cpp",
     WW3D / "dx8indexbuffer.cpp",
+    WW3D / "dx8renderer.cpp",
+    WW3D / "texture.cpp",
 ]
 
 # Definitions only (not calls): all Renderer static methods must have exactly
@@ -46,11 +48,13 @@ class DX12BackendSelectionTests(unittest.TestCase):
             "void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)",
             "void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)",
             "void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer, unsigned short baseVertexIndex)",
+            "void Renderer::Set_Shader(const ShaderClass & shader)",
+            "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)",
         }
         self.assertGreater(len(dx8), 150)
         self.assertEqual(len(dx8), len(set(dx8)), "DX8 defines duplicate signatures")
         self.assertEqual(set(adapters), expected_adapters,
-                         "R02 may split only the four typed W3D buffer overloads")
+                         "Only the six typed W3D buffer/material/texture adapters may live outside DX12Backend.cpp")
         self.assertEqual(len(adapters), len(set(adapters)))
         self.assertEqual(set(dx8), set(dx12),
                          "Missing, duplicate or extra DX12 Renderer definitions")

@@ -507,24 +507,15 @@ void Renderer::Set_Legacy_Pixel_Shader_Vector(unsigned registerIndex, float x, f
     ReportPending("Renderer::Set_Legacy_Pixel_Shader_Vector");
 }
 
-void Renderer::Set_Shader(const ShaderClass & shader)
-{
-    ReportPending("Renderer::Set_Shader");
-}
-
 void Renderer::Set_Material(const VertexMaterialClass * material)
 {
     ReportPending("Renderer::Set_Material");
 }
 
-void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
-{
-    ReportPending("Renderer::Set_Texture");
-}
-
 void Renderer::Apply_Pending_State_Changes()
 {
-    ReportPending("Renderer::Apply_Pending_State_Changes");
+    // Native PSO and texture descriptors are resolved at each draw submission;
+    // there is no DX8 deferred state cache to flush here.
 }
 
 void Renderer::Set_Transform(RenderTransform transform, const Matrix3D & matrix)

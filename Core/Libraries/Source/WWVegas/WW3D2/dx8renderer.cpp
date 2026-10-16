@@ -65,6 +65,40 @@
 ** Global Instance of the DX8MeshRender
 */
 DX8MeshRendererClass TheDX8MeshRenderer;
+#if defined(W3D_RENDER_BACKEND_DX12)
+// ShaderClass is the original W3D bitfield, not a D3D8 shader object.
+// Translate only the portable PSO state at the renderer contract boundary.
+void Renderer::Set_Shader(const ShaderClass & shader)
+{
+    RenderBlendState state;
+    switch (shader.Get_Src_Blend_Func())
+    {
+    case ShaderClass::SRCBLEND_ZERO: state.source = RENDER_BLEND_ZERO; break;
+    case ShaderClass::SRCBLEND_SRC_ALPHA: state.source = RENDER_BLEND_SRC_ALPHA; break;
+    case ShaderClass::SRCBLEND_ONE_MINUS_SRC_ALPHA: state.source = RENDER_BLEND_INV_SRC_ALPHA; break;
+    default: state.source = RENDER_BLEND_ONE; break;
+    }
+    switch (shader.Get_Dst_Blend_Func())
+    {
+    case ShaderClass::DSTBLEND_ONE: state.destination = RENDER_BLEND_ONE; break;
+    case ShaderClass::DSTBLEND_SRC_COLOR: state.destination = RENDER_BLEND_SRC_COLOR; break;
+    case ShaderClass::DSTBLEND_ONE_MINUS_SRC_COLOR: state.destination = RENDER_BLEND_INV_SRC_COLOR; break;
+    case ShaderClass::DSTBLEND_SRC_ALPHA: state.destination = RENDER_BLEND_SRC_ALPHA; break;
+    case ShaderClass::DSTBLEND_ONE_MINUS_SRC_ALPHA: state.destination = RENDER_BLEND_INV_SRC_ALPHA; break;
+    default: state.destination = RENDER_BLEND_ZERO; break;
+    }
+    state.blendEnabled = state.source != RENDER_BLEND_ONE ||
+                         state.destination != RENDER_BLEND_ZERO;
+    state.alphaTestEnabled = shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE;
+    state.colorWriteEnabled = shader.Get_Color_Mask() == ShaderClass::COLOR_WRITE_ENABLE;
+    Apply_Blend_State(state);
+    Set_Depth_Compare(static_cast<RenderCompareFunc>(shader.Get_Depth_Compare()));
+    Set_Depth_Write(shader.Get_Depth_Mask() == ShaderClass::DEPTH_WRITE_ENABLE);
+    Set_Cull_Mode(shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ?
+                  RENDER_CULL_CCW : RENDER_CULL_NONE);
+}
+#endif
+
 bool DX8TextureCategoryClass::m_gForceMultiply = false; // Forces opaque materials to use the multiply blend - pseudo transparent effect.  jba.
 // ----------------------------------------------------------------------------
 

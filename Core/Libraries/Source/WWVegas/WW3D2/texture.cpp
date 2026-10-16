@@ -260,6 +260,16 @@ void TextureBaseClass::Apply_New_Surface(IDirect3DBaseTexture8 * texture,
 //! Returns a pointer to the d3d texture
 /*!
 */
+#if defined(W3D_RENDER_BACKEND_DX12)
+// Material and terrain/particle producers still speak TextureBaseClass.
+// Convert their borrowed W3D handles at the complete typed class boundary;
+// DX12Backend.cpp itself must not import the legacy texture object.
+void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
+{
+    Bind_Texture(stage, texture ? texture->Peek_Render_Texture() : nullptr);
+}
+#endif
+
 RenderTextureHandle TextureBaseClass::Peek_Render_Texture() const
 {
 	LastAccessed=WW3D::Get_Sync_Time();

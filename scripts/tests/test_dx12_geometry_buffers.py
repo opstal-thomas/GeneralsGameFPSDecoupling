@@ -303,6 +303,23 @@ class R01GeometryBuffers(unittest.TestCase):
         for text in (cmake, game):
             self.assertIn("DX12W3DNativeDraw.cpp", text)
 
+    def test_m01_w3d_shader_and_texture_adapters_are_native(self):
+        shader = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
+        texture = (WW3D / "texture.cpp").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        for content, token in ((shader, "void Renderer::Set_Shader(const ShaderClass & shader)"),
+                               (texture, "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)")):
+            self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", content)
+            self.assertIn(token, content)
+        for token in ("shader.Get_Src_Blend_Func()", "shader.Get_Dst_Blend_Func()",
+                      "Apply_Blend_State(state)", "Set_Depth_Compare(", "Set_Depth_Write("):
+            self.assertIn(token, shader)
+        self.assertIn("texture->Peek_Render_Texture()", texture)
+        self.assertIn("Bind_Texture(stage,", texture)
+        for token in ("Renderer::Set_Shader(", "Renderer::Set_Texture("):
+            self.assertNotIn(token, backend)
+        self.assertNotIn('ReportPending("Renderer::Apply_Pending_State_Changes")', backend)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")
