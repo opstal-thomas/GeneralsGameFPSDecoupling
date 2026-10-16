@@ -12,6 +12,7 @@ add_library(W3DDX12PresentationDevice STATIC
     ../DX12W3DPassGraph.cpp
     ../DX12W3DGeometryBuffers.cpp
     ../DX12W3DTextures.cpp
+    ../DX12W3DSurfaces.cpp
     ../DX12PrimaryWindow.cpp
     ../DX12IndexedMeshPass.cpp
 )
