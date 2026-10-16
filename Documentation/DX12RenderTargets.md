@@ -29,9 +29,12 @@ and R05 stable texture identity. An acquired surface holds a reference to
 its texture and caches a native RTV/DSV descriptor heap **with an owned
 reference to the resource generation**. GPU target generations survive
 D3D12 device reinitialization through their texture handle; the next
-attachment acquisition/bind recreates the view if necessary. Primary HWND
-surfaces are scoped to one `RecordingSerial` to reject stale handles
-after resize or frame change.
+attachment acquisition/bind recreates the view if necessary. Retained **MSAA**
+surfaces additionally recreate their multisampled native color allocation
+and RTV descriptor on a new device, rechecking MSAA quality support before
+recording commands. The separate one-sample resolve texture is rehydrated
+through R04 as usual. Primary HWND surfaces are scoped to one
+`RecordingSerial` to reject stale handles after resize or frame change.
 
 Both descriptor heaps and native D3D12 resources used by a recorded
 command list are retained on the **same GPU fence** through
@@ -95,8 +98,9 @@ existing backbuffer `PRESENT` transition.
 readback** on both Win32 and x64. It covers single-sample RTT clears,
 D24S8 depth/stencil, invalid dimension/sample/mip rejection, MSAA resolve
 and exact GPU colors, depth-only shadow-map bindings, premature W3D handle
-release, per-fence descriptor/resource retirement, primary HWND resize
-and device-reset texture/view recovery.
+release, per-fence descriptor/resource retirement, primary HWND resize,
+device-reset texture/view recovery, and **retained MSAA target recreation on
+the replacement device with GPU resolve/readback**.
 
 `W3DDX12RendererFrameSmoke` also calls the **public neutral `Renderer`**
 on the actual borrowed game-style HWND: offscreen color/depth acquisition,
