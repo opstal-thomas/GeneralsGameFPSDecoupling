@@ -15,11 +15,20 @@ DEFAULT heaps, using the original R01 CopyBufferRegion staging path.
 
 ## Verification status
 
+**CI repair (2026-10-16):** The initial R02 source-contract check incorrectly
+prohibited `newNative->Map`, despite that being the correct way to obtain a
+CPU pointer to a pooled UPLOAD page. The regression assertion was corrected.
+The Win32/x64 WARP geometry smoke now copies the first vertex snapshot, the
+NO_OVERWRITE vertex snapshot, and the shared-page index range into independent
+GPU readback buffers, checks all three byte sequences after the frame fence,
+and checks page reuse after an idle fence and resize. This is committed test
+coverage, not a claim of a completed CI run.
+
 The R01 Python source contract now checks pooled page allocation, device
 identity, fence gating and view offsets. The WARP geometry smoke's R01
-whole-resource identity assertion was updated for R02 page sharing; the
-immutability guarantee is now the *nonoverlapping GPU address*, not a
-different ID3D12Resource for each buffer update.
+whole-resource identity assertion was updated for R02 page sharing; it now
+reads back both generations so the immutability guarantee is demonstrated
+through *nonoverlapping GPU addresses* instead of resource identity.
 
 **Windows compilation and WARP execution have not been run in this session.**
 The R02 package remains provisional pending the existing Windows game build,
