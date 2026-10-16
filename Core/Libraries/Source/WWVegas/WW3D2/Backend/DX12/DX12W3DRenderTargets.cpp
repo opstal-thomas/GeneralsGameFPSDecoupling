@@ -566,6 +566,10 @@ RenderTextureHandle DX12W3DRenderTargets::TextureForSurface(RenderSurfaceHandle 
     auto * s = impl_->Lookup(h);
     return s ? s->texture : nullptr;
 }
+RenderTextureHandle DX12W3DRenderTargets::BoundColorTexture() const
+{
+    return impl_->activeColor ? impl_->activeColor->texture : nullptr;
+}
 ID3D12Resource * DX12W3DRenderTargets::BoundColorResource(DX12PresentationDevice & frame) const
 {
     return impl_->activeColor ? impl_->Resource(impl_->activeColor, frame) :
