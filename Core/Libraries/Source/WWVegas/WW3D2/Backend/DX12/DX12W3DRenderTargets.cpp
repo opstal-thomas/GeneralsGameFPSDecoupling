@@ -51,6 +51,9 @@ struct DX12W3DRenderTargets::Impl
         // at the same CPU address and incorrectly hit the cached RTV/DSV.
         ComPtr<ID3D12Resource> viewResource;
         ComPtr<ID3D12Resource> msaa;
+        // The multisampled RTV is NOT the resolved R04 texture. Retained
+        // W3D surfaces must rebuild this extra allocation on device reset.
+        ComPtr<ID3D12Device> msaaDevice;
         D3D12_RESOURCE_STATES msaaState = D3D12_RESOURCE_STATE_COMMON;
 
         ~Surface() { DX12W3DTextures::Release(texture); }
@@ -137,6 +140,46 @@ struct DX12W3DRenderTargets::Impl
     bool PrepareView(Surface & s, DX12PresentationDevice & frame)
     {
         if (s.IsPrimary()) return true; // RTV/DSV belongs to the current swapchain frame
+        if (s.kind == Kind::MSAAColor &&
+            (!s.msaa || s.msaaDevice.Get() != frame.NativeDevice()))
+        {
+            // The resolved single-sample texture is rehydrated separately
+            // by R04. The multisampled RTV must also belong to this device,
+            // not to the D3D12 device that created the original W3D handle.
+            D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS quality = {};
+            quality.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            quality.SampleCount = s.samples;
+            if (FAILED(frame.NativeDevice()->CheckFeatureSupport(
+                    D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                    &quality, sizeof(quality))) || !quality.NumQualityLevels)
+                return Fail("Retained MSAA surface is unsupported after device reset");
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = s.description.width;
+            desc.Height = s.description.height;
+            desc.DepthOrArraySize = desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            desc.SampleDesc.Count = s.samples;
+            desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            D3D12_CLEAR_VALUE clear = {};
+            clear.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            clear.Color[3] = 1.f;
+            const auto heap = DefaultHeap();
+            ComPtr<ID3D12Resource> replacement;
+            if (FAILED(frame.NativeDevice()->CreateCommittedResource(
+                    &heap, D3D12_HEAP_FLAG_NONE, &desc,
+                    D3D12_RESOURCE_STATE_COMMON, &clear,
+                    IID_PPV_ARGS(&replacement))))
+                return Fail("Recreating retained MSAA RTV on the new D3D12 device failed");
+            // Previously recorded commands pin their resources and heaps
+            // until their frame fences. No old-device descriptor is reused.
+            s.msaa = std::move(replacement);
+            s.msaaDevice = frame.NativeDevice();
+            s.msaaState = D3D12_RESOURCE_STATE_COMMON;
+            s.viewHeap.Reset();
+            s.viewResource.Reset();
+            s.viewDevice.Reset();
+        }
         if (s.kind != Kind::MSAAColor &&
             !DX12W3DTextures::EnsureAttachment(frame.NativeDevice(), s.texture))
             return Fail(DX12W3DTextures::LastError());
@@ -405,10 +448,16 @@ RenderSurfaceHandle DX12W3DRenderTargets::CreateMSAAColor(
     s->description.multisampled = true;
     if (FAILED(frame.NativeDevice()->CreateCommittedResource(
             &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON,
-            &clear, IID_PPV_ARGS(&s->msaa))) || !impl_->PrepareView(*s, frame))
+            &clear, IID_PPV_ARGS(&s->msaa))))
     {
         delete s;
         impl_->Fail("Creating native MSAA color attachment failed");
+        return nullptr;
+    }
+    s->msaaDevice = frame.NativeDevice();
+    if (!impl_->PrepareView(*s, frame))
+    {
+        delete s;
         return nullptr;
     }
     return impl_->Register(s);
