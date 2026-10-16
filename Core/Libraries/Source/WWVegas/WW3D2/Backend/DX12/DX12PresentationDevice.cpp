@@ -598,6 +598,16 @@ unsigned long long DX12PresentationDevice::RecordingSerial() const
     return impl_->recording ? impl_->recordingSerial : 0;
 }
 
+unsigned long long DX12PresentationDevice::CompletedFenceValue() const
+{
+    return impl_->fence ? impl_->fence->GetCompletedValue() : 0;
+}
+
+unsigned long long DX12PresentationDevice::LastSubmittedFenceValue() const
+{
+    return impl_->nextFence ? impl_->nextFence - 1 : 0;
+}
+
 unsigned DX12PresentationDevice::InFlightObjectCount() const
 {
     std::size_t count = impl_->recordingObjects.size();
