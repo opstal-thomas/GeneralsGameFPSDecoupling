@@ -17,9 +17,8 @@ namespace DX12W3DGeometryBuffers
 {
     // Persistent geometry is created in the DEFAULT heap at first binding;
     // CPU writes are staged and copied on the active DX12 command list.
-    // Dynamic geometry receives a new UPLOAD resource generation on each
-    // committed write. A frame fence owns retired GPU versions (R02 will
-    // replace this simple safe policy with pooled transient/ring allocations).
+    // R02 dynamic geometry is snapshotted to immutable slices of a shared
+    // UPLOAD page. The owning presentation frame fence controls page reuse.
     RenderVertexBufferHandle CreateVertex(ID3D12Device * device,
                                           const RenderBufferDescription & description);
     RenderIndexBufferHandle CreateIndex(ID3D12Device * device,
@@ -45,6 +44,9 @@ namespace DX12W3DGeometryBuffers
     // callers do not own these GPU resources, and must not release them.
     ID3D12Resource * NativeVertexResource(RenderVertexBufferHandle handle);
     ID3D12Resource * NativeIndexResource(RenderIndexBufferHandle handle);
+    // Backend-private byte offsets for validating pooled upload snapshots.
+    unsigned NativeVertexOffset(RenderVertexBufferHandle handle);
+    unsigned NativeIndexOffset(RenderIndexBufferHandle handle);
     unsigned VertexByteSize(RenderVertexBufferHandle handle);
     unsigned IndexByteSize(RenderIndexBufferHandle handle);
     bool IsVertexMapped(RenderVertexBufferHandle handle);
