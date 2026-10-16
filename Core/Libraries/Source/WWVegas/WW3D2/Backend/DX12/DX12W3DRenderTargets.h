@@ -59,6 +59,7 @@ public:
 
     bool IsPrimary() const;
     RenderTextureHandle TextureForSurface(RenderSurfaceHandle surface) const;
+    RenderTextureHandle BoundColorTexture() const;
     ID3D12Resource * BoundColorResource(DX12PresentationDevice & frame) const;
     ID3D12Resource * BoundDepthResource(DX12PresentationDevice & frame) const;
     unsigned BoundSampleCount() const;
