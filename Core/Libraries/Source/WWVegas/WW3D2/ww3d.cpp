@@ -112,10 +112,6 @@
 #include "dx8wrapper.h"
 #include "WWLib/TARGA.h"
 #include "sortingrenderer.h"
-#if defined(W3D_RENDER_BACKEND_DX12)
-#include "dx8vertexbuffer.h"
-#include "dx8indexbuffer.h"
-#endif
 #include "WWLib/thread.h"
 #include "WWLib/cpudetect.h"
 #include "dx8texman.h"
