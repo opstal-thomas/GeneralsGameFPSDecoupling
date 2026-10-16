@@ -143,3 +143,15 @@ target_link_libraries(W3DDX12TextureSmoke PRIVATE
 add_test(NAME W3D_DX12_WARP_W3D_Texture_Upload
     COMMAND W3DDX12TextureSmoke)
 set_tests_properties(W3D_DX12_WARP_W3D_Texture_Upload PROPERTIES TIMEOUT 90)
+
+# R05: shader-visible immutable two-stage descriptor snapshots and GPU-fence
+# ownership with actual sampled WARP pixel readback. Run on Win32 and x64.
+add_executable(W3DDX12DescriptorSmoke DX12DescriptorSmoke.cpp)
+target_compile_features(W3DDX12DescriptorSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12DescriptorSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12DescriptorSmoke PRIVATE
+    W3DDX12PresentationDevice user32
+)
+add_test(NAME W3D_DX12_WARP_Texture_Descriptor_Binding
+    COMMAND W3DDX12DescriptorSmoke)
+set_tests_properties(W3D_DX12_WARP_Texture_Descriptor_Binding PROPERTIES TIMEOUT 90)
