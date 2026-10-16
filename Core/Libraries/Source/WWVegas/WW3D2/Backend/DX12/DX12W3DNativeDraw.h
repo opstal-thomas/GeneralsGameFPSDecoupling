@@ -40,6 +40,7 @@ public:
     void SetTextureChannel(unsigned stage, bool alpha, const RenderTextureStageChannel & channel);
     void SetTextureFactor(unsigned packedARGB);
     void SetLightingEnabled(bool enabled);
+    void SetSpecularEnabled(bool enabled);
     void SetMaterialColorSources(const RenderMaterialColorSources & sources);
     void SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights);
     RenderLightingEnvironmentDescription GetLightingEnvironment() const;
@@ -58,7 +59,8 @@ public:
               DX12W3DTextureStages & stages, const float wvp[16],
               const float normalWorld[16],
               bool strip, unsigned firstIndex, unsigned primitiveCount,
-              unsigned minVertex, unsigned vertexCount);
+              unsigned minVertex, unsigned vertexCount,
+              const float * world = nullptr, const float * view = nullptr);
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

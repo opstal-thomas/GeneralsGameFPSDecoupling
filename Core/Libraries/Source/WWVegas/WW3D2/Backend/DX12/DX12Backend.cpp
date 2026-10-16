@@ -426,7 +426,7 @@ namespace
 
         if (!nativeDraw.Draw(primaryWindow.Presentation(), renderTargets, textureStages,
                              wvp, normalWorld, strip, startIndex, primitiveCount,
-                             minVertex, vertexCount))
+                             minVertex, vertexCount, &nativeWorld[0][0], &nativeView[0][0]))
         {
             OutputDebugStringA("[DX12 M01] Native gameplay indexed draw rejected: ");
             OutputDebugStringA(nativeDraw.LastError());
@@ -590,6 +590,11 @@ void Renderer::Set_Ambient(const Vector3 & color)
 
 // The standalone WARP backend never depends on the WW3D light classes.
 // The complete typed adapter in dx8renderer.cpp translates game objects.
+void DX12W3DSetNativeSpecularEnabled(bool enabled)
+{
+    nativeDraw.SetSpecularEnabled(enabled);
+}
+
 void DX12W3DApplyLightingEnvironment(const RenderLightingEnvironmentDescription & lighting)
 {
     nativeDraw.SetLightingEnvironment(lighting);

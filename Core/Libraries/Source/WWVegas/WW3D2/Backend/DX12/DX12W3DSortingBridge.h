@@ -24,6 +24,7 @@ void DX12W3DSortingTrackVertexBinding(const RenderDynamicVertexBinding & binding
 void DX12W3DSortingTrackIndexBinding(const RenderDynamicIndexBinding & binding,
                                     unsigned short baseVertexIndex);
 unsigned DX12W3DSortingCurrentBaseVertexIndex();
+void DX12W3DSetNativeSpecularEnabled(bool enabled);
 void DX12W3DApplyLightingEnvironment(const RenderLightingEnvironmentDescription & lights);
 RenderLightingEnvironmentDescription DX12W3DCurrentLightingEnvironment();
 RenderLightingEnvironmentDescription DX12W3DDefaultLightingEnvironment();

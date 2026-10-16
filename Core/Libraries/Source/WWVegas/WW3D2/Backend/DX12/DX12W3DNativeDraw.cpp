@@ -53,6 +53,14 @@ cbuffer W3DConstants : register(b0)
     uint LightingReserved0;
     uint LightingReserved1;
     uint LightingReserved2;
+    row_major float4x4 World;
+    row_major float4x4 View;
+    float4 MaterialSpecular;
+    float4 SpecularProperties;
+    float4 LightSpecular[4];
+    float4 LightPosition[4];
+    float4 LightSpotDirection[4];
+    float4 LightAttenuation[4];
 };
 Texture2D Texture0 : register(t0);
 Texture2D Texture1 : register(t1);
@@ -85,6 +93,7 @@ struct OutVertex
 {
     float4 position : SV_POSITION;
     float4 diffuse : COLOR0;
+    float4 specular : COLOR1;
     float2 uv0 : TEXCOORD0;
     float2 uv1 : TEXCOORD1;
 };
@@ -116,21 +125,68 @@ OutVertex W3D_VS(InVertex v)
         const float3 emissiveMaterial =
             W3DColorSource(EmissiveSource, MaterialEmissive, color1, color2).rgb;
         float3 lit = ambientMaterial * SceneAmbient.rgb + emissiveMaterial;
+        float3 spec = float3(0, 0, 0);
 #if W3D_HAS_NORMAL
-        // NormalToWorld is inverse-transpose (row-vector convention),
-        // necessary for meshes with non-uniform model scale.
+        // Row-vector inverse-transpose handles nonuniform model scale.
         float3 normalWorld = normalize(mul(float4(v.normal, 0.f), NormalToWorld).xyz);
+        float3 positionWorld = mul(float4(v.position.xyz, 1.f), World).xyz;
+        float3 positionView = mul(float4(positionWorld, 1.f), View).xyz;
+        float3 eyeVector = -positionView;
+        float eyeSq = dot(eyeVector, eyeVector);
+        float3 eyeDir = eyeSq > 1.e-8f ?
+            eyeVector * rsqrt(eyeSq) : float3(0, 0, 1);
+        float3 normalView = normalize(mul(float4(normalWorld, 0.f), View).xyz);
         [unroll]
         for (uint index = 0u; index < 4u; ++index)
         {
             if (index < LightCount)
             {
-                float lambert = saturate(dot(normalWorld, normalize(LightDirection[index].xyz)));
-                lit += lambert * LightDiffuse[index].rgb * diffuseMaterial;
+                float3 lightDirectionWorld = LightDirection[index].xyz;
+                float attenuation = 1.f;
+                uint type = (uint)LightDirection[index].w;
+                if (type != 0u)
+                {
+                    float3 towardLight = LightPosition[index].xyz - positionWorld;
+                    float distance = length(towardLight);
+                    lightDirectionWorld = distance > 1.e-5f ?
+                        towardLight / distance : float3(0, 0, 1);
+                    if (LightAttenuation[index].z > 0.5f)
+                    {
+                        float nearRange = LightAttenuation[index].x;
+                        float farRange = LightAttenuation[index].y;
+                        attenuation *= farRange <= nearRange + 1.e-5f ?
+                            (distance <= farRange ? 1.f : 0.f) :
+                            saturate((farRange - distance) / (farRange - nearRange));
+                    }
+                    if (type == 2u)
+                    {
+                        float outerCos = min(LightAttenuation[index].w, 0.9999f);
+                        float coneCos = dot(normalize(LightSpotDirection[index].xyz),
+                                            -lightDirectionWorld);
+                        attenuation *= saturate((coneCos - outerCos) /
+                                               max(1.e-4f, 1.f - outerCos));
+                    }
+                }
+                float3 lightDir = normalize(lightDirectionWorld);
+                float lambert = saturate(dot(normalWorld, lightDir));
+                lit += lambert * attenuation * LightDiffuse[index].rgb * diffuseMaterial;
+                if (SpecularProperties.y > 0.5f && lambert > 0.f)
+                {
+                    float3 lightView = normalize(mul(float4(lightDir, 0.f), View).xyz);
+                    float3 halfwayVector = lightView + eyeDir;
+                    float halfwaySq = dot(halfwayVector, halfwayVector);
+                    float3 halfway = halfwaySq > 1.e-8f ?
+                        halfwayVector * rsqrt(halfwaySq) : lightView;
+                    float gloss = pow(saturate(dot(normalView, halfway)),
+                                      max(1.f, SpecularProperties.x));
+                    spec += attenuation * gloss *
+                            MaterialSpecular.rgb * LightSpecular[index].rgb;
+                }
             }
         }
 #endif
         o.diffuse = float4(saturate(lit), color1.a * MaterialColor.a);
+        o.specular = float4(saturate(spec), 1.f);
     }
     else
     {
@@ -139,6 +195,7 @@ OutVertex W3D_VS(InVertex v)
 #else
         o.diffuse = MaterialColor;
 #endif
+        o.specular = SpecularProperties.y > 0.5f ? color2 : float4(0, 0, 0, 1);
     }
 #if W3D_HAS_UV0
     o.uv0 = v.uv0;
@@ -218,6 +275,8 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
             result = W3DStage(color1, alpha1, result, texel1, v.diffuse);
         }
     }
+    // D3D8 sums specular after the texture-stage cascade.
+    result.rgb = saturate(result.rgb + v.specular.rgb);
     if (AlphaTest != 0u)
     {
         float alpha = saturate(result.a);
@@ -337,8 +396,16 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned diffuseSource;
         unsigned emissiveSource;
         unsigned reserved[3];
+        float world[16];
+        float view[16];
+        float materialSpecular[4];
+        float specularProperties[4];
+        float lightSpecular[4][4];
+        float lightPosition[4][4];
+        float lightSpotDirection[4][4];
+        float lightAttenuation[4][4];
     };
-    static_assert(sizeof(DrawConstants) == 100 * sizeof(unsigned),
+    static_assert(sizeof(DrawConstants) == 204 * sizeof(unsigned),
                   "Native DX12 W3D constant buffer does not match shader packing");
 
     bool Compile(const char * entry, const char * profile,
@@ -377,6 +444,7 @@ struct DX12W3DNativeDraw::Impl
     RenderLightingEnvironmentDescription lighting;
     RenderMaterialColorSources colorSources;
     bool vertexLighting = false;
+    bool specularEnabled = false;
     RenderCompareFunc depthCompare = RENDER_COMPARE_LESS_EQUAL;
     bool depthWrite = true;
     RenderCullMode cull = RENDER_CULL_NONE;
@@ -620,6 +688,10 @@ void DX12W3DNativeDraw::SetLightingEnabled(bool enabled)
 {
     impl_->vertexLighting = enabled;
 }
+void DX12W3DNativeDraw::SetSpecularEnabled(bool enabled)
+{
+    impl_->specularEnabled = enabled;
+}
 void DX12W3DNativeDraw::SetMaterialColorSources(const RenderMaterialColorSources & sources)
 {
     impl_->colorSources = sources;
@@ -655,7 +727,8 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
                              DX12W3DTextureStages & stages, const float wvp[16],
                              const float normalWorld[16],
                              bool strip, unsigned firstIndex, unsigned primitives,
-                             unsigned minVertex, unsigned vertexCount)
+                             unsigned minVertex, unsigned vertexCount,
+                             const float * world, const float * view)
 {
     Impl & s = *impl_;
     s.error.clear();
@@ -709,6 +782,18 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     constants.textureFactor[2] = (s.textureFactor & 255u) / 255.f;
     constants.textureFactor[3] = ((s.textureFactor >> 24) & 255u) / 255.f;
     const float * materialAmbient = &s.material.ambient.r;
+    const float * materialSpecular = &s.material.specular.r;
+    std::memcpy(constants.materialSpecular, materialSpecular, sizeof(constants.materialSpecular));
+    constants.specularProperties[0] = s.material.power;
+    constants.specularProperties[1] = s.specularEnabled ? 1.f : 0.f;
+    const float identity[16] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f
+    };
+    std::memcpy(constants.world, world ? world : identity, sizeof(constants.world));
+    std::memcpy(constants.view, view ? view : identity, sizeof(constants.view));
     const float * materialEmissive = &s.material.emissive.r;
     std::memcpy(constants.materialAmbient, materialAmbient, sizeof(constants.materialAmbient));
     std::memcpy(constants.materialEmissive, materialEmissive, sizeof(constants.materialEmissive));
@@ -717,6 +802,11 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     {
         std::memcpy(constants.lightDirection[i], s.lighting.lights[i].direction, sizeof(constants.lightDirection[i]));
         std::memcpy(constants.lightDiffuse[i], s.lighting.lights[i].diffuse, sizeof(constants.lightDiffuse[i]));
+        constants.lightDirection[i][3] = static_cast<float>(s.lighting.lights[i].type);
+        std::memcpy(constants.lightSpecular[i], s.lighting.lights[i].specular, sizeof(constants.lightSpecular[i]));
+        std::memcpy(constants.lightPosition[i], s.lighting.lights[i].position, sizeof(constants.lightPosition[i]));
+        std::memcpy(constants.lightSpotDirection[i], s.lighting.lights[i].spotDirection, sizeof(constants.lightSpotDirection[i]));
+        std::memcpy(constants.lightAttenuation[i], s.lighting.lights[i].attenuation, sizeof(constants.lightAttenuation[i]));
     }
     constants.lightCount = s.lighting.lightCount;
     constants.lightingEnabled = s.vertexLighting ? 1u : 0u;

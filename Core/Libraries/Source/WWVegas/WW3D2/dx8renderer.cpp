@@ -468,6 +468,8 @@ void Renderer::Set_Shader(const ShaderClass & shader)
     Set_Cull_Mode(shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ?
                   (ShaderClass::Is_Backface_Culling_Inverted() ?
                       RENDER_CULL_CCW : RENDER_CULL_CW) : RENDER_CULL_NONE);
+    DX12W3DSetNativeSpecularEnabled(
+        shader.Get_Secondary_Gradient() != ShaderClass::SECONDARY_GRADIENT_DISABLE);
 }
 
 // Typed texture adapter lives beside shader/material mesh batching so that

@@ -343,7 +343,7 @@ class R01GeometryBuffers(unittest.TestCase):
                        "D3D12_ROOT_PARAMETER_TYPE_CBV",
                        "ReserveTransientGeometry(", "RetainFrameResource(upload)",
                        "SetGraphicsRootConstantBufferView(",
-                       "static_assert(sizeof(DrawConstants) == 100"):
+                       "static_assert(sizeof(DrawConstants) == 204"):
             self.assertIn(symbol, native)
         for symbol in ("XYZ | NORMAL | DIFFUSE",
                        "native W3D normal receives directional light",
