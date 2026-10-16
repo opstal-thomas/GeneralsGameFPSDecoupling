@@ -379,7 +379,7 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertNotIn('ReportPending("Renderer::' + name, backend)
         for token in ("D3D12_BLEND_OP_REV_SUBTRACT", "target.RenderTargetWriteMask = writeMask",
                       "SetColorWriteMask(", "AlphaBlend(blend.source)",
-                      "AlphaBlend(blend.destination)", "std::array<unsigned, 14>"):
+                      "AlphaBlend(blend.destination)", "std::array<unsigned, 15>"):
             self.assertIn(token, native_draw)
         for token in ("Renderer::Set_Shader(", "Renderer::Set_Texture(", "Renderer::Set_Material("):
             self.assertNotIn(token, backend)
