@@ -363,7 +363,7 @@ class R01GeometryBuffers(unittest.TestCase):
         for token in ("shader.Get_Src_Blend_Func()", "shader.Get_Dst_Blend_Func()",
                       "Apply_Blend_State(state)", "Set_Depth_Compare(", "Set_Depth_Write("):
             self.assertIn(token, shader)
-        self.assertIn("texture->Peek_Render_Texture()", texture)
+        self.assertIn("texture->Apply(stage)", texture)
         self.assertIn("Bind_Texture(stage,", texture)
         self.assertIn("material->Get_Opacity()", texture)
         self.assertIn("ShaderClass::Is_Backface_Culling_Inverted()", shader)
