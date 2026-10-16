@@ -297,8 +297,12 @@ void Renderer::Clear(bool clear_color, bool clear_z_stencil,
 {
     const float rgba[4] = {color.X, color.Y, color.Z, dest_alpha};
     if (!ready) return;
-    if (primaryWindow.IsSceneOpen() && !renderTargets.IsPrimary())
+    if (primaryWindow.IsSceneOpen())
     {
+        // Once R07 has opened the command list, all output clears use its
+        // currently bound RTV/DSV views, even for color-only primary targets.
+        // The primary-window path below remains the pre-BeginScene clear
+        // queue; it must not accidentally clear an unbound primary DSV.
         if (!renderTargets.Clear(primaryWindow.Presentation(), clear_color,
                                  clear_z_stencil, rgba, z, stencil))
             OutputDebugStringA(renderTargets.LastError());
