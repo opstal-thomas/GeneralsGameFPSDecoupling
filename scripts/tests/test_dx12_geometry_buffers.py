@@ -374,7 +374,7 @@ class R01GeometryBuffers(unittest.TestCase):
                      "Release_Sorting_State", "Apply_Sorting_Transforms_And_Lights"):
             self.assertIn("Renderer::" + name + "(", mesh)
             self.assertNotIn("Renderer::" + name + "(", backend)
-        for token in ("NativeSortingState()", "out = state;",
+        for token in ("NativeSortingState()", "state = tracked;",
                       "state.index_base_offset", "ToSortingMatrix(", "FromSortingMatrix(",
                       "state.vba_offset", "state.iba_offset",
                       "state.vertex_buffer_types[0]", "state.index_buffer_type",
