@@ -109,6 +109,9 @@ class DX12TextureDescriptorTests(unittest.TestCase):
             "CheckPixel(readback, 16, 48, {0, 255, 0})",
             "CheckPixel(readback, 48, 48, {0, 0, 0})",
             "stages.SnapshotCount() == 3",
+            "stages.SnapshotCount() == 260 && stages.PageCount() == 2",
+            "CheckPixel(pageReadback, 16, 16, {255, 0, 0})",
+            "CheckPixel(pageReadback, 48, 48, {0, 255, 0})",
             "device.InFlightObjectCount() == 0",
             "stages.Clear();", "device.Shutdown();",
         ):
