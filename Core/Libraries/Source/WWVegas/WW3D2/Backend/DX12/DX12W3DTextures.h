@@ -59,6 +59,12 @@ namespace DX12W3DTextures
                                bool alphaIndexed, const std::uint32_t * palette,
                                std::uint8_t * destination, unsigned targetRowPitch);
 
+    // CPU-only normalization also used by SurfaceClass and missing-texture
+    // fallback before GPU residency; no D3DX or DX8 surface is required.
+    bool ConvertRowToBGRA8(unsigned w3dFormat,
+                           const std::uint8_t * src, unsigned pixels,
+                           std::uint8_t * destination);
+
     bool SupportsFormat(unsigned w3dFormat);
     const char * LastError();
 }
