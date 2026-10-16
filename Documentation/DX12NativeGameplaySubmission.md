@@ -77,6 +77,51 @@ and both DX12-exclusive bootstrap builds/tests. These tests prove the
 native bindings compile and link with the games, but **do not** establish
 rendering parity in an actual skirmish.
 
+## M01/B07 native vertex-lighting and matrix milestone (2026-10-16)
+
+- Original `LightEnvironmentClass` values are translated in the typed
+  W3D mesh adapter into `RenderLightingEnvironmentDescription`, without
+  linking game-only light or D3D8 objects from the standalone DX12 backend.
+  The environment supplies the scene's equivalent ambient and at most four
+  attenuated directional contributors. `Set_Ambient`, `Set_Vertex_Lighting`
+  and `Set_Vertex_Color_Sources` now drive real native shader state.
+- Selected `VertexMaterialClass` diffuse/ambient/emissive/opacity values
+  and original material/vertex-color 1/vertex-color 2 source selectors
+  reach the native vertex shader. Original packed D3DCOLOR is BGRA-swizzled
+  and vertex NORMAL/COLOR1 layouts are decoded by the established R03 path.
+  The first lit shader evaluates ambient/emissive plus Lambert directional
+  diffuse, using the correct inverse-transpose of the world transform for
+  normals even when model scale differs by axis.
+- Since four lights plus normal/material state exceed D3D12's 64-DWORD
+  root-constant limit, every native W3D draw writes its immutable lighting
+  constants into a 256-byte-aligned CBV slice from the R02 transient
+  upload pool. The D3D12 frame retains each page until its submission
+  fence completes; deferred alpha draws do not alias prior constants.
+- `RenderStateStruct` now includes a backend-neutral lighting-value
+  snapshot copied along with deferred W3D sorting state. Sorted replay
+  restores the actual submitting object's ambient and directional lights,
+  not the state left by another opaque mesh.
+- The native world/view/projection path transposes Westwood's column-vector
+  matrices exactly as the DX8 adapter's `To_D3DMATRIX` does before
+  multiplying World * View * Projection. The raw transform-elements
+  getter also returns the DX8 row-vector representation.
+
+**Verified:** [WARP and contract validation 38972824571](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38972824571)
+passed native Win32/x64 GPU tests, including drawing an FVF
+XYZ/NORMAL/DIFFUSE red-vertex triangle as green under a material-sourced
+green light, then black when the light faces away. Existing triangle/strip,
+sorting and alpha-mask regression checks also passed.
+[Windows renderer validation 38972824650](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38972824650)
+passed all **seven** jobs: DX8 dependency inventory, Generals and Zero Hour
+normal builds, both preview builds and both DX12-exclusive bootstrap builds.
+
+**Still incomplete:** DX8-style point and spot lighting require correct
+position/attenuation parity rather than this equivalent-directional
+baseline. Specular material/light response, texture-stage combiners,
+samplers/UV transformations, vertex skinning, fog, RHW and remaining
+B07 renderer methods still need implementation. No playable DX12-only
+single-player skirmish or full in-game parity capture has been verified.
+
 ## Not yet implemented — keep M01/B07 open
 
 - End-to-end in-game sorted-alpha visual verification and parity.
@@ -86,11 +131,12 @@ rendering parity in an actual skirmish.
   This stage has shader/source/WARP-level tests, not a rendered
   Generals/Zero Hour gameplay comparison. Transparency ordering edge
   cases and specialized material passes also remain to be validated.
-- Full material/lighting, fog, texture combiners, samplers and all
-  shader permutations (M02/M03/R06). The initial shader is a deliberately
-  restricted unlit/single-pass baseline. W3D RHW transform semantics,
-  additional FVF options, procedural materials and special geometry are
-  not asserted to be gameplay-equivalent.
+- Complete material/fixed-function parity, exact point/spot-light
+  attenuation and specular reflection, fog, texture combiners, samplers
+  and all shader permutations (M02/M03/R06). Directional/ambient
+  vertex lighting and color sources are now implemented, but the
+  native shader remains single-pass and W3D RHW, skinned layouts,
+  procedural materials and special geometry are not gameplay-equivalent.
 - Complete terrain/water, shroud, particles, HUD/menu/UI, immediate
   primitives and surface blit/readback effects (T/U/F/R08).
 - Remaining DX12Backend `ReportPending` methods, error reporting
@@ -98,9 +144,9 @@ rendering parity in an actual skirmish.
 - Launch and play an actual DX12-only Generals/Zero Hour single-player
   skirmish without the developer checkpoint (V03, later after the above).
 
-**Next implementation gate:** implement M03 sorted-object lighting and
-fixed-function material/texture-combiner semantics (with R06 sampler
-parity), then validate ordered alpha and opaque model rendering
-against DX8 in a real DX12-only test map. Continue B07 remaining
-gameplay Renderer methods while T01/U01/R08 supply terrain/UI/copies.
-DX12-only skirmish support remains gated until these paths work.
+**Next implementation gate:** extend the first native lit shader to DX8
+point/spot lights, vertex specular and fixed-function texture/color
+combiners (M03/R06), then validate deferred sorted-alpha and opaque
+meshes against DX8 in a real single-player map. Complete B07's remaining
+Renderer methods and the T01/U01/R08 terrain/UI/copy paths before
+enabling the DX12-only gameplay gate.
