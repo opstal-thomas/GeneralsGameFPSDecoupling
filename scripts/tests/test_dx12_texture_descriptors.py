@@ -75,6 +75,23 @@ class DX12TextureDescriptorTests(unittest.TestCase):
         ):
             self.assertIn(token, presentation, token)
 
+    def test_preview_and_native_renderer_share_r04_r05_texture_path(self):
+        preview = (DX12 / "DX12IndexedMeshPass.cpp").read_text(encoding="utf-8")
+        for token in (
+            "DX12W3DTextureStages stages",
+            "DX12W3DTextures::Create2D(",
+            "DX12W3DTextures::Map2D(",
+            "DX12W3DTextures::Unmap2D(",
+            "DX12W3DTextures::Prepare(",
+            "state.stages.BindForDraw(*state.presentation, 1)",
+            "state.stages.Clear()",
+            "DX12W3DTextures::Release(",
+        ):
+            self.assertIn(token, preview, token)
+        self.assertNotIn("texturesHeap", preview)
+        self.assertNotIn("CreateShaderResourceView(", preview)
+        self.assertIn("dst[x*4]     = src[x*4+2]", preview)  # RGBA -> W3D BGRA
+
     def test_warp_samples_real_two_stage_descriptors_with_invalidations(self):
         smoke = (SMOKE / "DX12DescriptorSmoke.cpp").read_text(encoding="utf-8")
         cmake = (SMOKE / "CMakeLists.txt").read_text(encoding="utf-8")
