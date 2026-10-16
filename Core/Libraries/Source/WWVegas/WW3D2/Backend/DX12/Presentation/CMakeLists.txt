@@ -133,6 +133,16 @@ add_test(NAME W3D_DX12_WARP_Geometry_Buffer_Residency
     COMMAND W3DDX12GeometryBufferSmoke)
 set_tests_properties(W3D_DX12_WARP_Geometry_Buffer_Residency PROPERTIES TIMEOUT 90)
 
+# R03: decoded W3D FVF vertex layouts and actual 32-bit indexed GPU draw,
+# including packed-D3DCOLOR channel ordering, on both Win32 and x64 WARP.
+add_executable(W3DDX12VertexFormatSmoke DX12VertexFormatSmoke.cpp)
+target_compile_features(W3DDX12VertexFormatSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12VertexFormatSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12VertexFormatSmoke PRIVATE W3DDX12PresentationDevice user32)
+add_test(NAME W3D_DX12_WARP_Vertex_And_Index_Formats
+    COMMAND W3DDX12VertexFormatSmoke)
+set_tests_properties(W3D_DX12_WARP_Vertex_And_Index_Formats PROPERTIES TIMEOUT 90)
+
 # R04: native W3D texture subsystem. The test copies BGRA8 and compressed
 # BC1/BC3 mipmaps through a real WARP GPU, maps cube/volume subresources,
 # expands indexed palettes, and verifies reset/lifetime behavior on x86/x64.

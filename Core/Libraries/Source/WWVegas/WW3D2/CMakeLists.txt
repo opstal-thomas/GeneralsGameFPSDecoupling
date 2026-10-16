@@ -308,7 +308,8 @@ if(W3D_BUILD_DX12_PRESENTATION OR W3D_ENABLE_DX12_GAMEPLAY_PREVIEW OR
         Backend/DX12/DX12W3DPassGraph.cpp
         Backend/DX12/DX12W3DGeometryBuffers.h
         Backend/DX12/DX12W3DGeometryBuffers.cpp
-            Backend/DX12/DX12W3DVertexLayouts.cpp
+        Backend/DX12/DX12W3DVertexLayouts.h
+        Backend/DX12/DX12W3DVertexLayouts.cpp
         Backend/DX12/DX12W3DTextures.h
         Backend/DX12/DX12W3DTextures.cpp
         Backend/DX12/DX12W3DTextureStages.h
