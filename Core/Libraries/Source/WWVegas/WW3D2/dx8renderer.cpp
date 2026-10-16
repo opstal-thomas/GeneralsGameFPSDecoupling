@@ -420,13 +420,13 @@ void Renderer::Set_Shader(const ShaderClass & shader)
             color1.operation = RENDER_TEXOP_BLEND_TEXTURE_ALPHA; break;
         case ShaderClass::DETAILCOLOR_DETAILBLEND:
             color1.operation = RENDER_TEXOP_BLEND_CURRENT_ALPHA; break;
-        case ShaderClass::DETAILCOLOR_ADDSIGNED:
+        case 9: // Zero Hour ShaderClass::DETAILCOLOR_ADDSIGNED (ordinal preserved in Generals)
             color1.operation = RENDER_TEXOP_ADD_SIGNED; break;
-        case ShaderClass::DETAILCOLOR_ADDSIGNED2X:
+        case 10: // Zero Hour ShaderClass::DETAILCOLOR_ADDSIGNED2X (ordinal preserved in Generals)
             color1.operation = RENDER_TEXOP_ADD_SIGNED2X; break;
-        case ShaderClass::DETAILCOLOR_SCALE2X:
+        case 11: // Zero Hour ShaderClass::DETAILCOLOR_SCALE2X (ordinal preserved in Generals)
             color1.operation = RENDER_TEXOP_MODULATE2X; break;
-        case ShaderClass::DETAILCOLOR_MODALPHAADDCOLOR:
+        case 12: // Zero Hour ShaderClass::DETAILCOLOR_MODALPHAADDCOLOR (ordinal preserved in Generals)
             color1 = RenderTextureStageChannel(RENDER_TEXOP_MODULATE_ALPHA_ADD_COLOR,
                 RENDER_TEXARG_CURRENT, tex); break;
         default: break;
