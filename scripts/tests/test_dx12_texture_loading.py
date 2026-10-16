@@ -38,11 +38,16 @@ class R04NativeTextureTests(unittest.TestCase):
             "Blit_Surface": "Blit",
         }
         for method, internal in expected.items():
-            regex = rf"Renderer::{method}\([^{{]*\)\s*\{{(.*?)\}}"
-            match = re.search(regex, backend, re.S)
-            self.assertIsNotNone(match, method)
-            self.assertIn(internal, match.group(1), method)
-            self.assertNotIn("ReportPending(", match.group(1), method)
+            token = f"Renderer::{method}("
+            self.assertIn(token, backend, method)
+            start = backend.index(token)
+            # Stop at the actual top-level method closing brace, not at an
+            # early nested if block (Bind_Texture has multiple such blocks).
+            end = backend.find("\n}", start)
+            self.assertGreater(end, start, method)
+            body = backend[start:end]
+            self.assertIn(internal, body, method)
+            self.assertNotIn(f'ReportPending("Renderer::{method}"', body, method)
         self.assertIn("D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION", backend)
         self.assertIn("D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION", backend)
         self.assertNotIn("Direct3DCreate8(", backend)
