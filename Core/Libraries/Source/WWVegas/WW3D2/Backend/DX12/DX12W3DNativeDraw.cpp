@@ -35,6 +35,8 @@ cbuffer W3DConstants : register(b0)
     uint HasTexture1;
     uint AlphaTest;
     uint AlphaReference;
+    uint AlphaCompare;
+    float3 AlphaPadding;
     float4 MaterialColor;
     row_major float4x4 NormalToWorld;
     float4 MaterialAmbient;
@@ -157,7 +159,18 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
     if (HasTexture1 != 0u)
         result *= Texture1.Sample(Sampler1, v.uv1);
     if (AlphaTest != 0u)
-        clip(result.a * 255.0f - (float)AlphaReference - 0.5f);
+    {
+        float alpha = saturate(result.a);
+        float reference = (float)(AlphaReference & 255u) / 255.0f;
+        bool passes = AlphaCompare == 0u ? false :
+            AlphaCompare == 1u ? alpha < reference :
+            AlphaCompare == 2u ? alpha == reference :
+            AlphaCompare == 3u ? alpha <= reference :
+            AlphaCompare == 4u ? alpha > reference :
+            AlphaCompare == 5u ? alpha != reference :
+            AlphaCompare == 6u ? alpha >= reference : true;
+        clip(passes ? 1.0f : -1.0f);
+    }
     return result;
 }
 )";
@@ -248,6 +261,8 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned texture1;
         unsigned alphaTest;
         unsigned alphaReference;
+        unsigned alphaCompare;
+        unsigned alphaPadding[3];
         float material[4];
         float normalToWorld[16];
         float materialAmbient[4];
@@ -262,7 +277,7 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned emissiveSource;
         unsigned reserved[3];
     };
-    static_assert(sizeof(DrawConstants) == 92 * sizeof(unsigned),
+    static_assert(sizeof(DrawConstants) == 96 * sizeof(unsigned),
                   "Native DX12 W3D constant buffer does not match shader packing");
 
     bool Compile(const char * entry, const char * profile,
@@ -590,6 +605,7 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     constants.texture1 = stages.Bound(1) && canTexture1 ? 1u : 0u;
     constants.alphaTest = s.blend.alphaTestEnabled ? 1u : 0u;
     constants.alphaReference = s.blend.alphaReference;
+    constants.alphaCompare = static_cast<unsigned>(s.blend.alphaCompare);
     constants.material[0] = s.material.diffuse.r;
     constants.material[1] = s.material.diffuse.g;
     constants.material[2] = s.material.diffuse.b;
