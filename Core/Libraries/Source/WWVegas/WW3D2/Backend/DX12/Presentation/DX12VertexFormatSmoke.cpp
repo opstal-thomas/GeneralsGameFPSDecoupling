@@ -157,7 +157,7 @@ namespace
             return false;
         const unsigned invalid[] = {
             0x0000, 0x2002, 0x0902, 0x0014, 0x9006, 0x1002,
-            0x4004, 0x10002, 0x0402
+            0x4004, 0x10002, 0x0001
         };
         for (unsigned fvf : invalid)
         {
