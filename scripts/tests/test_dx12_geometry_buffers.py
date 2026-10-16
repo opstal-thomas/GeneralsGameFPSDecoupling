@@ -320,6 +320,30 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertNotIn(token, backend)
         self.assertNotIn('ReportPending("Renderer::Apply_Pending_State_Changes")', backend)
 
+    def test_m01_polygon_batches_use_authoritative_renderer(self):
+        mesh = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
+        polygon = (WW3D / "dx8polygonrenderer.h").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        self.assertIn("void Renderer::Flush_Mesh_Batches()", mesh)
+        self.assertIn("TheDX8MeshRenderer.Flush();", mesh)
+        for call in ("Renderer::Bind_Legacy_Vertex_Buffer(",
+                     "Renderer::Bind_Legacy_Index_Buffer(",
+                     "Renderer::Set_Texture(", "Renderer::Set_Material(",
+                     "Renderer::Set_Shader(", "Renderer::Set_Transform("):
+            self.assertIn(call, mesh)
+        self.assertNotIn("DX8Wrapper::Set_Vertex_Buffer(", mesh)
+        self.assertNotIn("DX8Wrapper::Set_Index_Buffer(", mesh)
+        self.assertNotIn("DX8Wrapper::Get_Current_Caps()->Support_NPatches()", mesh)
+        for call in ("Renderer::Draw_Triangles(", "Renderer::Draw_Triangle_Strip(",
+                     "Renderer::Set_Index_Buffer_Index_Offset("):
+            self.assertIn(call, polygon)
+        self.assertNotIn("DX8Wrapper::Draw_Triangles(", polygon)
+        self.assertNotIn("DX8Wrapper::Draw_Strip(", polygon)
+        self.assertNotIn('ReportPending("Renderer::Flush_Mesh_Batches")', backend)
+        # Raw D3D8 render-state overrides are confined to the DX8 build:
+        # M03 will implement their native depth-bias/alpha semantics.
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", mesh)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")

@@ -697,11 +697,6 @@ void Renderer::Set_Mesh_Camera(CameraClass * camera)
     ReportPending("Renderer::Set_Mesh_Camera");
 }
 
-void Renderer::Flush_Mesh_Batches()
-{
-    ReportPending("Renderer::Flush_Mesh_Batches");
-}
-
 void Renderer::Clear_Pending_Mesh_Deletes()
 {
     ReportPending("Renderer::Clear_Pending_Mesh_Deletes");
