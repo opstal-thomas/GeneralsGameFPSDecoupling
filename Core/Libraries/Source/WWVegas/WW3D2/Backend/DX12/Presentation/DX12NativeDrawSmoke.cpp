@@ -326,7 +326,7 @@ int wmain()
         1.f, 0.f, 0.f, 0.f,
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
-        0.f, 0.f, -2.f, 1.f
+        0.f, 0.f, -100.f, 1.f
     };
     for (unsigned pass = 0; pass < 5; ++pass)
     {
