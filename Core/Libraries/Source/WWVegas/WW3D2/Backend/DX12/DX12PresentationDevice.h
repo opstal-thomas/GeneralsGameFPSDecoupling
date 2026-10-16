@@ -16,6 +16,7 @@
 struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
 struct ID3D12Resource;
+struct IUnknown;
 
 class DX12PresentationDevice final
 {
@@ -62,7 +63,15 @@ public:
     // alive until its signalled GPU fence completes. R01 relies on this for
     // buffer generations and upload staging, including released handles.
     bool RetainFrameResource(ID3D12Resource * resource);
+    // Shader-visible descriptor heaps are COM objects, not D3D12 resources.
+    // Retain them through the identical GPU fence as uploaded textures so
+    // root descriptor tables never point into freed/reused descriptor memory.
+    bool RetainFrameObject(IUnknown * object);
     unsigned InFlightResourceCount() const;
+    unsigned InFlightObjectCount() const;
+    // Incremented at every successful BeginFrame, including after reset.
+    // Descriptor caches can never reuse tables recorded for an older list.
+    unsigned long long RecordingSerial() const;
     // DX8 SetIndices carried a base-vertex offset. D3D12 applies it during
     // DrawIndexedInstanced, not IASetIndexBuffer; cache for B07 submission.
     void SetBoundBaseVertexIndex(unsigned index);
