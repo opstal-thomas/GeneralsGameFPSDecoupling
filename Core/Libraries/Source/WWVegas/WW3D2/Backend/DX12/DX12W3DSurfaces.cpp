@@ -11,6 +11,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <mutex>
 #include <new>
 #include <string>
@@ -78,6 +80,137 @@ namespace DX12W3DSurfaces
         image->pitch = desc.width * bytes;
         image->pixels.resize(static_cast<std::size_t>(image->pitch) * desc.height, 0);
         return reinterpret_cast<RenderSurfaceHandle>(image);
+    }
+
+    RenderSurfaceHandle LoadTGAFile(const char * filename)
+    {
+        lastError.clear();
+        if (!filename || !*filename)
+        {
+            Fail("TGA filename is empty");
+            return nullptr;
+        }
+        std::ifstream stream(filename, std::ios::binary);
+        if (!stream)
+        {
+            Fail("W3D TGA surface file could not be opened");
+            return nullptr;
+        }
+        stream.seekg(0, std::ios::end);
+        const auto length = stream.tellg();
+        if (length < 18 || length > static_cast<std::streamoff>(64ull * 1024 * 1024))
+        {
+            Fail("Invalid TGA file length");
+            return nullptr;
+        }
+        stream.seekg(0, std::ios::beg);
+        std::vector<std::uint8_t> file(static_cast<std::size_t>(length));
+        if (!stream.read(reinterpret_cast<char *>(file.data()), length))
+        {
+            Fail("Reading TGA source failed");
+            return nullptr;
+        }
+
+        const auto u16 = [&](unsigned offset) -> unsigned
+        {
+            return static_cast<unsigned>(file[offset] | (file[offset + 1] << 8));
+        };
+        const unsigned imageType = file[2], paletteStart = u16(3), paletteCount = u16(5);
+        const unsigned paletteBits = file[7], width = u16(12), height = u16(14);
+        const unsigned pixelBits = file[16], flags = file[17];
+        const bool indexed = imageType == 1 || imageType == 9;
+        const bool gray = imageType == 3 || imageType == 11;
+        const bool color = imageType == 2 || imageType == 10;
+        const bool rle = imageType == 9 || imageType == 10 || imageType == 11;
+        const unsigned rawBytes = pixelBits / 8;
+        const unsigned paletteBytes = paletteBits / 8;
+        const unsigned paletteSize = file[1] ? paletteCount * paletteBytes : 0;
+        if (!width || !height || width > 4096 || height > 4096 ||
+            static_cast<std::uint64_t>(width) * height > 16ull * 1024 * 1024 ||
+            (!indexed && !gray && !color) || (indexed && (pixelBits != 8 ||
+              file[1] != 1 || (paletteBits != 24 && paletteBits != 32))) ||
+            (gray && pixelBits != 8) ||
+            (color && pixelBits != 24 && pixelBits != 32) ||
+            static_cast<std::size_t>(18 + file[0]) + paletteSize > file.size())
+        {
+            Fail("Unsupported or malformed W3D TGA palette/format");
+            return nullptr;
+        }
+
+        std::size_t position = static_cast<std::size_t>(18 + file[0]);
+        const std::size_t paletteOffset = position;
+        position += paletteSize;
+        RenderSurfaceDescription desc;
+        desc.width = width; desc.height = height; desc.pixelFormat = 2;
+        RenderSurfaceHandle out = Create(desc);
+        if (!out) return nullptr;
+        Surface & surface = *Native(out);
+        const std::size_t totalPixels = static_cast<std::size_t>(width) * height;
+        std::size_t written = 0;
+        bool valid = true;
+        while (written < totalPixels && valid)
+        {
+            unsigned count = 1;
+            bool repeat = false;
+            if (rle)
+            {
+                if (position >= file.size()) { valid = false; break; }
+                const std::uint8_t code = file[position++];
+                count = (code & 0x7Fu) + 1;
+                repeat = (code & 0x80u) != 0;
+            }
+            if (count > totalPixels - written) { valid = false; break; }
+            std::uint8_t repeated[4] = {};
+            if (repeat)
+            {
+                if (position + rawBytes > file.size()) { valid = false; break; }
+                std::memcpy(repeated, file.data() + position, rawBytes);
+                position += rawBytes;
+            }
+            for (unsigned i = 0; i < count && valid; ++i)
+            {
+                std::uint8_t in[4] = {};
+                if (repeat)
+                    std::memcpy(in, repeated, rawBytes);
+                else
+                {
+                    if (position + rawBytes > file.size()) { valid = false; break; }
+                    std::memcpy(in, file.data() + position, rawBytes);
+                    position += rawBytes;
+                }
+                std::uint8_t bgra[4] = {0, 0, 0, 255};
+                if (indexed)
+                {
+                    if (in[0] < paletteStart || in[0] >= paletteStart + paletteCount)
+                    {
+                        valid = false; break;
+                    }
+                    const std::size_t off = paletteOffset +
+                        (static_cast<unsigned>(in[0]) - paletteStart) * paletteBytes;
+                    std::memcpy(bgra, file.data() + off, paletteBytes);
+                }
+                else if (gray)
+                    bgra[0] = bgra[1] = bgra[2] = in[0];
+                else
+                    std::memcpy(bgra, in, rawBytes);
+
+                const unsigned row = static_cast<unsigned>(written / width);
+                const unsigned column = static_cast<unsigned>(written % width);
+                const unsigned targetY = flags & 0x20u ? row : height - 1 - row;
+                const unsigned targetX = flags & 0x10u ? width - 1 - column : column;
+                std::memcpy(surface.pixels.data() +
+                            (static_cast<std::size_t>(targetY) * width + targetX) * 4u,
+                            bgra, 4u);
+                ++written;
+            }
+        }
+        if (!valid || written != totalPixels)
+        {
+            Release(out);
+            Fail("Truncated RLE or invalid W3D TGA image/palette data");
+            return nullptr;
+        }
+        return out;
     }
 
     void Retain(RenderSurfaceHandle handle)
