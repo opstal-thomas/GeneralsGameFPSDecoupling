@@ -78,6 +78,7 @@ struct DX12W3DBufferState
     bool mapped = false;
     bool readOnly = false;
     bool dirty = true;
+    unsigned long long preparedRecording = 0;
 
     explicit DX12W3DBufferState(ID3D12Device * device,
                                 const RenderBufferDescription & desc)
@@ -133,7 +134,11 @@ struct DX12W3DBufferState
         const auto finalState = indices ? D3D12_RESOURCE_STATE_INDEX_BUFFER
                                         : D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
 
-        if (!native || dirty)
+        // Transient pages are owned by the presentation and may be recycled
+        // after the last using fence. Even an unchanged dynamic W3D handle
+        // must resnapshot its CPU shadow when rebound in a later recording.
+        // Static DEFAULT-heap resources remain persistent between frames.
+        if (!native || dirty || (dynamic && preparedRecording != device.RecordingSerial()))
         {
             ComPtr<ID3D12Resource> newNative;
             if (dynamic)
@@ -192,7 +197,6 @@ struct DX12W3DBufferState
             // Replacing a buffer preserves the previous version for any
             // already-recorded draws, pinned by RetainFrameResource().
             native = std::move(newNative);
-            dirty = false;
         }
 
         D3D12_RESOURCE_STATES tracked = D3D12_RESOURCE_STATE_COMMON;
@@ -213,6 +217,10 @@ struct DX12W3DBufferState
 
         if (!device.RetainFrameResource(native.Get()))
             return Fail(device.LastError());
+        // Commit only after registration/retention succeeded: a transient
+        // allocation failure remains retryable rather than binding stale data.
+        dirty = false;
+        preparedRecording = device.RecordingSerial();
         return true;
     }
 };
