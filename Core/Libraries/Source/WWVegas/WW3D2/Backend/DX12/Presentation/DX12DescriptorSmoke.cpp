@@ -123,6 +123,10 @@ namespace
     bool BuildPipeline(ID3D12Device * device, ComPtr<ID3D12RootSignature> & root,
                        ComPtr<ID3D12PipelineState> & pipeline)
     {
+        // Pipeline states/root signatures belong to a specific ID3D12Device.
+        // Do not pass a non-null ComPtr output pointer after a device reset.
+        pipeline.Reset();
+        root.Reset();
         ComPtr<ID3DBlob> vs, ps, errors;
         if (!Check(SUCCEEDED(D3DCompile(
                       ShaderCode, sizeof(ShaderCode)-1, nullptr, nullptr,
