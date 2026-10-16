@@ -134,7 +134,18 @@ struct DX12W3DTextureStages::Impl
         if (!output.dirty && output.resource &&
             found != preparedRevisions.end() &&
             found->second == output.contentRevision)
-            return true;
+        {
+            // Readback/R07 passes may have transitioned the texture away
+            // from shader read since its last draw. Avoid duplicate AddRef
+            // but still respect the actual B05 resource-state tracker.
+            D3D12_RESOURCE_STATES current = D3D12_RESOURCE_STATE_COMMON;
+            const auto sampled = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+                                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            if (frame.GetFrameResourceState(output.resource.Get(), current))
+                return current == sampled ||
+                    frame.TransitionFrameResource(output.resource.Get(), sampled) ||
+                    Fail(frame.LastError());
+        }
         if (!DX12W3DTextures::Prepare(frame, h))
             return Fail(DX12W3DTextures::LastError());
         if (!DX12W3DTextures::Snapshot(h, output))
