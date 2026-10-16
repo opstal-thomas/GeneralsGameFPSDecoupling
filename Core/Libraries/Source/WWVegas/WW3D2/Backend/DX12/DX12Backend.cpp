@@ -1010,8 +1010,9 @@ RenderSurfaceHandle Renderer::Create_Surface(const RenderSurfaceDescription & de
 
 RenderSurfaceHandle Renderer::Load_Surface(const char * filename)
 {
-    ReportPending("Renderer::Load_Surface");
-    return {};
+    // Native filesystem TGA loader. TextureLoader handles archived
+    // DDS/TGA assets through W3D's existing FileFactory CPU decode path.
+    return DX12W3DSurfaces::LoadTGAFile(filename);
 }
 
 void Renderer::Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description)
