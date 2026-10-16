@@ -711,3 +711,21 @@ ID3D12Resource * DX12PresentationDevice::CurrentDepthTarget() const
 {
     return impl_->recording ? impl_->depthBuffer.Get() : nullptr;
 }
+
+D3D12_CPU_DESCRIPTOR_HANDLE DX12PresentationDevice::CurrentBackBufferRTV() const
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE result = {};
+    if (impl_->recording && impl_->rtvHeap)
+    {
+        result = impl_->rtvHeap->GetCPUDescriptorHandleForHeapStart();
+        result.ptr += static_cast<SIZE_T>(impl_->currentBuffer) * impl_->rtvIncrement;
+    }
+    return result;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DX12PresentationDevice::CurrentDepthDSV() const
+{
+    return impl_->recording && impl_->dsvHeap
+        ? impl_->dsvHeap->GetCPUDescriptorHandleForHeapStart()
+        : D3D12_CPU_DESCRIPTOR_HANDLE{};
+}
