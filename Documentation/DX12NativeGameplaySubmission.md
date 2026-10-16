@@ -115,38 +115,70 @@ sorting and alpha-mask regression checks also passed.
 passed all **seven** jobs: DX8 dependency inventory, Generals and Zero Hour
 normal builds, both preview builds and both DX12-exclusive bootstrap builds.
 
-**Still incomplete:** DX8-style point and spot lighting require correct
-position/attenuation parity rather than this equivalent-directional
-baseline. Specular material/light response, texture-stage combiners,
-samplers/UV transformations, vertex skinning, fog, RHW and remaining
-B07 renderer methods still need implementation. No playable DX12-only
-single-player skirmish or full in-game parity capture has been verified.
+## M01/B07 native local lighting, combiners, and samplers (2026-10-17)
+
+- The typed W3D light-environment adapter now preserves actual point/spot
+  positions, spot axes and outer cone angles, attenuation ranges, raw diffuse
+  and specular colors, and light types. Both Generals and Zero Hour preserve
+  these values in the deferred sorting snapshots, not just preattenuated
+  center-of-object directional approximations.
+- The native vertex shader evaluates each vertex's world position and normal
+  against up to four original lights: directional Lambert diffuse, distance
+  attenuation for point and spot lights, and spot-cone rejection. World and
+  view matrices remain in the row-vector convention validated by M01.
+  W3D material shininess and specular light/material colors generate
+  Blinn-Phong vertex highlights, added after fixed-function texture combiners,
+  with original W3D secondary-gradient specular enable.
+- W3D's original primary color/alpha stage and secondary detail-stage
+  operations now select compile-time HLSL permutations, including two
+  independent channel equations, texture factor, modulate/modulate2x,
+  signed/add/smooth/subtract and texture/current-alpha blends. Unsupported
+  bump-environment operators reject the draw explicitly rather than being
+  misrendered as ordinary multiply.
+- The authoritative draw root binds R05 shader-visible texture descriptors
+  alongside native per-stage sampler tables; sampler descriptions support
+  point/linear/aniso filters, no mip, wrap/clamp/border, anisotropy and
+  border colors. Sampler descriptors are snapshotted per frame and retained
+  until their command-submission fence. Critically, the selected
+  `Renderer::Set_Texture` now invokes the original `TextureClass::Apply`,
+  including lazy texture loading and original `TextureFilterClass::Apply`,
+  rather than just peeking at the underlying texture handle.
+- Shader and source-contract checks and WARP pixel tests passed at
+  [run 38976026242](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38976026242)
+  for actual point/spot lighting, specular, two-UV/detail combiners and
+  sampler wrap/clamp. Additional native WARP opaque plus 50%-transparent
+  compositing assertions were submitted later and must pass independently
+  before the B07 transparent baseline can be treated as verified.
+
+**Still incomplete:** These are DX8 fixed-function approximations implemented
+against real W3D state, not a measured screenshot/pixel-parity guarantee for
+all point/spot falloffs and specular modes. Native stage-2+ effects, dynamic
+texture-coordinate transforms, bump mapping, fog, skinning, RHW, stencil,
+fullscreen effects and other B07 methods remain. An actual DX12-only
+single-player gameplay launch and DX8-vs-DX12 opaque/transparent camera
+comparison have **not** been verified.
 
 ## Not yet implemented — keep M01/B07 open
 
-- End-to-end in-game sorted-alpha visual verification and parity.
-  CPU state capture/restore, dynamic buffers and basic native replay are
-  implemented, but scene lighting from captured lights is **not** native
-  yet; the M03 lighting path must preserve mesh/environment overrides.
-  This stage has shader/source/WARP-level tests, not a rendered
-  Generals/Zero Hour gameplay comparison. Transparency ordering edge
-  cases and specialized material passes also remain to be validated.
-- Complete material/fixed-function parity, exact point/spot-light
-  attenuation and specular reflection, fog, texture combiners, samplers
-  and all shader permutations (M02/M03/R06). Directional/ambient
-  vertex lighting and color sources are now implemented, but the
-  native shader remains single-pass and W3D RHW, skinned layouts,
-  procedural materials and special geometry are not gameplay-equivalent.
+- End-to-end in-game opaque/sorted-transparent visual comparison against a
+  matched DX8 reference scene. CPU transparent ordering, typed captured
+  materials/lights, restored geometry and native blend equations are
+  implemented; they still require a DX12-only skirmish launch, comparable
+  camera capture and investigation of unsupported specialist passes.
+- Full fixed-function and material compatibility for every original W3D
+  shader variant: bump/UV transforms, animated textures, additional
+  texture stages, fog, skinning, transformed vertices, stencil/reflection
+  paths and per-material light/environment overrides.
 - Complete terrain/water, shroud, particles, HUD/menu/UI, immediate
   primitives and surface blit/readback effects (T/U/F/R08).
-- Remaining DX12Backend `ReportPending` methods, error reporting
-  and the B07 full neutral Renderer parity audit.
-- Launch and play an actual DX12-only Generals/Zero Hour single-player
-  skirmish without the developer checkpoint (V03, later after the above).
+- Remaining DX12Backend `ReportPending` methods, error handling,
+  resource/PSO state coverage and the full B07 neutral Renderer parity audit.
+- Launch and finish an actual DX12-only Generals/Zero Hour single-player
+  match without the B10 developer checkpoint (V03).
 
-**Next implementation gate:** extend the first native lit shader to DX8
-point/spot lights, vertex specular and fixed-function texture/color
-combiners (M03/R06), then validate deferred sorted-alpha and opaque
-meshes against DX8 in a real single-player map. Complete B07's remaining
-Renderer methods and the T01/U01/R08 terrain/UI/copy paths before
-enabling the DX12-only gameplay gate.
+**Next implementation gate:** confirm the latest two-material WARP compositing
+test and the Generals/Zero Hour Windows build matrix, then work through B07
+remaining renderer methods and T01/U01/R08 terrain/UI/copy paths that prevent
+a true DX12-only skirmish. Once DX12-only gameplay runs without any DX8
+render device, capture matched opaque and sorted-transparent mesh scenes
+against the DX8 reference as the required visual acceptance milestone.
