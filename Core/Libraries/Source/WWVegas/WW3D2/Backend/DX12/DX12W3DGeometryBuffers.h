@@ -9,6 +9,7 @@
 #pragma once
 
 #include "../../Renderer.h"
+#include "DX12W3DVertexLayouts.h"
 #include <d3d12.h>
 
 class DX12PresentationDevice;
@@ -47,6 +48,8 @@ namespace DX12W3DGeometryBuffers
     // Backend-private byte offsets for validating pooled upload snapshots.
     unsigned NativeVertexOffset(RenderVertexBufferHandle handle);
     unsigned NativeIndexOffset(RenderIndexBufferHandle handle);
+    const DX12W3DVertexLayout * NativeVertexLayout(RenderVertexBufferHandle handle);
+    unsigned NativeIndexElementBytes(RenderIndexBufferHandle handle);
     unsigned VertexByteSize(RenderVertexBufferHandle handle);
     unsigned IndexByteSize(RenderIndexBufferHandle handle);
     bool IsVertexMapped(RenderVertexBufferHandle handle);

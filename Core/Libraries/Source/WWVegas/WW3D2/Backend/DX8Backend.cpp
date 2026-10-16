@@ -896,14 +896,17 @@ RenderVertexBufferHandle Renderer::Create_Point_Sprite_Vertex_Buffer(unsigned by
 RenderIndexBufferHandle Renderer::Create_Index_Buffer(const RenderBufferDescription & description)
 {
     DX8_THREAD_ASSERT();
-    if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8())
+    if (!description.Is_Valid() || !DX8Wrapper::_Get_D3D_Device8() ||
+        (description.indexFormat != RENDER_INDEX_UINT16 &&
+         description.indexFormat != RENDER_INDEX_UINT32) ||
+        (description.byteSize % static_cast<unsigned>(description.indexFormat)) != 0)
         return nullptr;
 
     IDirect3DIndexBuffer8 * buffer = nullptr;
     const HRESULT result = DX8Wrapper::_Get_D3D_Device8()->CreateIndexBuffer(
         description.byteSize,
         Get_Legacy_Buffer_Usage(description),
-        D3DFMT_INDEX16,
+        description.indexFormat == RENDER_INDEX_UINT32 ? D3DFMT_INDEX32 : D3DFMT_INDEX16,
         description.Is_Dynamic() ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
         &buffer);
 

@@ -210,16 +210,26 @@ enum RenderBufferMapFlags
     RENDER_MAP_READ_ONLY = 1 << 3
 };
 
+// Native geometry can request 32-bit indices without abusing the FVF field.
+// All existing W3D index-buffer classes remain 16-bit by default.
+enum RenderIndexElementFormat
+{
+    RENDER_INDEX_UINT16 = 2,
+    RENDER_INDEX_UINT32 = 4
+};
+
 struct RenderBufferDescription
 {
     RenderBufferDescription()
-        : byteSize(0), legacyVertexFormat(0), usageFlags(RENDER_BUFFER_STATIC)
+        : byteSize(0), legacyVertexFormat(0), usageFlags(RENDER_BUFFER_STATIC),
+          indexFormat(RENDER_INDEX_UINT16)
     {
     }
 
     unsigned byteSize;
-    unsigned legacyVertexFormat; // 0 for 16-bit index buffers.
+    unsigned legacyVertexFormat; // 0 for index buffers; FVF for vertex buffers.
     unsigned usageFlags;
+    RenderIndexElementFormat indexFormat; // Ignored by vertex-buffer allocation.
 
     bool Is_Valid() const { return byteSize > 0; }
     bool Is_Dynamic() const { return (usageFlags & RENDER_BUFFER_DYNAMIC) != 0; }

@@ -135,6 +135,8 @@ struct DX12W3DBufferState
     D3D12_RESOURCE_STATES residentState = D3D12_RESOURCE_STATE_COMMON;
     unsigned nativeOffset = 0;
     unsigned format = 0;
+    DX12W3DVertexLayout vertexLayout;
+    unsigned indexElementBytes = 2;
     bool dynamic = false;
     bool mapped = false;
     bool readOnly = false;
@@ -144,6 +146,7 @@ struct DX12W3DBufferState
                                 const RenderBufferDescription & desc)
         : owner(device), shadow(desc.byteSize, 0),
           format(desc.legacyVertexFormat),
+          indexElementBytes(static_cast<unsigned>(desc.indexFormat)),
           dynamic(desc.Is_Dynamic()) {}
 
     bool Map(unsigned offset, unsigned size, unsigned flags, void * & result)
@@ -302,17 +305,36 @@ namespace DX12W3DGeometryBuffers
             Fail("Vertex buffer requires device and nonzero byte size");
             return nullptr;
         }
-        return new (std::nothrow) RendererVertexBufferResource(device, desc);
+        DX12W3DVertexLayout layout;
+        std::string reason;
+        if (!DX12W3DVertexLayouts::DecodeLegacyFVF(desc.legacyVertexFormat, layout, &reason))
+        {
+            Fail(reason.c_str());
+            return nullptr;
+        }
+        if (desc.byteSize < layout.stride || desc.byteSize % layout.stride)
+        {
+            Fail("Vertex byte size must contain whole FVF-stride vertices");
+            return nullptr;
+        }
+        auto * handle = new (std::nothrow) RendererVertexBufferResource(device, desc);
+        if (handle)
+            handle->state.vertexLayout = layout;
+        else
+            Fail("Unable to allocate DX12 vertex-buffer handle");
+        return handle;
     }
 
     RenderIndexBufferHandle CreateIndex(ID3D12Device * device,
                                         const RenderBufferDescription & desc)
     {
         lastError.clear();
-        if (!device || !desc.Is_Valid() || (desc.byteSize & 1u) != 0 ||
-            desc.legacyVertexFormat != 0)
+        const unsigned elementBytes = static_cast<unsigned>(desc.indexFormat);
+        if (!device || !desc.Is_Valid() ||
+            (elementBytes != 2 && elementBytes != 4) ||
+            (desc.byteSize % elementBytes) != 0 || desc.legacyVertexFormat != 0)
         {
-            Fail("Index buffer must have an even byte count and 16-bit W3D index format");
+            Fail("Index buffer needs whole 16-bit/32-bit elements and no vertex FVF");
             return nullptr;
         }
         return new (std::nothrow) RendererIndexBufferResource(device, desc);
@@ -373,7 +395,7 @@ namespace DX12W3DGeometryBuffers
             device.ActiveCommandList()->IASetVertexBuffers(stream, 1, nullptr);
             return true;
         }
-        if (!stride ||
+        if (stride < handle->state.vertexLayout.stride ||
             static_cast<unsigned long long>(firstVertex) * stride >= handle->state.shadow.size())
             return Fail("Invalid W3D DX12 vertex stream, stride or first vertex");
         const unsigned offset = firstVertex * stride;
@@ -407,13 +429,15 @@ namespace DX12W3DGeometryBuffers
             device.SetBoundBaseVertexIndex(0);
             return true;
         }
-        if (static_cast<unsigned long long>(firstIndex) * sizeof(std::uint16_t) >=
+        const unsigned elementBytes = handle->state.indexElementBytes;
+        if (static_cast<unsigned long long>(firstIndex) * elementBytes >=
             handle->state.shadow.size())
             return Fail("Invalid W3D index range");
-        const unsigned offset = firstIndex * sizeof(std::uint16_t);
+        const unsigned offset = firstIndex * elementBytes;
         const unsigned available = static_cast<unsigned>(handle->state.shadow.size()) - offset;
         const unsigned countBytes = indexCount
-            ? static_cast<unsigned long long>(indexCount) * 2 > available ? 0 : indexCount * 2
+            ? static_cast<unsigned long long>(indexCount) * elementBytes > available
+                  ? 0 : indexCount * elementBytes
             : available;
         if (!countBytes)
             return Fail("Index buffer slice exceeds mapped W3D allocation");
@@ -422,7 +446,7 @@ namespace DX12W3DGeometryBuffers
         D3D12_INDEX_BUFFER_VIEW view = {};
         view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + handle->state.nativeOffset + offset;
         view.SizeInBytes = countBytes;
-        view.Format = DXGI_FORMAT_R16_UINT;
+        view.Format = elementBytes == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
         device.ActiveCommandList()->IASetIndexBuffer(&view);
         device.SetBoundBaseVertexIndex(baseVertexIndex);
         return true;
@@ -446,6 +470,16 @@ namespace DX12W3DGeometryBuffers
     unsigned NativeIndexOffset(RenderIndexBufferHandle handle)
     {
         return handle ? handle->state.nativeOffset : 0;
+    }
+
+    const DX12W3DVertexLayout * NativeVertexLayout(RenderVertexBufferHandle handle)
+    {
+        return handle ? &handle->state.vertexLayout : nullptr;
+    }
+
+    unsigned NativeIndexElementBytes(RenderIndexBufferHandle handle)
+    {
+        return handle ? handle->state.indexElementBytes : 0;
     }
 
     unsigned VertexByteSize(RenderVertexBufferHandle handle)
