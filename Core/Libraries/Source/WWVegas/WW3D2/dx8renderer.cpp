@@ -476,9 +476,19 @@ void Renderer::Set_Shader(const ShaderClass & shader)
 // DX12Backend.cpp does not import legacy W3D objects or D3D8 types.
 void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
 {
-    if (stage < MAX_TEXTURE_STAGES)
-        REF_PTR_SET(NativeSortingState().Textures[stage], texture);
-    Bind_Texture(stage, texture ? texture->Peek_Render_Texture() : nullptr);
+    if (stage >= MAX_TEXTURE_STAGES)
+        return;
+    REF_PTR_SET(NativeSortingState().Textures[stage], texture);
+    // TextureClass::Apply initializes lazy W3D assets, binds the actual
+    // RenderTextureHandle, and calls TextureFilterClass::Apply. The latter
+    // translates the original material's min/mag/mip and U/V addressing
+    // through Renderer::Apply_Texture_Sampler into the native sampler heap.
+    // Sampling the Peek_Render_Texture() handle directly silently skipped
+    // all three behaviors for opaque and deferred transparent meshes.
+    if (texture)
+        texture->Apply(stage);
+    else
+        Bind_Texture(stage, nullptr);
 }
 
 // M01: translate the original W3D color and opacity (including per-object
