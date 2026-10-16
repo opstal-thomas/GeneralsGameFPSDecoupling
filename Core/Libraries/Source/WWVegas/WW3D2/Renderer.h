@@ -518,6 +518,28 @@ struct RenderVertexMaterialDescription
     float power;
 };
 
+// M01/B07 native vertex lighting keeps the game's light approximation
+// independent of D3D8's D3DLIGHT8. LightEnvironmentClass already combines
+// point/spot attenuation into at most four directional contributors.
+struct RenderDirectionalLight
+{
+    RenderDirectionalLight() : direction{0.f, 0.f, 1.f, 0.f},
+        diffuse{0.f, 0.f, 0.f, 0.f} {}
+
+    float direction[4]; // world-space vector toward the light
+    float diffuse[4];   // linear color after per-object attenuation
+};
+
+struct RenderLightingEnvironmentDescription
+{
+    RenderLightingEnvironmentDescription() : ambient{0.f, 0.f, 0.f, 1.f},
+        lightCount(0) {}
+
+    float ambient[4];
+    RenderDirectionalLight lights[4];
+    unsigned lightCount;
+};
+
 // The W3D fixed-function pixel pipeline consists of separate color and
 // alpha combiners per texture stage. Operations and inputs are semantic,
 // rather than the numeric values used by Direct3D 8 texture-stage states.
