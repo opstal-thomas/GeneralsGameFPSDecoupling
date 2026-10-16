@@ -54,6 +54,7 @@ struct DX12PresentationDevice::Impl
     HANDLE fenceEvent = nullptr;
     std::array<UINT64, BufferCount> frameFences = {};
     UINT64 nextFence = 1;
+    unsigned long long recordingSerial = 0;
     UINT rtvIncrement = 0;
     UINT currentBuffer = 0;
     unsigned width = 0;
@@ -66,6 +67,8 @@ struct DX12PresentationDevice::Impl
     // AddRef until the queue signals its fence; handles may be reused.
     std::vector<ComPtr<ID3D12Resource>> recordingResources;
     std::deque<std::pair<UINT64, std::vector<ComPtr<ID3D12Resource>>>> retiredResources;
+    std::vector<ComPtr<IUnknown>> recordingObjects;
+    std::deque<std::pair<UINT64, std::vector<ComPtr<IUnknown>>>> retiredObjects;
     void CollectRetired()
     {
         if (!fence)
@@ -75,6 +78,8 @@ struct DX12PresentationDevice::Impl
             return;
         while (!retiredResources.empty() && retiredResources.front().first <= done)
             retiredResources.pop_front();
+        while (!retiredObjects.empty() && retiredObjects.front().first <= done)
+            retiredObjects.pop_front();
     }
     DX12W3DPassGraph passGraph;
     std::string lastError;
@@ -207,6 +212,8 @@ struct DX12PresentationDevice::Impl
         boundBaseVertexIndex = 0;
         recordingResources.clear();
         retiredResources.clear();
+        recordingObjects.clear();
+        retiredObjects.clear();
         passGraph.Reset();
     }
 };
@@ -386,8 +393,8 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
         return false;
     state.CollectRetired();
     state.boundBaseVertexIndex = 0;
-    if (!state.recordingResources.empty())
-        return state.Fail("Unsubmitted frame resource retention remained", E_FAIL);
+    if (!state.recordingResources.empty() || !state.recordingObjects.empty())
+        return state.Fail("Unsubmitted frame resource/descriptor retention remained", E_FAIL);
     if (!state.Check(state.allocators[index]->Reset(), "Reset frame command allocator"))
         return false;
     if (!state.Check(state.commandList->Reset(state.allocators[index].Get(), nullptr),
@@ -415,6 +422,7 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
         state.commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH,
                                                  clearDepthValue, 0, 0, nullptr);
     state.recording = true;
+    ++state.recordingSerial;
     return true;
 }
 
@@ -471,7 +479,10 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
         // these until shutdown/device loss, even when queue signaling fails.
         state.retiredResources.emplace_back(UINT64_MAX,
             std::move(state.recordingResources));
+        state.retiredObjects.emplace_back(UINT64_MAX,
+            std::move(state.recordingObjects));
         state.recordingResources.clear();
+        state.recordingObjects.clear();
         return false;
     }
     state.frameFences[state.currentBuffer] = signalValue;
@@ -480,6 +491,12 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
         state.retiredResources.emplace_back(
             signalValue, std::move(state.recordingResources));
         state.recordingResources.clear();
+    }
+    if (!state.recordingObjects.empty())
+    {
+        state.retiredObjects.emplace_back(
+            signalValue, std::move(state.recordingObjects));
+        state.recordingObjects.clear();
     }
     state.CollectRetired();
     return state.Check(presented, "IDXGISwapChain::Present");
@@ -567,6 +584,28 @@ bool DX12PresentationDevice::RetainFrameResource(ID3D12Resource * resource)
     return true;
 }
 
+bool DX12PresentationDevice::RetainFrameObject(IUnknown * object)
+{
+    Impl & state = *impl_;
+    if (!state.recording || !object)
+        return state.Fail("RetainFrameObject requires active frame and COM object", E_INVALIDARG);
+    state.recordingObjects.emplace_back(object);
+    return true;
+}
+
+unsigned long long DX12PresentationDevice::RecordingSerial() const
+{
+    return impl_->recording ? impl_->recordingSerial : 0;
+}
+
+unsigned DX12PresentationDevice::InFlightObjectCount() const
+{
+    std::size_t count = impl_->recordingObjects.size();
+    for (const auto & frame : impl_->retiredObjects)
+        count += frame.second.size();
+    return static_cast<unsigned>(count);
+}
+
 unsigned DX12PresentationDevice::InFlightResourceCount() const
 {
     std::size_t count = impl_->recordingResources.size();
@@ -642,6 +681,8 @@ void DX12PresentationDevice::Shutdown()
     // unsubmitted staging allocations may be safely disposed.
     state.recordingResources.clear();
     state.retiredResources.clear();
+    state.recordingObjects.clear();
+    state.retiredObjects.clear();
     state.ReleaseAll();
 }
 
