@@ -175,27 +175,27 @@ void DX12W3DSortingTrackIndexBinding(const RenderDynamicIndexBinding & binding,
     state.index_base_offset = owner ? baseVertexIndex : 0;
 }
 
-void Renderer::Capture_Sorting_State(RenderStateStruct & out)
+void Renderer::Capture_Sorting_State(RenderStateStruct & state)
 {
-    RenderStateStruct & state = NativeSortingState();
+    RenderStateStruct & tracked = NativeSortingState();
     Matrix4x4 matrix(true);
     Get_Transform(RENDER_TRANSFORM_WORLD, matrix);
-    state.world = ToSortingMatrix(matrix);
+    tracked.world = ToSortingMatrix(matrix);
     Get_Transform(RENDER_TRANSFORM_VIEW, matrix);
-    state.view = ToSortingMatrix(matrix);
-    state.index_base_offset = static_cast<unsigned short>(
+    tracked.view = ToSortingMatrix(matrix);
+    tracked.index_base_offset = static_cast<unsigned short>(
         DX12W3DSortingCurrentBaseVertexIndex());
     // Sorting light environments are not yet native. Never advertise
     // unknown or stale DX8 lights as though they were real DX12 lighting.
-    std::memset(state.LightEnable, 0, sizeof(state.LightEnable));
-    out = state; // retains every referenced W3D buffer/texture/material
+    std::memset(tracked.LightEnable, 0, sizeof(tracked.LightEnable));
+    state = tracked; // retains every referenced W3D buffer/texture/material
 }
 
-void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & state)
+void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_state)
 {
-    Set_Transform(RENDER_TRANSFORM_WORLD, FromSortingMatrix(state.world));
-    Set_Transform(RENDER_TRANSFORM_VIEW, FromSortingMatrix(state.view));
-    if (state.material && state.material->Get_Lighting())
+    Set_Transform(RENDER_TRANSFORM_WORLD, FromSortingMatrix(render_state.world));
+    Set_Transform(RENDER_TRANSFORM_VIEW, FromSortingMatrix(render_state.view));
+    if (render_state.material && render_state.material->Get_Lighting())
     {
         // M03 will provide real native light permutations. The baseline
         // unlit material must never dereference uninitialized light data.
@@ -208,35 +208,35 @@ void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & state)
     }
 }
 
-void Renderer::Restore_Sorting_State(const RenderStateStruct & original)
+void Renderer::Restore_Sorting_State(const RenderStateStruct & state)
 {
     // Keep source references alive while re-binding: the current tracked
     // state may be the sole other reference to the buffer we replace.
-    RenderStateStruct state;
-    state = original;
-    Set_Shader(state.shader);
-    Set_Material(state.material);
+    RenderStateStruct snapshot;
+    snapshot = state;
+    Set_Shader(snapshot.shader);
+    Set_Material(snapshot.material);
     const unsigned stageCount = Get_Capabilities().maxTexturesPerPass;
     for (unsigned i = 0; i < MAX_TEXTURE_STAGES; ++i)
     {
         if (i < stageCount)
-            Set_Texture(i, state.Textures[i]);
+            Set_Texture(i, snapshot.Textures[i]);
     }
-    Apply_Sorting_Transforms_And_Lights(state);
+    Apply_Sorting_Transforms_And_Lights(snapshot);
 
-    const VertexBufferClass * vertex = state.vertex_buffers[0];
-    if (!vertex || state.vertex_buffer_types[0] == BUFFER_TYPE_INVALID)
+    const VertexBufferClass * vertex = snapshot.vertex_buffers[0];
+    if (!vertex || snapshot.vertex_buffer_types[0] == BUFFER_TYPE_INVALID)
         Bind_Legacy_Vertex_Buffer(nullptr);
-    else if (state.vertex_buffer_types[0] == BUFFER_TYPE_DX8 ||
-             state.vertex_buffer_types[0] == BUFFER_TYPE_SORTING)
+    else if (snapshot.vertex_buffer_types[0] == BUFFER_TYPE_DX8 ||
+             snapshot.vertex_buffer_types[0] == BUFFER_TYPE_SORTING)
         Bind_Legacy_Vertex_Buffer(vertex);
     else
     {
         RenderDynamicVertexBinding binding;
         binding.legacyOwner = vertex;
-        binding.bufferType = state.vertex_buffer_types[0];
-        binding.firstVertex = state.vba_offset;
-        binding.vertexCount = state.vba_count;
+        binding.bufferType = snapshot.vertex_buffer_types[0];
+        binding.firstVertex = snapshot.vba_offset;
+        binding.vertexCount = snapshot.vba_count;
         binding.legacyVertexFormat = vertex->FVF_Info().Get_FVF();
         binding.stride = vertex->FVF_Info().Get_FVF_Size();
         if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
@@ -246,25 +246,25 @@ void Renderer::Restore_Sorting_State(const RenderStateStruct & original)
         {
             const auto * array = static_cast<const SortingVertexBufferClass *>(vertex)->
                 Get_Sorting_Vertex_Array();
-            binding.cpuData = array ? array + state.vba_offset : nullptr;
+            binding.cpuData = array ? array + snapshot.vba_offset : nullptr;
         }
         Bind_Dynamic_Vertex_Buffer(binding);
         DX12W3DSortingTrackVertexBinding(binding);
     }
 
-    const IndexBufferClass * index = state.index_buffer;
-    if (!index || state.index_buffer_type == BUFFER_TYPE_INVALID)
+    const IndexBufferClass * index = snapshot.index_buffer;
+    if (!index || snapshot.index_buffer_type == BUFFER_TYPE_INVALID)
         Bind_Legacy_Index_Buffer(nullptr, 0);
-    else if (state.index_buffer_type == BUFFER_TYPE_DX8 ||
-             state.index_buffer_type == BUFFER_TYPE_SORTING)
-        Bind_Legacy_Index_Buffer(index, state.index_base_offset);
+    else if (snapshot.index_buffer_type == BUFFER_TYPE_DX8 ||
+             snapshot.index_buffer_type == BUFFER_TYPE_SORTING)
+        Bind_Legacy_Index_Buffer(index, snapshot.index_base_offset);
     else
     {
         RenderDynamicIndexBinding binding;
         binding.legacyOwner = index;
-        binding.bufferType = state.index_buffer_type;
-        binding.firstIndex = state.iba_offset;
-        binding.indexCount = index->Get_Index_Count() - state.iba_offset;
+        binding.bufferType = snapshot.index_buffer_type;
+        binding.firstIndex = snapshot.iba_offset;
+        binding.indexCount = index->Get_Index_Count() - snapshot.iba_offset;
         if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
             binding.resource = static_cast<const DX8IndexBufferClass *>(index)->
                 Get_Render_Index_Buffer();
@@ -272,14 +272,14 @@ void Renderer::Restore_Sorting_State(const RenderStateStruct & original)
         {
             const auto * array = static_cast<const SortingIndexBufferClass *>(index)->
                 Get_Sorting_Index_Array();
-            binding.cpuData = array ? array + state.iba_offset : nullptr;
+            binding.cpuData = array ? array + snapshot.iba_offset : nullptr;
         }
-        Bind_Dynamic_Index_Buffer(binding, state.index_base_offset);
-        DX12W3DSortingTrackIndexBinding(binding, state.index_base_offset);
+        Bind_Dynamic_Index_Buffer(binding, snapshot.index_base_offset);
+        DX12W3DSortingTrackIndexBinding(binding, snapshot.index_base_offset);
     }
     // W3D's index_base_offset is a vertex-base offset. Set this after
     // IA rebinding because that operation also resets the native base.
-    Set_Index_Buffer_Index_Offset(state.index_base_offset);
+    Set_Index_Buffer_Index_Offset(snapshot.index_base_offset);
 }
 
 void Renderer::Release_Sorting_State()
