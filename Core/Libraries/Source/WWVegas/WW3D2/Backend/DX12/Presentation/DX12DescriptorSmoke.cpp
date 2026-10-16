@@ -401,6 +401,62 @@ int wmain()
                "All descriptor heaps retired after GPU fence completion"))
         return 1;
 
+    // Exhaust one shader-visible page with many distinct texture identities.
+    // The cache must allocate another page instead of overwriting descriptors
+    // that earlier DrawInstanced commands still reference.
+    if (!Check(device.BeginFrame(clear), "Begin descriptor page-rotation frame"))
+        return 1;
+    cmd = device.ActiveCommandList();
+    cmd->SetGraphicsRootSignature(root.Get());
+    cmd->SetPipelineState(pipeline.Get());
+    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmd->RSSetViewports(1, &viewport);
+    for (unsigned i = 0; i < 260; ++i)
+    {
+        const std::array<std::uint8_t, 4> color =
+            i == 0 ? std::array<std::uint8_t, 4>{0, 0, 255, 255} :
+            i == 259 ? std::array<std::uint8_t, 4>{0, 255, 0, 255} :
+                       std::array<std::uint8_t, 4>{
+                           static_cast<std::uint8_t>(i), 8,
+                           static_cast<std::uint8_t>(i * 3u), 255};
+        auto source = MakeTexture(device.NativeDevice(), color);
+        if (!Check(source && stages.Bind(0, T(source)),
+                   "Bind unique W3D native texture for descriptor paging"))
+            return 1;
+        Release(T(source)); // cache holds last CPU reference
+        if (i == 0)
+        {
+            if (!Check(DrawArea(device, stages, 0, 0, 0),
+                       "Draw retained descriptor in first heap page")) return 1;
+        }
+        else if (i == 259)
+        {
+            if (!Check(DrawArea(device, stages, 0, 32, 32),
+                       "Draw descriptor from second heap page")) return 1;
+        }
+        else if (!Check(stages.BindForDraw(device, 1),
+                        "Allocate immutable SRV table under page pressure"))
+            return 1;
+    }
+    if (!Check(stages.SnapshotCount() == 260 && stages.PageCount() == 2,
+               "SRV cache page rolls over after 256 unique texture pairs") ||
+        !Check(device.InFlightObjectCount() >= 2,
+               "Both shader-visible pages pinned through the same GPU fence"))
+        return 1;
+    Readback pageReadback;
+    if (!Check(CopyBackbuffer(device, pageReadback), "Copy descriptor page rotation output"))
+        return 1;
+    stages.Clear();
+    if (!Check(device.EndFrame(0, false), "Submit first-page and second-page draws") ||
+        !Check(device.WaitForIdle(), "Complete multi-page descriptor frame") ||
+        !Check(CheckPixel(pageReadback, 16, 16, {255, 0, 0}),
+               "First descriptor page draw survives 259 subsequent bindings") ||
+        !Check(CheckPixel(pageReadback, 48, 48, {0, 255, 0}),
+               "New SRV page displays final W3D texture") ||
+        !Check(device.InFlightObjectCount() == 0,
+               "Both shader-visible pages retired after GPU completion"))
+        return 1;
+
     // Reusing the same cache after device recreation may NEVER bind a view
     // into the previous device or reissue a GPU descriptor from old frames.
     auto again = MakeTexture(device.NativeDevice(), {4, 8, 12, 255});
