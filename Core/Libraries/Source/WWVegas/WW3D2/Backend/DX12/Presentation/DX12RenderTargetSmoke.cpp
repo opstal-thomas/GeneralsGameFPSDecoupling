@@ -198,6 +198,16 @@ int wmain()
     targets.Release(mismatched);
     DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(otherDepth));
 
+    if (!Check(targets.Bind(frame, savedPrimary, nullptr),
+               "Bind primary backbuffer color-only without DSV") ||
+        !Check(!targets.Clear(frame, false, true, primary, 0.4f, 0),
+               "Reject depth clear while primary DSV is unbound") ||
+        !Check(targets.Clear(frame, true, false, primary, 1.f, 0),
+               "Color-only native primary target remains clearable") ||
+        !Check(targets.Bind(frame, nullptr, nullptr),
+               "Restore full HWND attachments after color-only pass"))
+        return 1;
+
     if (!Check(targets.Bind(frame, colorSurface, depthSurface),
                "Switch GPU RTV/DSV from HWND to offscreen") ||
         !Check(targets.BoundColorResource(frame) ==
