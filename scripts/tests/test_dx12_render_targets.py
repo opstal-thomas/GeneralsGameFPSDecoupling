@@ -96,6 +96,10 @@ class DX12R07RenderTargetTests(unittest.TestCase):
         self.assertIn("RenderSurfaceHandle AcquireTextureLevel(", header)
         self.assertIn("RenderSurfaceHandle CreateMSAAColor(", header)
         self.assertIn("RenderTextureHandle BoundDepthTexture() const", header)
+        self.assertIn("ComPtr<ID3D12Device> msaaDevice;", source)
+        self.assertIn("s.msaaDevice.Get() != frame.NativeDevice()", source)
+        self.assertIn("s.msaaState = D3D12_RESOURCE_STATE_COMMON", source)
+        self.assertIn("s.msaa = std::move(replacement)", source)
         self.assertIn("hasColor ? 1u : 0u", source)
         self.assertIn("impl_->activeDepth ? nullptr : frame.CurrentBackBuffer()", source)
         self.assertIn("Cannot clear a color target in a depth-only pass", source)
@@ -127,6 +131,8 @@ class DX12R07RenderTargetTests(unittest.TestCase):
             "Record depth/stencil clear with zero active RTVs",
             "Reject stale primary surface handle after resize",
             "Rehydrate offscreen texture/RTV after device reset",
+            "Recreate retained 4x MSAA RTV on replacement D3D12 device",
+            "GPU 4x MSAA resolve survives D3D12 device replacement",
             "frame.InFlightResourceCount() == 0",
             "frame.InFlightObjectCount() == 0",
         ):
