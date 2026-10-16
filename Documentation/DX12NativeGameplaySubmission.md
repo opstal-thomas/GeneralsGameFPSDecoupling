@@ -38,6 +38,22 @@ build remains intentionally fail-closed outside the developer checkpoint.
   invalid layouts and unsupported depth-only color passes.
   Per-frame root/PSO ownership and resource residency follow the
   previously verified presentation submission-fence lifecycle.
+- The M01 sorting-state bridge now snapshots original WW3D shader,
+  material, texture, vertex/index and transform state in the typed CPU
+  adapter. Deferred nodes retain the original W3D owners and renderer
+  bindings; restoration reconstructs the R02 dynamic/sorting slices,
+  world/view transforms, shader state and base-vertex index. Indexed
+  replay then uses the authoritative DX12 draw path instead of a
+  separate DX8 draw. Sorting matrix multiplication and homogeneous
+  transformed-center calculations match the historic D3DX row-vector
+  convention. The CPU sorting queue still chooses draw order.
+- The B07 native draw PSO now has distinct source/destination blend
+  factors, alpha blend equations, additive/reverse-subtract operations,
+  independent RGB/alpha write masks and blend enable. These contribute
+  to the immutable PSO cache key, avoiding state bleed between adjacent
+  transparent draws. The WARP test records a second masked draw and
+  verifies the previous pixel is preserved on GPU readback. Existing
+  DX8 dependency audit and source-interface guardrails remain in force.
 
 ## Verified
 
@@ -49,18 +65,27 @@ W3D R16 triangles and R32 strips using the **selected native W3D path**,
 checks out-of-range rejection, copies back actual GPU pixels and
 verifies their color. No DX8 texture or draw mirror participates.
 
-[Windows game validation run 38966299293](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38966299293)
-**passed all seven jobs**: the DX8 dependency audit, normal Generals and
-Zero Hour builds/tests, their DX12-preview builds/tests, and both
-DX12-exclusive bootstrap builds/tests. This verifies the source-level
-compatibility and native draw integration, **not** playable DX12-only gameplay.
+[Sorting/blending WARP validation run 38970703645](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38970703645)
+**passed** Win32/x64 WARP GPU tests, shader compilation, source contract
+checks, homogeneous sorting matrix smoke assertions and the new masked
+reverse-subtract draw / native PSO cache readback assertion.
+
+[Windows game validation run 38970703978](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38970703978)
+**passed all seven jobs**: the DX8 dependency inventory/boundary audit,
+normal Generals and Zero Hour builds/tests, both DX12-preview builds/tests,
+and both DX12-exclusive bootstrap builds/tests. These tests prove the
+native bindings compile and link with the games, but **do not** establish
+rendering parity in an actual skirmish.
 
 ## Not yet implemented — keep M01/B07 open
 
-- `Renderer::Capture_Sorting_State`, `Restore_Sorting_State`,
-  `Release_Sorting_State`, sorted deferred transparency/light capture
-  and all ordering/transform parity. Sorting source geometry was
-  integrated by R02, but this is **not** completed sorted draw execution.
+- End-to-end in-game sorted-alpha visual verification and parity.
+  CPU state capture/restore, dynamic buffers and basic native replay are
+  implemented, but scene lighting from captured lights is **not** native
+  yet; the M03 lighting path must preserve mesh/environment overrides.
+  This stage has shader/source/WARP-level tests, not a rendered
+  Generals/Zero Hour gameplay comparison. Transparency ordering edge
+  cases and specialized material passes also remain to be validated.
 - Full material/lighting, fog, texture combiners, samplers and all
   shader permutations (M02/M03/R06). The initial shader is a deliberately
   restricted unlit/single-pass baseline. W3D RHW transform semantics,
@@ -73,6 +98,9 @@ compatibility and native draw integration, **not** playable DX12-only gameplay.
 - Launch and play an actual DX12-only Generals/Zero Hour single-player
   skirmish without the developer checkpoint (V03, later after the above).
 
-**Next implementation gate:** correctly implement sorted state and
-transparency submission from the original W3D queues, then validate
-real model rendering with terrain/UI in a DX12-only test map.
+**Next implementation gate:** implement M03 sorted-object lighting and
+fixed-function material/texture-combiner semantics (with R06 sampler
+parity), then validate ordered alpha and opaque model rendering
+against DX8 in a real DX12-only test map. Continue B07 remaining
+gameplay Renderer methods while T01/U01/R08 supply terrain/UI/copies.
+DX12-only skirmish support remains gated until these paths work.
