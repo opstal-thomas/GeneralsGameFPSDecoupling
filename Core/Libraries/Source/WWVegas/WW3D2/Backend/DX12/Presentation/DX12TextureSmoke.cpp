@@ -5,6 +5,7 @@
 */
 #include "../DX12PresentationDevice.h"
 #include "../DX12W3DTextures.h"
+#include "../DX12W3DSurfaces.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -17,6 +18,8 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -265,6 +268,72 @@ int wmain()
                decoded[2] == 0x40 && decoded[3] == 2,
                "A8P8 indexed W3D palette conversion")) return 1;
 
+    // Native SurfaceClass-style fallback image with distinct 2x2 quadrants,
+    // normalized into BGRA8 and box-filtered into a full mip chain.
+    RenderSurfaceDescription surfaceDesc;
+    surfaceDesc.width = surfaceDesc.height = 4;
+    surfaceDesc.pixelFormat = 2;
+    auto sourceSurface = DX12W3DSurfaces::Create(surfaceDesc);
+    auto clonedSurface = DX12W3DSurfaces::Create(surfaceDesc);
+    if (!Check(sourceSurface && clonedSurface, "Create native CPU image surfaces"))
+        return 1;
+    RenderSurfaceMap surfaceMap;
+    if (!Check(DX12W3DSurfaces::Lock(sourceSurface, surfaceMap),
+               "Lock CPU fallback surface")) return 1;
+    for (unsigned y = 0; y < 4; ++y)
+    {
+        auto * row = static_cast<std::uint8_t *>(surfaceMap.data) + y * surfaceMap.rowPitch;
+        for (unsigned x = 0; x < 4; ++x)
+        {
+            const unsigned offset = x * 4;
+            row[offset] = x < 2 ? 0x12 : 0x88;
+            row[offset + 1] = y < 2 ? 0x34 : 0x99;
+            row[offset + 2] = 0x56;
+            row[offset + 3] = 0xFF;
+        }
+    }
+    if (!Check(DX12W3DSurfaces::Unlock(sourceSurface), "Unlock CPU surface") ||
+        !Check(DX12W3DSurfaces::Copy(sourceSurface, nullptr, clonedSurface, nullptr),
+               "CPU image surface copy with independent ownership"))
+        return 1;
+    auto fromSurface = DX12W3DSurfaces::ToTexture(device.NativeDevice(),
+                                                  clonedSurface, 0);
+    if (!Check(fromSurface && MipCount(T(fromSurface)) == 3,
+               "Create full box-filtered RGBA8 mip chain from W3D CPU surface"))
+        return 1;
+    DX12W3DSurfaces::Release(sourceSurface);
+    DX12W3DSurfaces::Release(clonedSurface);
+
+    // Validate filesystem TGA parsing in the backend, without a D3DX loader.
+    // The game archive DDS/TGA loader already decodes via FileFactory into
+    // the very same neutral Map_Texture_* entry points.
+    const char * tgaName = "w3d_dx12_r04_tga_smoke.tga";
+    {
+        const std::uint8_t tga[] = {
+            0, 1, 9, 0, 0, 2, 0, 24, 0, 0, 0, 0,
+            2, 0, 1, 0, 8, 0x20,
+            255, 0, 0, 0, 0, 255, // indexed palette: blue, red
+            1, 0, 1                // RLE raw packet: two palette indices
+        };
+        std::ofstream file(tgaName, std::ios::binary | std::ios::trunc);
+        if (!Check(static_cast<bool>(file), "Create TGA sample")) return 1;
+        file.write(reinterpret_cast<const char *>(tga), sizeof(tga));
+    }
+    auto tgaSurface = DX12W3DSurfaces::LoadTGAFile(tgaName);
+    std::remove(tgaName);
+    if (!Check(tgaSurface, "Read palettized RLE W3D TGA without DX8") ||
+        !Check(DX12W3DSurfaces::Lock(tgaSurface, surfaceMap) &&
+               surfaceMap.rowPitch == 8, "Read normalized image surface pixels"))
+        return 1;
+    const auto * tgaPixels = static_cast<const std::uint8_t *>(surfaceMap.data);
+    if (!Check(tgaPixels[0] == 255 && tgaPixels[1] == 0 &&
+               tgaPixels[4] == 0 && tgaPixels[6] == 255,
+               "TGA palette and RLE pixels converted to native BGRA8"))
+        return 1;
+    if (!Check(DX12W3DSurfaces::Unlock(tgaSurface), "Release loaded TGA lock"))
+        return 1;
+    DX12W3DSurfaces::Release(tgaSurface);
+
     const float clear[] = {0.10f, 0.20f, 0.30f, 1.f};
     if (!Check(device.BeginFrame(clear), "Begin real WARP frame") ||
         !Check(Prepare(device, T(main)), "Upload 2D mip chain") ||
@@ -272,19 +341,23 @@ int wmain()
         !Check(Prepare(device, T(bc)), "Upload real BC1 DDS blocks") ||
         !Check(Prepare(device, T(bc3)), "Upload BC3 texture") ||
         !Check(Prepare(device, T(cube)), "Upload cube faces") ||
-        !Check(Prepare(device, T(volume)), "Upload volume slices"))
+        !Check(Prepare(device, T(volume)), "Upload volume slices") ||
+        !Check(Prepare(device, T(fromSurface)),
+               "Upload native W3D CPU surface and generated mip levels"))
         return 1;
     if (!Check(NativeResource(T(main)) &&
                NativeResource(T(main))->GetDesc().Format == DXGI_FORMAT_B8G8R8A8_UNORM,
                "Actual D3D12 default-heap BGRA8 GPU texture"))
         return 1;
-    Readback rgbaReadback, bcReadback, mipReadback, cubeReadback;
+    Readback rgbaReadback, bcReadback, mipReadback, surfaceReadback;
     if (!Check(CopyMipToReadback(device, T(main), 0, rgbaReadback),
                "Copy original texture from GPU") ||
         !Check(CopyMipToReadback(device, T(bc), 1, bcReadback),
                "Readback 4x4 compressed mip") ||
         !Check(CopyMipToReadback(device, T(copied), 2, mipReadback),
-               "Readback updated 1x1 mip"))
+               "Readback updated 1x1 mip") ||
+        !Check(CopyMipToReadback(device, T(fromSurface), 1, surfaceReadback),
+               "Readback W3D CPU surface 2x2 box-filtered mip"))
         return 1;
 
     // Released W3D textures are no longer heap owners; the command-list fence
@@ -292,7 +365,8 @@ int wmain()
     Release(T(main));
     Release(T(copied));
     Release(T(bc));
-    if (!Check(device.InFlightResourceCount() >= 12, "GPU upload staging pinned") ||
+    Release(T(fromSurface));
+    if (!Check(device.InFlightResourceCount() >= 14, "GPU upload staging pinned") ||
         !Check(device.EndFrame(0), "Submit texture copies") ||
         !Check(device.WaitForIdle(), "Wait WARP texture uploads") ||
         !Check(EqualsReadback(rgbaReadback, 0, pixels.data(), 16),
@@ -302,6 +376,9 @@ int wmain()
         !Check(EqualsReadback(mipReadback, 0,
                    reinterpret_cast<const std::uint8_t *>("\x55\x55\x55\x55"), 4),
                "GPU UpdateTexture 1x1 mip roundtrip") ||
+        !Check(EqualsReadback(surfaceReadback, 0,
+                   reinterpret_cast<const std::uint8_t *>("\x12\x34\x56\xFF"), 4),
+               "Native surface box-filtered mip reaches DX12 GPU") ||
         !Check(device.InFlightResourceCount() == 0,
                "Staging and texture generations retired by native fence"))
         return 1;
@@ -321,6 +398,6 @@ int wmain()
     Release(T(bc3));
     device.Shutdown();
     std::cout << "R04 PASS: W3D DDS BC mip uploads, packed and uncompressed pixels, "
-                 "cube/volume maps, palette, fence lifetime, GPU readback and reset\n";
+                 "cube/volume maps, TGA/palette/surface fallback, fence lifetime, GPU readback and reset\n";
     return 0;
 }
