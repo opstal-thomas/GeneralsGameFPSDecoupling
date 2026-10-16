@@ -144,6 +144,17 @@ add_test(NAME W3D_DX12_WARP_Vertex_And_Index_Formats
     COMMAND W3DDX12VertexFormatSmoke)
 set_tests_properties(W3D_DX12_WARP_Vertex_And_Index_Formats PROPERTIES TIMEOUT 90)
 
+# M01: real raw FVF W3D geometry submitted to the selected renderer's
+# command list, not the DX8 mesh mirror or diagnostic canonicalized mesh.
+# Pixel readback verifies both R16 triangles and R32 triangle strips.
+add_executable(W3DDX12NativeDrawSmoke DX12NativeDrawSmoke.cpp)
+target_compile_features(W3DDX12NativeDrawSmoke PRIVATE cxx_std_17)
+target_compile_definitions(W3DDX12NativeDrawSmoke PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(W3DDX12NativeDrawSmoke PRIVATE W3DDX12PresentationDevice user32)
+add_test(NAME W3D_DX12_WARP_Authoritative_Indexed_Draw
+    COMMAND W3DDX12NativeDrawSmoke)
+set_tests_properties(W3D_DX12_WARP_Authoritative_Indexed_Draw PROPERTIES TIMEOUT 90)
+
 # R04: native W3D texture subsystem. The test copies BGRA8 and compressed
 # BC1/BC3 mipmaps through a real WARP GPU, maps cube/volume subresources,
 # expands indexed palettes, and verifies reset/lifetime behavior on x86/x64.

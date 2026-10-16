@@ -262,6 +262,47 @@ class R01GeometryBuffers(unittest.TestCase):
                       "Borrowed CPU sorting data remains immutable on WARP after owner rewrite"):
             self.assertIn(token, smoke)
 
+    def test_m01_authoritative_native_draws_use_original_w3d_formats(self):
+        impl = (DX12 / "DX12W3DNativeDraw.cpp").read_text(encoding="utf-8")
+        header = (DX12 / "DX12W3DNativeDraw.h").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        smoke = (PRESENTATION / "DX12NativeDrawSmoke.cpp").read_text(encoding="utf-8")
+        cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
+        game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")
+        for token in ("DX12W3DNativeDraw", "void BindVertex(", "void BindIndex(",
+                      "bool Draw(", "SetBlend(", "SetCull(", "SetDepthCompare("):
+            self.assertIn(token, header)
+        for token in ("DrawIndexedInstanced(", "D3DCompile(", "CreateGraphicsPipelineState(",
+                      "layout.NativeInputLayout()", "SetGraphicsRoot32BitConstants(",
+                      "stages.BindForDraw(frame, 1)", "frame.RetainFrameObject(pipeline)",
+                      "D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP",
+                      "D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST",
+                      "o.diffuse = v.diffuse.bgra",
+                      "firstIndex > s.indices - usedIndices"):
+            self.assertIn(token, impl)
+        for token in ("SubmitGameTriangles(false,", "SubmitGameTriangles(true,",
+                      "nativeDraw.BindVertex(", "nativeDraw.BindIndex(",
+                      "nativeDraw.Draw(primaryWindow.Presentation()",
+                      "nativeDraw.SetBlend(", "nativeDraw.SetCull("):
+            self.assertIn(token, backend)
+        for pending in ("Draw_Triangles", "Draw_Triangle_Strip", "Apply_Blend_State",
+                        "Set_Cull_Mode", "Set_Depth_Write", "Set_Depth_Compare",
+                        "Is_Triangle_Draw_Enabled"):
+            self.assertNotIn('ReportPending("Renderer::' + pending, backend)
+        for token in ("BindVertex(device,", "BindIndex(device,", "NativeVertexLayout(",
+                      "RenderIndexElementFormat", "RENDER_INDEX_UINT32",
+                      "DX12W3DNativeDraw draw", "DrawCount()",
+                      "authoritative W3D vertex color reaches WARP pixel",
+                      "reject out-of-range game draw",
+                      "ReadPixel(", "CheckReadback("):
+            if token == "RenderIndexElementFormat":
+                self.assertIn(token, (WW3D / "Renderer.h").read_text(encoding="utf-8"))
+            else:
+                self.assertIn(token, smoke)
+        self.assertIn("W3D_DX12_WARP_Authoritative_Indexed_Draw", cmake)
+        for text in (cmake, game):
+            self.assertIn("DX12W3DNativeDraw.cpp", text)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")
