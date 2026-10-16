@@ -274,7 +274,7 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn(token, header)
         for token in ("DrawIndexedInstanced(", "D3DCompile(", "CreateGraphicsPipelineState(",
                       "layout.NativeInputLayout()", "SetGraphicsRootConstantBufferView(",
-                      "stages.BindForDraw(frame, 1)", "frame.RetainFrameObject(pipeline)",
+                      "stages.BindForDraw(frame, 1, 3)", "frame.RetainFrameObject(pipeline)",
                       "D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP",
                       "D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST",
                       "float4 color1 = v.diffuse.bgra",
