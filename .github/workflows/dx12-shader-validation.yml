@@ -14,6 +14,7 @@ on:
       - 'scripts/tests/test_dx12_geometry_buffers.py'
       - 'scripts/tests/test_dx12_texture_loading.py'
       - 'scripts/tests/test_dx12_texture_descriptors.py'
+      - 'scripts/tests/test_dx12_render_targets.py'
       - 'Documentation/DX12OnlyLaunchCheckpoint.md'
       - '.github/workflows/dx12-shader-validation.yml'
   workflow_dispatch:
@@ -41,6 +42,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_loading.py'
       - name: Verify R05 immutable DX12 W3D texture stages and SRV descriptor lifetime
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_descriptors.py'
+      - name: Verify R07 native W3D offscreen color/depth and MSAA target invariants
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render_targets.py'
 
   compile-shaders:
     runs-on: windows-latest
