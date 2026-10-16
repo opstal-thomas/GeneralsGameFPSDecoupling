@@ -339,7 +339,9 @@ RenderSurfaceHandle DX12W3DRenderTargets::AcquireCurrentColor(
         impl_->Retain(impl_->activeColor);
         return reinterpret_cast<RenderSurfaceHandle>(impl_->activeColor);
     }
-    return AcquirePrimaryColor(frame);
+    // A depth-only shadow pass has no RTV. Never report the unrelated
+    // primary backbuffer as its active color attachment.
+    return impl_->activeDepth ? nullptr : AcquirePrimaryColor(frame);
 }
 RenderSurfaceHandle DX12W3DRenderTargets::AcquireCurrentDepth(
     DX12PresentationDevice & frame)
@@ -455,13 +457,17 @@ bool DX12W3DRenderTargets::Bind(DX12PresentationDevice & frame,
     auto * d = impl_->Lookup(depth);
     if ((color && !c) || (depth && !d) ||
         (c && !c->IsColor()) || (d && !d->IsDepth()) ||
-        (!c && d) || !impl_->ValidSurface(c, frame) || !impl_->ValidSurface(d, frame))
+        !impl_->ValidSurface(c, frame) || !impl_->ValidSurface(d, frame))
         return impl_->Fail("R07 target handles must be live GPU color/depth surfaces");
     if (c == impl_->activeColor && d == impl_->activeDepth)
         return true;
-    const unsigned width = c ? c->description.width : frame.Width();
-    const unsigned height = c ? c->description.height : frame.Height();
-    const unsigned samples = c ? c->samples : 1u;
+    // nullptr/nullptr restores the primary RTV+DSV; nullptr/depth is a
+    // legitimate depth-only shadow pass (zero color descriptors).
+    const unsigned width = c ? c->description.width :
+        d ? d->description.width : frame.Width();
+    const unsigned height = c ? c->description.height :
+        d ? d->description.height : frame.Height();
+    const unsigned samples = c ? c->samples : d ? d->samples : 1u;
     if (d && (d->description.width != width || d->description.height != height ||
               d->samples != samples))
         return impl_->Fail("Color/depth attachment dimensions or MSAA counts disagree");
@@ -473,7 +479,7 @@ bool DX12W3DRenderTargets::Bind(DX12PresentationDevice & frame,
 
     if (c && !impl_->Transition(*c, frame, D3D12_RESOURCE_STATE_RENDER_TARGET))
         return false;
-    if (!c && !frame.TransitionFrameResource(
+    if (!c && !d && !frame.TransitionFrameResource(
             frame.CurrentBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET))
         return impl_->Fail(frame.LastError());
     if (d && !impl_->Transition(*d, frame, D3D12_RESOURCE_STATE_DEPTH_WRITE))
@@ -482,17 +488,20 @@ bool DX12W3DRenderTargets::Bind(DX12PresentationDevice & frame,
             frame.CurrentDepthTarget(), D3D12_RESOURCE_STATE_DEPTH_WRITE))
         return impl_->Fail(frame.LastError());
 
-    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = impl_->View(c, frame, false);
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv = {};
+    const bool hasColor = c || !d;
     const bool hasDepth = d || !c;
-    if (hasDepth)
-        dsv = impl_->View(d, frame, true);
-    if (!rtv.ptr || (hasDepth && !dsv.ptr))
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = hasColor
+        ? impl_->View(c, frame, false) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = hasDepth
+        ? impl_->View(d, frame, true) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if ((hasColor && !rtv.ptr) || (hasDepth && !dsv.ptr))
         return impl_->Fail("R07 native output descriptors are unavailable");
     if ((c && c->viewHeap && !frame.RetainFrameObject(c->viewHeap.Get())) ||
         (d && d->viewHeap && !frame.RetainFrameObject(d->viewHeap.Get())))
         return impl_->Fail(frame.LastError());
-    frame.ActiveCommandList()->OMSetRenderTargets(1, &rtv, FALSE, hasDepth ? &dsv : nullptr);
+    frame.ActiveCommandList()->OMSetRenderTargets(
+        hasColor ? 1u : 0u, hasColor ? &rtv : nullptr, FALSE,
+        hasDepth ? &dsv : nullptr);
     D3D12_VIEWPORT viewport = {0.f, 0.f,
         static_cast<float>(width), static_cast<float>(height), 0.f, 1.f};
     D3D12_RECT scissor = {0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
@@ -515,6 +524,8 @@ bool DX12W3DRenderTargets::Clear(DX12PresentationDevice & frame, bool color, boo
         return impl_->Fail("R07 clear requires active frame and valid color/depth");
     if (color)
     {
+        if (impl_->activeDepth && !impl_->activeColor)
+            return impl_->Fail("Cannot clear a color target in a depth-only pass");
         const auto rtv = impl_->View(impl_->activeColor, frame, false);
         if (!rtv.ptr) return impl_->Fail("No RTV is bound for clear");
         frame.ActiveCommandList()->ClearRenderTargetView(rtv, rgba, 0, nullptr);
@@ -571,10 +582,15 @@ RenderTextureHandle DX12W3DRenderTargets::BoundColorTexture() const
 {
     return impl_->activeColor ? impl_->activeColor->texture : nullptr;
 }
+RenderTextureHandle DX12W3DRenderTargets::BoundDepthTexture() const
+{
+    return impl_->activeDepth ? impl_->activeDepth->texture : nullptr;
+}
 ID3D12Resource * DX12W3DRenderTargets::BoundColorResource(DX12PresentationDevice & frame) const
 {
-    return impl_->activeColor ? impl_->Resource(impl_->activeColor, frame) :
-                                frame.CurrentBackBuffer();
+    if (impl_->activeColor)
+        return impl_->Resource(impl_->activeColor, frame);
+    return impl_->activeDepth ? nullptr : frame.CurrentBackBuffer();
 }
 ID3D12Resource * DX12W3DRenderTargets::BoundDepthResource(DX12PresentationDevice & frame) const
 {
@@ -583,7 +599,8 @@ ID3D12Resource * DX12W3DRenderTargets::BoundDepthResource(DX12PresentationDevice
 }
 unsigned DX12W3DRenderTargets::BoundSampleCount() const
 {
-    return impl_->activeColor ? impl_->activeColor->samples : 1u;
+    return impl_->activeColor ? impl_->activeColor->samples :
+        impl_->activeDepth ? impl_->activeDepth->samples : 1u;
 }
 const char * DX12W3DRenderTargets::LastError() const
 {
