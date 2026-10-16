@@ -115,6 +115,14 @@ native RTT and real Renderer-HWND path. [All seven Generals and Zero Hour
 Windows build, CTest and DX8 dependency-audit jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38876104586)
 passed on the same code revision.
 
+**Additional R07 reset-hardening verified:** [Win32/x64 WARP and contract CI](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38880266572)
+passed all ten presentation tests in each architecture, including a
+**retained 4x MSAA RTV across device shutdown/recreation and real GPU-resolved
+pixel readback**. The matching [seven-job game-build and dependency-audit
+matrix](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38880266600)
+also completed successfully. This fix retains the original R07 scope; it
+does not implement R08 surface readback APIs or M01/B07 gameplay rendering.
+
 ## Remaining work
 
 - **M01/B07:** Route authoritative world, terrain, water, shadows,
