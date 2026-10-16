@@ -559,7 +559,8 @@ void DX12W3DRenderTargets::Reset()
 }
 bool DX12W3DRenderTargets::IsPrimary() const
 {
-    return !impl_->activeColor || impl_->activeColor->IsPrimary();
+    return (!impl_->activeColor || impl_->activeColor->IsPrimary()) &&
+           (!impl_->activeDepth || impl_->activeDepth->IsPrimary());
 }
 RenderTextureHandle DX12W3DRenderTargets::TextureForSurface(RenderSurfaceHandle h) const
 {
