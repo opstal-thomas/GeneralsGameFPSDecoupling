@@ -15,6 +15,7 @@
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
+#include "WW3D2/Backend/DX12/DX12W3DRenderTargets.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
 
@@ -41,6 +42,7 @@ namespace
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
     DX12W3DTextureStages textureStages;
+    DX12W3DRenderTargets renderTargets;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
 
     bool ValidTransform(RenderTransform transform)
@@ -189,6 +191,7 @@ void Renderer::Shutdown()
     // Stage references may outlive a native frame; keep texture identity
     // independent of graphics device reset, then drop stage caches.
     textureStages.Clear();
+    renderTargets.Reset();
     ready = false;
     renderThread = 0;
     syncInterval = 0;
@@ -257,6 +260,11 @@ void Renderer::Begin_Scene()
         }
         return;
     }
+    if (!renderTargets.BeginFrame(primaryWindow.Presentation()))
+    {
+        OutputDebugStringA(renderTargets.LastError());
+        return;
+    }
     // The native stage cache pins any modified TGA/DDS mip generations
     // once per command list. Actual shader-visible root-table binding is
     // performed by the native draw pass after its root signature is set.
@@ -268,6 +276,8 @@ void Renderer::End_Scene(bool flip_frame)
 {
     if (!primaryWindow.IsSceneOpen())
         return; // minimized window: BeginScene intentionally skipped recording
+    if (!renderTargets.EndFrame(primaryWindow.Presentation()))
+        OutputDebugStringA(renderTargets.LastError());
     if (!primaryWindow.EndScene(flip_frame, syncInterval))
     {
         ReportFailure("Renderer::End_Scene");
@@ -285,9 +295,16 @@ void Renderer::Clear(bool clear_color, bool clear_z_stencil,
                      const Vector3 & color, float dest_alpha,
                      float z, unsigned int stencil)
 {
-    (void)stencil; // D32_FLOAT has no stencil bits (B07 adds stencil targets).
     const float rgba[4] = {color.X, color.Y, color.Z, dest_alpha};
-    if (ready && !primaryWindow.Clear(clear_color, clear_z_stencil, rgba, z))
+    if (!ready) return;
+    if (primaryWindow.IsSceneOpen() && !renderTargets.IsPrimary())
+    {
+        if (!renderTargets.Clear(primaryWindow.Presentation(), clear_color,
+                                 clear_z_stencil, rgba, z, stencil))
+            OutputDebugStringA(renderTargets.LastError());
+        return;
+    }
+    if (!primaryWindow.Clear(clear_color, clear_z_stencil, rgba, z))
     {
         ReportFailure("Renderer::Clear");
         if (primaryWindow.CurrentStatus() == DX12PrimaryWindow::Status::Failed)
@@ -836,8 +853,8 @@ void Renderer::Describe_Texture_Level_2D(RenderTexture2DHandle texture, unsigned
 void Renderer::Describe_Depth_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
                                                RenderTextureLevelDescription & description)
 {
-    description = RenderTextureLevelDescription();
-    ReportPending("Renderer::Describe_Depth_Texture_Level_2D");
+    DX12W3DTextures::Describe(reinterpret_cast<RenderTextureHandle>(texture),
+                              level, description);
 }
 
 void Renderer::Describe_Texture_Level_Cube(RenderTextureCubeHandle texture, unsigned level,
@@ -861,44 +878,59 @@ unsigned Renderer::Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture)
 
 RenderTexture2DHandle Renderer::Create_Offscreen_Texture(const RenderSurfaceDescription & description)
 {
-    ReportPending("Renderer::Create_Offscreen_Texture");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return renderTargets.CreateOffscreenTexture(primaryWindow.Presentation(), description);
 }
 
 RenderSurfaceHandle Renderer::Acquire_Current_Color_Surface()
 {
-    ReportPending("Renderer::Acquire_Current_Color_Surface");
-    return {};
+    return primaryWindow.IsSceneOpen()
+        ? renderTargets.AcquireCurrentColor(primaryWindow.Presentation()) : nullptr;
 }
 
 RenderSurfaceHandle Renderer::Acquire_Back_Buffer_Surface()
 {
-    ReportPending("Renderer::Acquire_Back_Buffer_Surface");
-    return {};
+    return primaryWindow.IsSceneOpen()
+        ? renderTargets.AcquirePrimaryColor(primaryWindow.Presentation()) : nullptr;
 }
 
 unsigned Renderer::Read_Current_Color_Region(unsigned char * destination, unsigned capacity, int x, int y, unsigned width, unsigned height)
 {
-    ReportPending("Renderer::Read_Current_Color_Region");
-    return {};
+    // R08: a synchronous transfer/readback must use copyable footprints and
+    // GPU fences. Do not reinterpret an offscreen RTV as a CPU image surface.
+    ReportPending("Renderer::Read_Current_Color_Region (R08 GPU readback)");
+    return 0;
 }
 
 RenderSurfaceHandle Renderer::Acquire_Current_Depth_Surface()
 {
-    ReportPending("Renderer::Acquire_Current_Depth_Surface");
-    return {};
+    return primaryWindow.IsSceneOpen()
+        ? renderTargets.AcquireCurrentDepth(primaryWindow.Presentation()) : nullptr;
 }
 
 bool Renderer::Set_Render_Target_Surfaces(RenderSurfaceHandle color, RenderSurfaceHandle depth)
 {
-    ReportPending("Renderer::Set_Render_Target_Surfaces");
-    return {};
+    if (!ready || renderThread != GetCurrentThreadId() || !primaryWindow.IsSceneOpen())
+        return false;
+    // It is illegal to sample a resource through the R05 shader stages
+    // while the same resource is bound as an RTV/DSV output.
+    const RenderTextureHandle colorTexture = renderTargets.TextureForSurface(color);
+    const RenderTextureHandle depthTexture = renderTargets.TextureForSurface(depth);
+    for (unsigned stage = 0; stage < DX12W3DTextureStages::StageCount; ++stage)
+    {
+        const auto bound = textureStages.Bound(stage);
+        if (bound && (bound == colorTexture || bound == depthTexture))
+            return false;
+    }
+    return renderTargets.Bind(primaryWindow.Presentation(), color, depth);
 }
 
 RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level( RenderTexture2DHandle texture, unsigned mipLevel)
 {
-    ReportPending("Renderer::Acquire_Texture_Surface_Level");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return renderTargets.AcquireTextureLevel(primaryWindow.Presentation(), texture, mipLevel);
 }
 
 void Renderer::Update_Texture(RenderTextureHandle source, RenderTextureHandle destination)
@@ -949,12 +981,19 @@ void Renderer::Unmap_Texture_Volume(RenderTextureVolumeHandle texture, unsigned 
 
 RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDescription & description)
 {
-    ReportPending("Renderer::Create_Depth_Texture_2D");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return renderTargets.CreateDepthTexture(primaryWindow.Presentation(), description);
 }
 
 void Renderer::Bind_Texture(unsigned stage, RenderTextureHandle texture)
 {
+    if (texture && texture == renderTargets.BoundColorTexture() &&
+        primaryWindow.IsSceneOpen())
+    {
+        OutputDebugStringA("[DX12-R07] refusing to sample the current RTV output\n");
+        return;
+    }
     if (!textureStages.Bind(stage, texture))
     {
         OutputDebugStringA(textureStages.LastError());
