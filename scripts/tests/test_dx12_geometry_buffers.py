@@ -300,6 +300,8 @@ class R01GeometryBuffers(unittest.TestCase):
             else:
                 self.assertIn(token, smoke)
         self.assertIn("W3D_DX12_WARP_Authoritative_Indexed_Draw", cmake)
+        self.assertIn("sorted alpha state records a second native PSO", smoke)
+        self.assertIn("draw.SetColorWriteMask(false, false)", smoke)
         for text in (cmake, game):
             self.assertIn("DX12W3DNativeDraw.cpp", text)
 
@@ -324,6 +326,15 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("nativeDraw.SetMaterial(material)", backend)
         self.assertNotIn('ReportPending("Renderer::Set_Vertex_Material")', backend)
         self.assertIn("MaterialColor", (DX12 / "DX12W3DNativeDraw.cpp").read_text(encoding="utf-8"))
+        native_draw = (DX12 / "DX12W3DNativeDraw.cpp").read_text(encoding="utf-8")
+        for name in ("Set_Source_Blend", "Set_Destination_Blend",
+                     "Set_Blend_Operation", "Set_Blending_Enabled",
+                     "Set_Color_Write_Mask"):
+            self.assertNotIn('ReportPending("Renderer::' + name, backend)
+        for token in ("D3D12_BLEND_OP_REV_SUBTRACT", "target.RenderTargetWriteMask = writeMask",
+                      "SetColorWriteMask(", "AlphaBlend(blend.source)",
+                      "AlphaBlend(blend.destination)", "std::array<unsigned, 14>"):
+            self.assertIn(token, native_draw)
         for token in ("Renderer::Set_Shader(", "Renderer::Set_Texture(", "Renderer::Set_Material("):
             self.assertNotIn(token, backend)
         self.assertNotIn('ReportPending("Renderer::Apply_Pending_State_Changes")', backend)
@@ -384,7 +395,7 @@ class R01GeometryBuffers(unittest.TestCase):
                       "REF_PTR_SET(NativeSortingState().Textures",
                       "Get_Transform(RENDER_TRANSFORM_WORLD",
                       "Get_Transform(RENDER_TRANSFORM_VIEW",
-                      "Set_Index_Buffer_Index_Offset(state.index_base_offset)"):
+                      "Set_Index_Buffer_Index_Offset(snapshot.index_base_offset)"):
             self.assertIn(token, mesh)
         self.assertIn("DX12W3DSortingTrackVertexBinding(binding);", vertex)
         self.assertIn("DX12W3DSortingTrackIndexBinding(binding, baseVertexIndex);", index)

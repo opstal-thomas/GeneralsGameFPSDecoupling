@@ -135,6 +135,20 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         }
     }
 
+    // In alpha equations D3D8's SRC_COLOR/DEST_COLOR use the same alpha
+    // channel as SRC_ALPHA/DEST_ALPHA, not the fixed alpha blend used by
+    // the original minimal M01 proof-of-concept.
+    D3D12_BLEND AlphaBlend(RenderBlendFactor factor)
+    {
+        switch (factor)
+        {
+        case RENDER_BLEND_SRC_COLOR: return D3D12_BLEND_SRC_ALPHA;
+        case RENDER_BLEND_INV_SRC_COLOR: return D3D12_BLEND_INV_SRC_ALPHA;
+        case RENDER_BLEND_DEST_COLOR: return D3D12_BLEND_DEST_ALPHA;
+        default: return Blend(factor);
+        }
+    }
+
     D3D12_COMPARISON_FUNC Compare(RenderCompareFunc value)
     {
         if (value < RENDER_COMPARE_NEVER || value > RENDER_COMPARE_ALWAYS)
@@ -207,6 +221,8 @@ struct DX12W3DNativeDraw::Impl
     unsigned indices = 0;
     unsigned draws = 0;
     RenderBlendState blend;
+    RenderBlendOperation equation = RENDER_BLEND_OPERATION_ADD;
+    unsigned char writeMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     RenderVertexMaterialDescription material;
     RenderCompareFunc depthCompare = RENDER_COMPARE_LESS_EQUAL;
     bool depthWrite = true;
@@ -214,7 +230,7 @@ struct DX12W3DNativeDraw::Impl
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3DBlob> pixelShader;
-    std::map<std::array<unsigned, 12>, ComPtr<ID3D12PipelineState>> pipelines;
+    std::map<std::array<unsigned, 14>, ComPtr<ID3D12PipelineState>> pipelines;
     std::string error;
 
     bool Fail(const char * description)
@@ -290,7 +306,7 @@ struct DX12W3DNativeDraw::Impl
             Fail("W3D native draw requires a rigid XYZ/XYZW vertex layout");
             return nullptr;
         }
-        const auto key = std::array<unsigned, 12>{{
+        const auto key = std::array<unsigned, 14>{{
             layout.legacyFVF, static_cast<unsigned>(color), static_cast<unsigned>(depth),
             samples, sampleQuality, static_cast<unsigned>(cull),
             static_cast<unsigned>(depthCompare), depthWrite ? 1u : 0u,
@@ -298,7 +314,9 @@ struct DX12W3DNativeDraw::Impl
             static_cast<unsigned>(blend.source),
             static_cast<unsigned>(blend.destination),
             (static_cast<unsigned>(blend.colorWriteEnabled) << 1) |
-            static_cast<unsigned>(blend.alphaTestEnabled)
+            static_cast<unsigned>(blend.alphaTestEnabled),
+            static_cast<unsigned>(equation),
+            static_cast<unsigned>(writeMask)
         }};
         const auto existing = pipelines.find(key);
         if (existing != pipelines.end())
@@ -328,13 +346,13 @@ struct DX12W3DNativeDraw::Impl
         target.BlendEnable = blend.blendEnabled;
         target.SrcBlend = Blend(blend.source);
         target.DestBlend = Blend(blend.destination);
-        target.BlendOp = D3D12_BLEND_OP_ADD;
-        target.SrcBlendAlpha = D3D12_BLEND_ONE;
-        target.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-        target.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        target.BlendOp = equation == RENDER_BLEND_OPERATION_REVERSE_SUBTRACT ?
+            D3D12_BLEND_OP_REV_SUBTRACT : D3D12_BLEND_OP_ADD;
+        target.SrcBlendAlpha = AlphaBlend(blend.source);
+        target.DestBlendAlpha = AlphaBlend(blend.destination);
+        target.BlendOpAlpha = target.BlendOp;
         target.LogicOp = D3D12_LOGIC_OP_NOOP;
-        target.RenderTargetWriteMask =
-            blend.colorWriteEnabled ? D3D12_COLOR_WRITE_ENABLE_ALL : 0;
+        target.RenderTargetWriteMask = writeMask;
         desc.DepthStencilState.DepthEnable = depth != DXGI_FORMAT_UNKNOWN;
         desc.DepthStencilState.DepthWriteMask = depthWrite ?
             D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
@@ -372,7 +390,36 @@ void DX12W3DNativeDraw::BindIndex(unsigned count)
     impl_->hasIndex = count > 0;
     impl_->indices = count;
 }
-void DX12W3DNativeDraw::SetBlend(const RenderBlendState & state) { impl_->blend = state; }
+void DX12W3DNativeDraw::SetBlend(const RenderBlendState & state)
+{
+    impl_->blend = state;
+    impl_->writeMask = state.colorWriteEnabled ? D3D12_COLOR_WRITE_ENABLE_ALL : 0;
+}
+void DX12W3DNativeDraw::SetSourceBlend(RenderBlendFactor value)
+{
+    impl_->blend.source = value;
+}
+void DX12W3DNativeDraw::SetDestinationBlend(RenderBlendFactor value)
+{
+    impl_->blend.destination = value;
+}
+void DX12W3DNativeDraw::SetBlendOperation(RenderBlendOperation value)
+{
+    impl_->equation = value;
+}
+void DX12W3DNativeDraw::SetBlendingEnabled(bool enabled)
+{
+    impl_->blend.blendEnabled = enabled;
+}
+void DX12W3DNativeDraw::SetColorWriteMask(bool rgbEnabled, bool alphaEnabled)
+{
+    impl_->writeMask = static_cast<unsigned char>(
+        (rgbEnabled ? D3D12_COLOR_WRITE_ENABLE_RED |
+                      D3D12_COLOR_WRITE_ENABLE_GREEN |
+                      D3D12_COLOR_WRITE_ENABLE_BLUE : 0) |
+        (alphaEnabled ? D3D12_COLOR_WRITE_ENABLE_ALPHA : 0));
+    impl_->blend.colorWriteEnabled = impl_->writeMask != 0;
+}
 void DX12W3DNativeDraw::SetMaterial(const RenderVertexMaterialDescription & state)
 {
     impl_->material = state;

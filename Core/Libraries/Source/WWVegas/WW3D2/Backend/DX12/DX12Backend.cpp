@@ -1294,22 +1294,22 @@ void Renderer::Set_Texture_Border_Color(unsigned stage, unsigned packedARGB)
 
 void Renderer::Set_Source_Blend(RenderBlendFactor factor)
 {
-    ReportPending("Renderer::Set_Source_Blend");
+    nativeDraw.SetSourceBlend(factor);
 }
 
 void Renderer::Set_Destination_Blend(RenderBlendFactor factor)
 {
-    ReportPending("Renderer::Set_Destination_Blend");
+    nativeDraw.SetDestinationBlend(factor);
 }
 
 void Renderer::Set_Blend_Operation(RenderBlendOperation operation)
 {
-    ReportPending("Renderer::Set_Blend_Operation");
+    nativeDraw.SetBlendOperation(operation);
 }
 
 void Renderer::Set_Blending_Enabled(bool enabled)
 {
-    ReportPending("Renderer::Set_Blending_Enabled");
+    nativeDraw.SetBlendingEnabled(enabled);
 }
 
 void Renderer::Set_Texture_Factor(unsigned packedARGB)
@@ -1319,7 +1319,7 @@ void Renderer::Set_Texture_Factor(unsigned packedARGB)
 
 void Renderer::Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled)
 {
-    ReportPending("Renderer::Set_Color_Write_Mask");
+    nativeDraw.SetColorWriteMask(rgbEnabled, alphaEnabled);
 }
 
 bool Renderer::Supports_Texture_Format(unsigned w3dPixelFormat)

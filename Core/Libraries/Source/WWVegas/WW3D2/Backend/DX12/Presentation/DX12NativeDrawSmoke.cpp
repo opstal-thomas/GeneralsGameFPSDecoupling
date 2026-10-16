@@ -221,6 +221,29 @@ int wmain()
             !Check(draw.DrawCount() == 1 && draw.PipelineCount() >= 1,
                    "native W3D PSO cache submitted exactly one draw"))
             return 1;
+        if (pass == 0)
+        {
+            // A sorted transparent material may change blend equation and
+            // per-channel masks between adjacent draws. PSO cache entries
+            // must be distinct, and an all-disabled write mask may not
+            // change the previously rendered WARP pixel.
+            draw.SetSourceBlend(RENDER_BLEND_ONE);
+            draw.SetDestinationBlend(RENDER_BLEND_ONE);
+            draw.SetBlendOperation(RENDER_BLEND_OPERATION_REVERSE_SUBTRACT);
+            draw.SetBlendingEnabled(true);
+            draw.SetColorWriteMask(false, false);
+            if (!Check(draw.Draw(device, targets, textureStages, Identity,
+                                 false, 0, 1, 0, 4),
+                       "sorted alpha state records a second native PSO",
+                       draw.LastError()) ||
+                !Check(draw.PipelineCount() >= 2,
+                       "blend equation and color mask create separate native PSO"))
+                return 1;
+            draw.SetColorWriteMask(true, true);
+            draw.SetBlendingEnabled(false);
+            draw.SetDestinationBlend(RENDER_BLEND_ZERO);
+            draw.SetBlendOperation(RENDER_BLEND_OPERATION_ADD);
+        }
         ComPtr<ID3D12Resource> readback;
         UINT rowPitch = 0;
         unsigned char unused[4] = {};

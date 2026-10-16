@@ -29,6 +29,11 @@ public:
     void BindVertex(const DX12W3DVertexLayout * layout, unsigned count);
     void BindIndex(unsigned count);
     void SetBlend(const RenderBlendState & blend);
+    void SetSourceBlend(RenderBlendFactor factor);
+    void SetDestinationBlend(RenderBlendFactor factor);
+    void SetBlendOperation(RenderBlendOperation operation);
+    void SetBlendingEnabled(bool enabled);
+    void SetColorWriteMask(bool rgbEnabled, bool alphaEnabled);
     void SetMaterial(const RenderVertexMaterialDescription & material);
     void SetDepthCompare(RenderCompareFunc compare);
     void SetDepthWrite(bool enabled);
