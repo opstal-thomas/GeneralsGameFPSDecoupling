@@ -79,7 +79,11 @@ rejected before any new output transition.
 
 Depth-only passes expose no current color surface, bind zero RTV
 descriptors, and reject color clears while still allowing depth/stencil
-clears. `Set_Render_Target_Surfaces(nullptr, nullptr)` restores the
+clears. Conversely, primary color-only binding clears its RTV without
+touching an unbound primary DSV. All in-frame `Renderer::Clear` calls
+now honor R07's actual output views; the pre-`Begin_Scene` path still
+queues the clear through the existing native primary window.
+`Set_Render_Target_Surfaces(nullptr, nullptr)` restores the
 game-owned primary RTV/DSV and the saved W3D viewport/scissor, including
 after a depth-only shadow-map pass. Frame completion resolves/finishes
 outstanding offscreen work and restores primary OM bindings before the
