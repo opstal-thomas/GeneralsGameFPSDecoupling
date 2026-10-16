@@ -126,6 +126,12 @@ namespace
         const bool correct = pixel[expectedChannel] > 180 &&
                              pixel[(expectedChannel + 1) % 3] < 80 &&
                              pixel[(expectedChannel + 2) % 3] < 80;
+        if (!correct)
+            std::cerr << "M01 readback pixel RGBA=("
+                      << unsigned(pixel[0]) << "," << unsigned(pixel[1])
+                      << "," << unsigned(pixel[2]) << ","
+                      << unsigned(pixel[3]) << ") pitch=" << pitch
+                      << " expected dominant channel=" << expectedChannel << '\n';
         const D3D12_RANGE unused = {0, 0};
         readback->Unmap(0, &unused);
         return Check(correct, "authoritative W3D vertex color reaches WARP pixel");
