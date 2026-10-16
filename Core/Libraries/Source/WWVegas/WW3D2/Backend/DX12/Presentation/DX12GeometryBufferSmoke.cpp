@@ -355,6 +355,111 @@ int wmain()
         return 1;
     ReleaseVertex(recycled);
 
+    // A dynamic W3D handle can remain alive and get rebound *without* being
+    // mapped again. Recycling its first page must never change the data seen
+    // by that later bind. This catches the pre-R02 cross-frame stale slice.
+    auto longLived = CreateVertex(device.NativeDevice(), dynamicDesc);
+    auto other = CreateVertex(device.NativeDevice(), dynamicDesc);
+    std::array<unsigned char, 48> stableBytes = {}, otherBytes = {};
+    stableBytes.fill(0x27);
+    otherBytes.fill(0xCA);
+    if (!Check(longLived && other, "Create cross-frame dynamic rings"))
+        return 1;
+    auto * stableMap = static_cast<unsigned char *>(
+        MapVertex(longLived, 0, 0, RENDER_MAP_DISCARD));
+    if (!Check(stableMap != nullptr, "Map first persistent dynamic handle"))
+        return 1;
+    std::memcpy(stableMap, stableBytes.data(), stableBytes.size());
+    if (!Check(UnmapVertex(longLived), "Unmap persistent dynamic handle") ||
+        !Check(device.BeginFrame(clear), "Begin persistent-handle first frame") ||
+        !Check(BindVertex(device, longLived, 0, 12), "First bind persistent handle") ||
+        !Check(device.EndFrame(0), "Submit first persistent-handle frame") ||
+        !Check(device.WaitForIdle(), "Complete first persistent-handle frame"))
+        return 1;
+
+    auto * otherMap = static_cast<unsigned char *>(
+        MapVertex(other, 0, 0, RENDER_MAP_DISCARD));
+    if (!Check(otherMap != nullptr, "Map second dynamic handle"))
+        return 1;
+    std::memcpy(otherMap, otherBytes.data(), otherBytes.size());
+    ComPtr<ID3D12Resource> stableReadback, otherReadback;
+    if (!Check(UnmapVertex(other) &&
+               MakeReadback(device.NativeDevice(), dynamicDesc.byteSize, stableReadback) &&
+               MakeReadback(device.NativeDevice(), dynamicDesc.byteSize, otherReadback),
+               "Allocate cross-frame WARP GPU readbacks") ||
+        !Check(device.BeginFrame(clear), "Begin cross-frame page-recycling test") ||
+        !Check(BindVertex(device, other, 0, 12), "Rebind other on recycled page") ||
+        !Check(BindVertex(device, longLived, 0, 12),
+               "Rebind unchanged dynamic buffer after prior page reuse") ||
+        !Check(NativeVertexResource(other) == NativeVertexResource(longLived) &&
+               NativeVertexOffset(other) != NativeVertexOffset(longLived),
+               "Unchanged cross-frame vertex data resnapshotted to a distinct slice"))
+        return 1;
+    device.ActiveCommandList()->CopyBufferRegion(
+        stableReadback.Get(), 0, NativeVertexResource(longLived),
+        NativeVertexOffset(longLived), dynamicDesc.byteSize);
+    device.ActiveCommandList()->CopyBufferRegion(
+        otherReadback.Get(), 0, NativeVertexResource(other),
+        NativeVertexOffset(other), dynamicDesc.byteSize);
+    if (!Check(device.EndFrame(0), "Submit cross-frame dynamic page reuse") ||
+        !Check(device.WaitForIdle(), "Wait for cross-frame readback") ||
+        !Check(VerifyBytes(stableReadback.Get(), stableBytes.data(), stableBytes.size()) &&
+               VerifyBytes(otherReadback.Get(), otherBytes.data(), otherBytes.size()),
+               "Two dynamic W3D handles survive GPU page reuse across frames"))
+        return 1;
+    ReleaseVertex(longLived);
+    ReleaseVertex(other);
+
+    // R02 growth is demand-driven rather than a hard mesh cap: five roughly
+    // 256 KiB immutable generations must span more than one UPLOAD page.
+    RenderBufferDescription largeDynamic = dynamicDesc;
+    largeDynamic.byteSize = 264000; // 22,000 tightly packed XYZ vertices
+    auto oversized = CreateVertex(device.NativeDevice(), largeDynamic);
+    if (!Check(oversized != nullptr && device.BeginFrame(clear),
+               "Begin dynamic upload page growth test"))
+        return 1;
+    ID3D12Resource * firstLargePage = nullptr;
+    for (unsigned generation = 0; generation < 5; ++generation)
+    {
+        auto * mapped = static_cast<unsigned char *>(
+            MapVertex(oversized, 0, 0, RENDER_MAP_DISCARD));
+        if (!Check(mapped != nullptr, "Map large dynamic generation"))
+            return 1;
+        std::memset(mapped, static_cast<int>(generation + 1), largeDynamic.byteSize);
+        if (!Check(UnmapVertex(oversized) &&
+                   BindVertex(device, oversized, 0, 12),
+                   "Commit and bind large dynamic generation") ||
+            !Check((NativeVertexOffset(oversized) % 16u) == 0u,
+                   "Transient large generation is 16-byte aligned"))
+            return 1;
+        if (generation == 0)
+            firstLargePage = NativeVertexResource(oversized);
+        if (generation == 4 &&
+            !Check(NativeVertexResource(oversized) != firstLargePage,
+                   "Large ring overflow allocated another page"))
+            return 1;
+    }
+    if (!Check(device.TransientGeometryPageCount() >= 2 &&
+               device.TransientGeometryResidentBytes() >= 2ull * 1024 * 1024,
+               "Demand-based transient GPU page growth") ||
+        !Check(device.EndFrame(0), "Submit multi-page transient generation") ||
+        !Check(device.WaitForIdle(), "Retire multi-page geometry"))
+        return 1;
+    ReleaseVertex(oversized);
+
+    // The device owns the pool, not process globals. Full shutdown/reset must
+    // release the upload pages even if the old resource handles were released.
+    device.Shutdown();
+    if (!Check(device.TransientGeometryPageCount() == 0 &&
+               device.TransientGeometryResidentBytes() == 0,
+               "Shutdown clears device-owned transient geometry") ||
+        !Check(device.Initialize(window.hwnd, 128, 96, true),
+               "Reinitialize native WARP device after upload growth") ||
+        !Check(device.TransientGeometryPageCount() == 0,
+               "Recreated DX12 device starts with an empty upload pool") ||
+        !Check(device.BeginFrame(clear) && device.EndFrame(0) && device.WaitForIdle(),
+               "Recreated device submits a clean frame"))
+        return 1;
     device.Shutdown();
     std::cout << "R01/R02 PASS: native static/default and pooled dynamic/upload resources, "
                  "mapped byte ranges, indexed IA views and WARP GPU readback\n";

@@ -102,7 +102,12 @@ class R01GeometryBuffers(unittest.TestCase):
                       "firstVertexReadback", "secondVertexReadback", "dynamicIndexReadback",
                       "First pooled dynamic snapshot survives NO_OVERWRITE on WARP",
                       "Updated pooled dynamic slice contains the new bytes on WARP",
-                      "Recycle the pooled upload page only after the submission fence"):
+                      "Recycle the pooled upload page only after the submission fence",
+                      "Rebind unchanged dynamic buffer after prior page reuse",
+                      "Two dynamic W3D handles survive GPU page reuse across frames",
+                      "Large ring overflow allocated another page",
+                      "Shutdown clears device-owned transient geometry",
+                      "Recreated DX12 device starts with an empty upload pool"):
             self.assertIn(token, smoke)
 
     def test_old_w3d_buffer_classes_use_selected_renderer(self):
