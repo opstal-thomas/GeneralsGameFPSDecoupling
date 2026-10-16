@@ -277,7 +277,8 @@ int wmain()
     targets.Release(depthSurface);
     DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(depthTexture));
     targets.Release(colorSurface);
-    targets.Release(msaa);
+    // Retain MSAA across resize and replacement device; its multisampled
+    // RTV allocation must be re-created, not just its resolve texture.
     if (!Check(targets.EndFrame(frame), "Close R07 target recording") ||
         !Check(frame.EndFrame(0), "Execute GPU frame and present") ||
         !Check(frame.WaitForIdle(), "Wait WARP fence") ||
@@ -310,14 +311,33 @@ int wmain()
                "Reinitialize B05/R07 after device reset"))
         return 1;
     auto recovered = targets.AcquireTextureLevel(frame, resolved, 0);
+    const float recoveredMSAA[] = {0.10f, 0.65f, 0.90f, 1.f};
+    Readback recoveredMultisamplePixels;
     if (!Check(recovered && targets.Bind(frame, recovered, nullptr) &&
                targets.Clear(frame, true, false, color, 1.f, 0) &&
-               targets.Bind(frame, nullptr, nullptr) &&
-               targets.EndFrame(frame) && frame.EndFrame(0) &&
-               frame.WaitForIdle(), "Rehydrate offscreen texture/RTV after device reset"))
+               targets.Bind(frame, nullptr, nullptr),
+               "Rehydrate offscreen texture/RTV after device reset") ||
+        !Check(targets.Bind(frame, msaa, nullptr),
+               "Recreate retained 4x MSAA RTV on replacement D3D12 device") ||
+        !Check(targets.Clear(frame, true, false, recoveredMSAA, 1.f, 0) &&
+               targets.Bind(frame, nullptr, nullptr),
+               "Resolve retained MSAA color on replacement device") ||
+        !Check(CopyColor(frame, resolved, recoveredMultisamplePixels),
+               "Copy native resolved MSAA after replacement device"))
         return 1;
+    // Destroy W3D owners before the queue executes. Fence retention keeps
+    // the replacement MSAA RTV and its single-sample texture alive.
+    targets.Release(msaa);
     targets.Release(recovered);
     DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(resolved));
+    if (!Check(targets.EndFrame(frame) && frame.EndFrame(0) &&
+               frame.WaitForIdle(), "Complete recovered MSAA frame") ||
+        !Check(Pixel(recoveredMultisamplePixels, {230, 166, 26, 255}),
+               "GPU 4x MSAA resolve survives D3D12 device replacement") ||
+        !Check(frame.InFlightResourceCount() == 0 &&
+               frame.InFlightObjectCount() == 0,
+               "New MSAA resource/descriptor generations retire after fence"))
+        return 1;
     frame.Shutdown();
     std::cout << "R07 PASS: native RTV/DSV, stencil, MSAA resolve, GPU pixels, "
                  "B05 barriers, fence-safe early release, resize and reset\n";
