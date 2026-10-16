@@ -103,3 +103,23 @@ W3D `Renderer` API on the primary HWND.
 See [R01 native geometry guide](../../../../../../../../Documentation/DX12NativeGeometryBuffers.md).
 The authoritative W3D draw pipeline is still B07/M01; dynamically
 suballocated index/vertex rings are scheduled separately under R02.
+
+## DX12-R07 — Offscreen RTV/DSV attachments and MSAA resolve
+
+The native `DX12W3DRenderTargets` manager now binds W3D offscreen
+BGRA8 color, typed depth/stencil and depth-only shadow outputs through
+the **same** primary-HWND B05 command list. View descriptors and texture
+generations stay GPU-fence owned. Switching back restores the game's
+original viewport and native primary targets, while 2x/4x/8x MSAA
+color targets resolve into one-sample shader-readable textures.
+Active output textures cannot simultaneously be sampled through R05
+stages, and clears honor the currently bound RTV/DSV (including
+color-only and depth-only passes).
+
+`W3DDX12RenderTargetSmoke` validates these operations with WARP
+GPU pixel readback, D24S8 stencil, invalid format/multisample
+rejection, resize and device-reset recovery on Win32 and x64.
+The actual `Renderer` game-HWND smoke also exercises offscreen,
+depth-only, feedback rejection and primary restoration.
+See [R07 native target contract](../../../../../../../../Documentation/DX12RenderTargets.md).
+Authoritative scene/shroud/terrain/water draws are still M01/B07.
