@@ -12,6 +12,7 @@
 #include "WW3D2/Renderer.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
+#include "WW3D2/Backend/DX12/DX12W3DTextures.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
 
@@ -23,6 +24,7 @@
 #endif
 #include <windows.h>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstring>
 
@@ -36,6 +38,7 @@ namespace
     bool ready = false;
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
+    std::array<RenderTextureHandle, 8> boundTextures = {};
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
 
     bool ValidTransform(RenderTransform transform)
@@ -173,6 +176,13 @@ bool Renderer::Init(void * window, bool lite)
 
 void Renderer::Shutdown()
 {
+    // Stage references may outlive a native frame; keep texture identity
+    // independent of graphics device reset, then drop stage caches.
+    for (auto & texture : boundTextures)
+    {
+        DX12W3DTextures::Release(texture);
+        texture = nullptr;
+    }
     ready = false;
     renderThread = 0;
     syncInterval = 0;
@@ -232,12 +242,20 @@ void Renderer::Begin_Scene()
     if (!ready || renderThread != GetCurrentThreadId() ||
         primaryWindow.IsSceneOpen())
         return;
-    if (!primaryWindow.BeginScene() &&
-        primaryWindow.CurrentStatus() == DX12PrimaryWindow::Status::Failed)
+    if (!primaryWindow.BeginScene())
     {
-        ReportFailure("Renderer::Begin_Scene");
-        ready = false;
+        if (primaryWindow.CurrentStatus() == DX12PrimaryWindow::Status::Failed)
+        {
+            ReportFailure("Renderer::Begin_Scene");
+            ready = false;
+        }
+        return;
     }
+    // Deferred TGA/DDS CPU uploads can have completed before the scene.
+    // Re-establish native state on this command list without D3D8 SetTexture.
+    for (auto * texture : boundTextures)
+        if (texture && !DX12W3DTextures::Prepare(primaryWindow.Presentation(), texture))
+            OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
 void Renderer::End_Scene(bool flip_frame)
@@ -618,7 +636,13 @@ void Renderer::Invalidate_Mesh_Cache()
 
 void Renderer::Release_Texture_Resources()
 {
-    ReportPending("Renderer::Release_Texture_Resources");
+    for (auto & texture : boundTextures)
+    {
+        DX12W3DTextures::Release(texture);
+        texture = nullptr;
+    }
+    // Individual texture handles retain CPU mip shadows across reset; R05
+    // descriptor cache and R09 eviction remain separate migration items.
 }
 
 RenderVertexBufferHandle Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
@@ -765,50 +789,58 @@ void Renderer::Set_Index_Buffer_Index_Offset(unsigned offset)
 
 RenderTexture2DHandle Renderer::Create_Texture_2D(const RenderTexture2DDescription & description)
 {
-    ReportPending("Renderer::Create_Texture_2D");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DTextures::Create2D(primaryWindow.Presentation().NativeDevice(), description);
 }
 
-RenderTexture2DHandle Renderer::Create_Texture_From_Surface( RenderSurfaceHandle surface, unsigned mipLevels)
+RenderTexture2DHandle Renderer::Create_Texture_From_Surface(RenderSurfaceHandle surface,
+                                                           unsigned mipLevels)
 {
-    ReportPending("Renderer::Create_Texture_From_Surface");
-    return {};
+    // Image surfaces remain an R04 follow-up to the W3D SurfaceClass DX8
+    // decoupling; never reinterpret an IDirect3DSurface8 as a DX12 resource.
+    (void)surface;
+    (void)mipLevels;
+    ReportPending("Renderer::Create_Texture_From_Surface: W3D surface migration");
+    return nullptr;
 }
 
 unsigned Renderer::Get_Texture_Mip_Count(RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Get_Texture_Mip_Count");
-    return {};
+    return DX12W3DTextures::MipCount(texture);
 }
 
-void Renderer::Describe_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level, RenderTextureLevelDescription & description)
+void Renderer::Describe_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                         RenderTextureLevelDescription & description)
 {
-    description = RenderTextureLevelDescription();
-    ReportPending("Renderer::Describe_Texture_Level_2D");
+    DX12W3DTextures::Describe(reinterpret_cast<RenderTextureHandle>(texture),
+                              level, description);
 }
 
-void Renderer::Describe_Depth_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level, RenderTextureLevelDescription & description)
+void Renderer::Describe_Depth_Texture_Level_2D(RenderTexture2DHandle texture, unsigned level,
+                                               RenderTextureLevelDescription & description)
 {
     description = RenderTextureLevelDescription();
     ReportPending("Renderer::Describe_Depth_Texture_Level_2D");
 }
 
-void Renderer::Describe_Texture_Level_Cube(RenderTextureCubeHandle texture, unsigned level, RenderTextureLevelDescription & description)
+void Renderer::Describe_Texture_Level_Cube(RenderTextureCubeHandle texture, unsigned level,
+                                           RenderTextureLevelDescription & description)
 {
-    description = RenderTextureLevelDescription();
-    ReportPending("Renderer::Describe_Texture_Level_Cube");
+    DX12W3DTextures::Describe(reinterpret_cast<RenderTextureHandle>(texture),
+                              level, description);
 }
 
-void Renderer::Describe_Texture_Level_Volume(RenderTextureVolumeHandle texture, unsigned level, RenderTextureLevelDescription & description)
+void Renderer::Describe_Texture_Level_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                             RenderTextureLevelDescription & description)
 {
-    description = RenderTextureLevelDescription();
-    ReportPending("Renderer::Describe_Texture_Level_Volume");
+    DX12W3DTextures::Describe(reinterpret_cast<RenderTextureHandle>(texture),
+                              level, description);
 }
 
 unsigned Renderer::Get_Texture_2D_Memory_Usage(RenderTexture2DHandle texture)
 {
-    ReportPending("Renderer::Get_Texture_2D_Memory_Usage");
-    return {};
+    return DX12W3DTextures::MemoryUsage(reinterpret_cast<RenderTextureHandle>(texture));
 }
 
 RenderTexture2DHandle Renderer::Create_Offscreen_Texture(const RenderSurfaceDescription & description)
@@ -855,40 +887,48 @@ RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level( RenderTexture2DHand
 
 void Renderer::Update_Texture(RenderTextureHandle source, RenderTextureHandle destination)
 {
-    ReportPending("Renderer::Update_Texture");
+    if (!DX12W3DTextures::Update(source, destination))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
-void Renderer::Map_Texture_2D(RenderTexture2DHandle texture, unsigned level, RenderSurfaceMap & mapped)
+void Renderer::Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
+                              RenderSurfaceMap & mapped)
 {
-    mapped = RenderSurfaceMap();
-    ReportPending("Renderer::Map_Texture_2D");
+    if (!DX12W3DTextures::Map2D(texture, level, mapped))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
 void Renderer::Unmap_Texture_2D(RenderTexture2DHandle texture, unsigned level)
 {
-    ReportPending("Renderer::Unmap_Texture_2D");
+    if (!DX12W3DTextures::Unmap2D(texture, level))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
-void Renderer::Map_Texture_Cube(RenderTextureCubeHandle texture, unsigned face, unsigned level, RenderSurfaceMap & mapped)
+void Renderer::Map_Texture_Cube(RenderTextureCubeHandle texture, unsigned face,
+                                unsigned level, RenderSurfaceMap & mapped)
 {
-    mapped = RenderSurfaceMap();
-    ReportPending("Renderer::Map_Texture_Cube");
+    if (!DX12W3DTextures::MapCube(texture, face, level, mapped))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
-void Renderer::Unmap_Texture_Cube(RenderTextureCubeHandle texture, unsigned face, unsigned level)
+void Renderer::Unmap_Texture_Cube(RenderTextureCubeHandle texture, unsigned face,
+                                  unsigned level)
 {
-    ReportPending("Renderer::Unmap_Texture_Cube");
+    if (!DX12W3DTextures::UnmapCube(texture, face, level))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
-void Renderer::Map_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level, RenderVolumeMap & mapped)
+void Renderer::Map_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level,
+                                  RenderVolumeMap & mapped)
 {
-    mapped = RenderVolumeMap();
-    ReportPending("Renderer::Map_Texture_Volume");
+    if (!DX12W3DTextures::MapVolume(texture, level, mapped))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
 void Renderer::Unmap_Texture_Volume(RenderTextureVolumeHandle texture, unsigned level)
 {
-    ReportPending("Renderer::Unmap_Texture_Volume");
+    if (!DX12W3DTextures::UnmapVolume(texture, level))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
 RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDescription & description)
@@ -899,41 +939,56 @@ RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDes
 
 void Renderer::Bind_Texture(unsigned stage, RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Bind_Texture");
+    if (stage >= boundTextures.size())
+    {
+        ReportPending("Renderer::Bind_Texture invalid stage");
+        return;
+    }
+    if (boundTextures[stage] != texture)
+    {
+        DX12W3DTextures::Retain(texture);
+        DX12W3DTextures::Release(boundTextures[stage]);
+        boundTextures[stage] = texture;
+    }
+    // R04 ensures native texture content is resident on the correct device.
+    // Actual stage SRV descriptors and cache invalidation belong to R05.
+    if (texture && primaryWindow.IsSceneOpen() &&
+        !DX12W3DTextures::Prepare(primaryWindow.Presentation(), texture))
+        OutputDebugStringA(DX12W3DTextures::LastError());
 }
 
 void Renderer::Retain_Texture(RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Retain_Texture");
+    DX12W3DTextures::Retain(texture);
 }
 
 void Renderer::Release_Texture(RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Release_Texture");
+    DX12W3DTextures::Release(texture);
 }
 
 unsigned Renderer::Get_Texture_Priority(RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Get_Texture_Priority");
-    return {};
+    return DX12W3DTextures::GetPriority(texture);
 }
 
 unsigned Renderer::Set_Texture_Priority(RenderTextureHandle texture, unsigned priority)
 {
-    ReportPending("Renderer::Set_Texture_Priority");
-    return {};
+    return DX12W3DTextures::SetPriority(texture, priority);
 }
 
 RenderTextureCubeHandle Renderer::Create_Texture_Cube(const RenderTextureCubeDescription & description)
 {
-    ReportPending("Renderer::Create_Texture_Cube");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DTextures::CreateCube(primaryWindow.Presentation().NativeDevice(), description);
 }
 
 RenderTextureVolumeHandle Renderer::Create_Texture_Volume(const RenderTextureVolumeDescription & description)
 {
-    ReportPending("Renderer::Create_Texture_Volume");
-    return {};
+    if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
+        return nullptr;
+    return DX12W3DTextures::CreateVolume(primaryWindow.Presentation().NativeDevice(), description);
 }
 
 RenderSurfaceHandle Renderer::Create_Surface(const RenderSurfaceDescription & description)
@@ -1122,8 +1177,7 @@ void Renderer::Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled)
 
 bool Renderer::Supports_Texture_Format(unsigned w3dPixelFormat)
 {
-    ReportPending("Renderer::Supports_Texture_Format");
-    return {};
+    return ready && DX12W3DTextures::SupportsFormat(w3dPixelFormat);
 }
 
 unsigned Renderer::Get_Back_Buffer_Format()
