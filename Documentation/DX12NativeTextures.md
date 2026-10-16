@@ -84,8 +84,10 @@ and Zero Hour Windows build configurations.
 **DX12-specific CI passed:** [Win32 and x64 R04 WARP upload/readback,
 game-owned HWND Renderer integration, shader compilation and source
 contracts](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38829454476).
-The broader Windows game-build/dependency-audit matrix is a separate
-regression gate.
+The [full seven-job Generals and Zero Hour Windows
+build/dependency-audit matrix](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38829454383)
+also passed, including normal DX8, DX12 preview and exclusive DX12 bootstrap
+configurations.
 
 ## Remaining boundaries
 
