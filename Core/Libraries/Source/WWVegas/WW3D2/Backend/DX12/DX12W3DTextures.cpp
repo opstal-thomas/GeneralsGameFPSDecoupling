@@ -129,15 +129,14 @@ namespace
         return (c * 255u + maxValue / 2u) / maxValue;
     }
 
-    std::uint16_t Read16(const std::uint8_t * p)
-    {
-        return static_cast<std::uint16_t>(p[0] | (p[1] << 8));
-    }
-
     void ConvertPixel(unsigned format, const std::uint8_t * in, std::uint8_t * out)
     {
         unsigned b = 0, g = 0, r = 0, a = 255;
-        const unsigned short v = Read16(in);
+        // Single-byte W3D formats must not read beyond their last pixel.
+        const unsigned short v = static_cast<unsigned short>(
+            in[0] | ((format == R3G3B2 || format == A8 ||
+                       format == L8 || format == A4L4) ? 0u :
+                      static_cast<unsigned short>(in[1]) << 8));
         switch (format)
         {
             case A8R8G8B8: b = in[0]; g = in[1]; r = in[2]; a = in[3]; break;
