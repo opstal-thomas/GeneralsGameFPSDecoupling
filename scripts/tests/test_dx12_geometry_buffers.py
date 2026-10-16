@@ -182,6 +182,19 @@ class R01GeometryBuffers(unittest.TestCase):
         dx8 = (WW3D / "Backend/DX8Backend.cpp").read_text(encoding="utf-8")
         self.assertIn("DX8Wrapper::Draw_Triangles(startIndex, triangleCount,", dx8)
 
+    def test_dx12_world_shutdown_releases_legacy_dynamic_ring_owners(self):
+        shutdown = (WW3D / "ww3d.cpp").read_text(encoding="utf-8")
+        section = shutdown[shutdown.index("WW3DErrorType WW3D::Shutdown()"):]
+        for token in ("#if defined(W3D_RENDER_BACKEND_DX12)",
+                      "SortingRendererClass::Deinit();",
+                      "DynamicVBAccessClass::_Deinit();",
+                      "DynamicIBAccessClass::_Deinit();"):
+            self.assertIn(token, section)
+        self.assertLess(section.index("DynamicVBAccessClass::_Deinit();"),
+                        section.index("Renderer::Shutdown();"))
+        self.assertLess(section.index("DynamicIBAccessClass::_Deinit();"),
+                        section.index("Renderer::Shutdown();"))
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")

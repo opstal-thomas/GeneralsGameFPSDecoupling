@@ -112,6 +112,10 @@
 #include "dx8wrapper.h"
 #include "WWLib/TARGA.h"
 #include "sortingrenderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "dx8vertexbuffer.h"
+#include "dx8indexbuffer.h"
+#endif
 #include "WWLib/thread.h"
 #include "WWLib/cpudetect.h"
 #include "dx8texman.h"
@@ -363,6 +367,15 @@ WW3DErrorType WW3D::Shutdown()
 	}
 
 	Renderer::Release_Texture_Resources();
+
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// DX8Wrapper::Shutdown used to release these static W3D ring handles.
+	// Exclusive DX12 never invokes DX8Wrapper, so flush CPU sorting owners
+	// and release native-backed rings before destroying the DX12 device.
+	SortingRendererClass::Deinit();
+	DynamicVBAccessClass::_Deinit();
+	DynamicIBAccessClass::_Deinit();
+#endif
 
 	Renderer::Shutdown();
 
