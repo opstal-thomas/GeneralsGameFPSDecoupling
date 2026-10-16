@@ -405,6 +405,31 @@ void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
 #endif
 
 #if defined(W3D_RENDER_BACKEND_DX12)
+RenderDynamicIndexBinding DX12W3DSortingMakeIndexBinding(
+    const IndexBufferClass * owner, unsigned bufferType, unsigned short firstIndex)
+{
+    RenderDynamicIndexBinding binding;
+    if (!owner || firstIndex >= owner->Get_Index_Count())
+        return binding;
+    binding.legacyOwner = owner;
+    binding.bufferType = bufferType;
+    binding.firstIndex = firstIndex;
+    binding.indexCount = owner->Get_Index_Count() - firstIndex;
+    if (bufferType == BUFFER_TYPE_DYNAMIC_DX8 && owner->Type() == BUFFER_TYPE_DX8)
+        binding.resource = static_cast<const DX8IndexBufferClass *>(owner)->
+            Get_Render_Index_Buffer();
+    else if (bufferType == BUFFER_TYPE_DYNAMIC_SORTING &&
+             owner->Type() == BUFFER_TYPE_SORTING)
+    {
+        const auto * array = static_cast<const SortingIndexBufferClass *>(owner)->
+            Get_Sorting_Index_Array();
+        binding.cpuData = array ? array + firstIndex : nullptr;
+    }
+    return binding;
+}
+#endif
+
+#if defined(W3D_RENDER_BACKEND_DX12)
 void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
                                         unsigned short baseVertexIndex)
 {

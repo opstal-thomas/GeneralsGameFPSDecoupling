@@ -10,8 +10,15 @@
 // backend-neutral buffer slices and matrix/light descriptions.
 struct RenderDynamicVertexBinding;
 struct RenderDynamicIndexBinding;
+class VertexBufferClass;
+class IndexBufferClass;
 
 #if defined(W3D_RENDER_BACKEND_DX12)
+RenderDynamicVertexBinding DX12W3DSortingMakeVertexBinding(
+    const VertexBufferClass * owner, unsigned bufferType,
+    unsigned short firstVertex, unsigned short vertexCount);
+RenderDynamicIndexBinding DX12W3DSortingMakeIndexBinding(
+    const IndexBufferClass * owner, unsigned bufferType, unsigned short firstIndex);
 void DX12W3DSortingTrackVertexBinding(const RenderDynamicVertexBinding & binding);
 void DX12W3DSortingTrackIndexBinding(const RenderDynamicIndexBinding & binding,
                                     unsigned short baseVertexIndex);

@@ -741,6 +741,38 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 }
 #endif
 
+// The CPU mesh sorter stores a borrowed legacy owner, but submits only
+// backend-neutral geometry views. Keep type-specific sorting conversions here
+// so a DX12-only mesh category never adds a new DX8 COM dependency key.
+#if defined(W3D_RENDER_BACKEND_DX12)
+RenderDynamicVertexBinding DX12W3DSortingMakeVertexBinding(
+    const VertexBufferClass * owner, unsigned bufferType,
+    unsigned short firstVertex, unsigned short vertexCount)
+{
+    RenderDynamicVertexBinding binding;
+    if (!owner || firstVertex >= owner->Get_Vertex_Count() ||
+        vertexCount > owner->Get_Vertex_Count() - firstVertex)
+        return binding;
+    binding.legacyOwner = owner;
+    binding.bufferType = bufferType;
+    binding.firstVertex = firstVertex;
+    binding.vertexCount = vertexCount;
+    binding.legacyVertexFormat = owner->FVF_Info().Get_FVF();
+    binding.stride = owner->FVF_Info().Get_FVF_Size();
+    if (bufferType == BUFFER_TYPE_DYNAMIC_DX8 && owner->Type() == BUFFER_TYPE_DX8)
+        binding.resource = static_cast<const DX8VertexBufferClass *>(owner)->
+            Get_Render_Vertex_Buffer();
+    else if (bufferType == BUFFER_TYPE_DYNAMIC_SORTING &&
+             owner->Type() == BUFFER_TYPE_SORTING)
+    {
+        const auto * array = static_cast<const SortingVertexBufferClass *>(owner)->
+            Get_Sorting_Vertex_Array();
+        binding.cpuData = array ? array + firstVertex : nullptr;
+    }
+    return binding;
+}
+#endif
+
 // Keep complete typed W3D classes out of the independent DX12 backend.
 #if defined(W3D_RENDER_BACKEND_DX12)
 void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)

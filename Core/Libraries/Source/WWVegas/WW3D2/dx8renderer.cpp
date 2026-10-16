@@ -232,22 +232,9 @@ void Renderer::Restore_Sorting_State(const RenderStateStruct & state)
         Bind_Legacy_Vertex_Buffer(vertex);
     else
     {
-        RenderDynamicVertexBinding binding;
-        binding.legacyOwner = vertex;
-        binding.bufferType = snapshot.vertex_buffer_types[0];
-        binding.firstVertex = snapshot.vba_offset;
-        binding.vertexCount = snapshot.vba_count;
-        binding.legacyVertexFormat = vertex->FVF_Info().Get_FVF();
-        binding.stride = vertex->FVF_Info().Get_FVF_Size();
-        if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
-            binding.resource = static_cast<const DX8VertexBufferClass *>(vertex)->
-                Get_Render_Vertex_Buffer();
-        else if (binding.bufferType == BUFFER_TYPE_DYNAMIC_SORTING)
-        {
-            const auto * array = static_cast<const SortingVertexBufferClass *>(vertex)->
-                Get_Sorting_Vertex_Array();
-            binding.cpuData = array ? array + snapshot.vba_offset : nullptr;
-        }
+        const RenderDynamicVertexBinding binding = DX12W3DSortingMakeVertexBinding(
+            vertex, snapshot.vertex_buffer_types[0],
+            snapshot.vba_offset, snapshot.vba_count);
         Bind_Dynamic_Vertex_Buffer(binding);
         DX12W3DSortingTrackVertexBinding(binding);
     }
@@ -260,20 +247,8 @@ void Renderer::Restore_Sorting_State(const RenderStateStruct & state)
         Bind_Legacy_Index_Buffer(index, snapshot.index_base_offset);
     else
     {
-        RenderDynamicIndexBinding binding;
-        binding.legacyOwner = index;
-        binding.bufferType = snapshot.index_buffer_type;
-        binding.firstIndex = snapshot.iba_offset;
-        binding.indexCount = index->Get_Index_Count() - snapshot.iba_offset;
-        if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
-            binding.resource = static_cast<const DX8IndexBufferClass *>(index)->
-                Get_Render_Index_Buffer();
-        else if (binding.bufferType == BUFFER_TYPE_DYNAMIC_SORTING)
-        {
-            const auto * array = static_cast<const SortingIndexBufferClass *>(index)->
-                Get_Sorting_Index_Array();
-            binding.cpuData = array ? array + snapshot.iba_offset : nullptr;
-        }
+        const RenderDynamicIndexBinding binding = DX12W3DSortingMakeIndexBinding(
+            index, snapshot.index_buffer_type, snapshot.iba_offset);
         Bind_Dynamic_Index_Buffer(binding, snapshot.index_base_offset);
         DX12W3DSortingTrackIndexBinding(binding, snapshot.index_base_offset);
     }
