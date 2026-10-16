@@ -699,7 +699,8 @@ namespace DX12W3DTextures
             return Fail(frame.LastError());
         t.attachmentState = state;
         if (state == D3D12_RESOURCE_STATE_RENDER_TARGET ||
-            state == D3D12_RESOURCE_STATE_DEPTH_WRITE)
+            state == D3D12_RESOURCE_STATE_DEPTH_WRITE ||
+            state == D3D12_RESOURCE_STATE_RESOLVE_DEST)
             ++t.contentRevision;
         return true;
     }
