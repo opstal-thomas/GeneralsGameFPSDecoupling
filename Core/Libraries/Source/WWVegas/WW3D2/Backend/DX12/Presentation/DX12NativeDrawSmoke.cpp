@@ -10,6 +10,7 @@
 #include "../DX12W3DGeometryBuffers.h"
 #include "../DX12W3DRenderTargets.h"
 #include "../DX12W3DTextureStages.h"
+#include "../DX12W3DTextures.h"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -383,6 +384,114 @@ int wmain()
     }
     draw.SetSpecularEnabled(false);
     draw.SetLightingEnabled(false);
+
+    // R06/M01: exercise the *running* gameplay pixel shader (not just the
+    // separate HLSL reference) with two real sampled W3D textures and
+    // dynamically selected wrap/clamp samplers. Pixel readback catches
+    // silently ignored detail stages and sampler state.
+    struct TexturedVertex
+    {
+        float xyz[3];
+        std::uint32_t diffuse;
+        float uv0[2];
+        float uv1[2];
+    };
+    RenderBufferDescription texturedDesc;
+    texturedDesc.byteSize = sizeof(TexturedVertex) * 4;
+    texturedDesc.legacyVertexFormat = 0x0242u; // FVF XYZ | DIFFUSE | TEX2
+    auto * textured = CreateVertex(device.NativeDevice(), texturedDesc);
+    RenderTexture2DDescription imageDesc;
+    imageDesc.width = imageDesc.height = 2;
+    imageDesc.pixelFormat = 2; // original W3D A8R8G8B8
+    imageDesc.mipLevels = 1;
+    auto tex0 = DX12W3DTextures::Create2D(device.NativeDevice(), imageDesc);
+    auto tex1 = DX12W3DTextures::Create2D(device.NativeDevice(), imageDesc);
+    if (!Check(textured && tex0 && tex1, "create 2-UV geometry and real native W3D textures"))
+        return 1;
+    const std::array<TexturedVertex, 4> texturedVertices = {{
+        {{-0.8f, -0.8f, 0.5f}, 0xff00ff00, {1.25f, 0.25f}, {0.25f, 0.25f}},
+        {{0.f, 0.8f, 0.5f}, 0xff00ff00, {1.25f, 0.25f}, {0.25f, 0.25f}},
+        {{0.8f, -0.8f, 0.5f}, 0xff00ff00, {1.25f, 0.25f}, {0.25f, 0.25f}},
+        {{0.8f, 0.8f, 0.5f}, 0xff00ff00, {1.25f, 0.25f}, {0.25f, 0.25f}}
+    }};
+    void * texGeometry = MapVertex(textured, 0, sizeof(texturedVertices), RENDER_MAP_NONE);
+    if (!Check(texGeometry != nullptr, "map textured FVF geometry")) return 1;
+    std::memcpy(texGeometry, texturedVertices.data(), sizeof(texturedVertices));
+    if (!Check(UnmapVertex(textured), "unmap two-UV geometry")) return 1;
+    RenderSurfaceMap map0, map1;
+    if (!Check(DX12W3DTextures::Map2D(tex0, 0, map0) &&
+               DX12W3DTextures::Map2D(tex1, 0, map1),
+               "map original format native textures")) return 1;
+    for (unsigned y = 0; y < 2; ++y)
+        for (unsigned x = 0; x < 2; ++x)
+        {
+            const unsigned char primary[4] = {x == 0 ? static_cast<unsigned char>(0u) : static_cast<unsigned char>(255u), 0u,
+                                               x == 0 ? 255u : 0u, 255u};
+            const unsigned char detail[4] = {0u, 255u, 0u, 255u};
+            std::memcpy(static_cast<unsigned char *>(map0.data) + y * map0.rowPitch + 4*x,
+                        primary, sizeof(primary));
+            std::memcpy(static_cast<unsigned char *>(map1.data) + y * map1.rowPitch + 4*x,
+                        detail, sizeof(detail));
+        }
+    if (!Check(DX12W3DTextures::Unmap2D(tex0, 0) &&
+               DX12W3DTextures::Unmap2D(tex1, 0), "upload two test texture mip shadows"))
+        return 1;
+    RenderTextureHandle handle0 = reinterpret_cast<RenderTextureHandle>(tex0);
+    RenderTextureHandle handle1 = reinterpret_cast<RenderTextureHandle>(tex1);
+    if (!Check(textureStages.Bind(0, handle0) && textureStages.Bind(1, handle1),
+               "bind two authoritative W3D texture handles")) return 1;
+    const RenderTextureStageChannel selectTex(RENDER_TEXOP_SELECT_ARG1,
+        RENDER_TEXARG_TEXTURE, RENDER_TEXARG_CURRENT);
+    const RenderTextureStageChannel modulateTex(RENDER_TEXOP_MODULATE,
+        RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+    for (unsigned pass = 0; pass < 4; ++pass)
+    {
+        if (!Check(device.BeginFrame(clear), "begin texture combiner frame") ||
+            !Check(targets.BeginFrame(device), "attach texture combiner targets") ||
+            !Check(BindVertex(device, textured, 0, sizeof(TexturedVertex)),
+                   "bind two-UV W3D vertices", LastError()) ||
+            !Check(BindIndex(device, indices16, 0), "bind two-UV W3D indices", LastError()))
+            return 1;
+        const D3D12_VIEWPORT viewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT scissor = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &scissor);
+        draw.BeginFrame();
+        draw.BindVertex(NativeVertexLayout(textured), 4);
+        draw.BindIndex(4);
+        draw.SetMaterial(RenderVertexMaterialDescription());
+        draw.SetTextureChannel(0, false, pass == 2 ? modulateTex : selectTex);
+        draw.SetTextureChannel(0, true, selectTex);
+        draw.SetTextureChannel(1, false, pass == 3 ? selectTex :
+            RenderTextureStageChannel());
+        draw.SetTextureChannel(1, true, pass == 3 ? selectTex :
+            RenderTextureStageChannel());
+        if (!Check(textureStages.SetAddress(0, RENDER_SAMPLER_AXIS_U,
+                      pass == 1 ? RENDER_SAMPLER_CLAMP : RENDER_SAMPLER_REPEAT),
+                   "select native sampler wrap or clamp"))
+            return 1;
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             false, 0, 1, 0, 4),
+                   "sample W3D combiner and dynamic sampler", draw.LastError()))
+            return 1;
+        ComPtr<ID3D12Resource> readback;
+        UINT rowPitch = 0;
+        unsigned char unused[4] = {};
+        // wrap=>red; clamp=>blue; red*vertex-green=>black;
+        // detail stage SELECT_TEXTURE=>green.
+        const unsigned expected = pass == 0 ? 0u : pass == 1 ? 2u : pass == 2 ? 3u : 1u;
+        if (!ReadPixel(device, unused, readback, rowPitch) ||
+            !Check(targets.EndFrame(device), "end texture combiner target") ||
+            !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+                   "submit native W3D textured draw", device.LastError()) ||
+            !CheckReadback(readback.Get(), rowPitch, expected))
+            return 1;
+    }
+    textureStages.Bind(0, nullptr);
+    textureStages.Bind(1, nullptr);
+    DX12W3DTextures::Release(handle0);
+    DX12W3DTextures::Release(handle1);
+    ReleaseVertex(textured);
     ReleaseVertex(lit);
     ReleaseVertex(red);
     ReleaseVertex(green);
