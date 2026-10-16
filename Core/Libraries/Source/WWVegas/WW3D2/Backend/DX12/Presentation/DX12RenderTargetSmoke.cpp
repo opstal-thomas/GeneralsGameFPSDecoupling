@@ -215,6 +215,29 @@ int wmain()
                "Acquire currently selected offscreen color"))
         return 1;
     targets.Release(active);
+
+    // Depth-only shadow-map passes must select no RTV. The primary color
+    // backbuffer remains unbound, and an accidental color clear must fail
+    // before emitting any GPU command. Depth/stencil remains writable.
+    if (!Check(targets.Bind(frame, nullptr, depthSurface),
+               "Bind depth-only W3D shadow pass without an RTV") ||
+        !Check(!targets.AcquireCurrentColor(frame),
+               "Depth-only pass does not expose the primary color RTV") ||
+        !Check(targets.BoundColorResource(frame) == nullptr &&
+               targets.BoundDepthResource(frame) ==
+                   DX12W3DTextures::NativeResource(
+                       reinterpret_cast<RenderTextureHandle>(depthTexture)),
+               "Native OM depth-only pass has no RTV and uses requested DSV") ||
+        !Check(!targets.Clear(frame, true, false, color, 0.2f, 0),
+               "Reject color clear when no RTV is bound") ||
+        !Check(targets.Clear(frame, false, true, color, 0.2f, 0xA5),
+               "Record depth/stencil clear with zero active RTVs"))
+        return 1;
+    auto boundDepth = targets.AcquireCurrentDepth(frame);
+    if (!Check(boundDepth == depthSurface, "Acquire depth-only current DSV"))
+        return 1;
+    targets.Release(boundDepth);
+
     // Drop the original W3D CPU owner before the command buffer completes.
     DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(targetTexture));
     targetTexture = nullptr;
