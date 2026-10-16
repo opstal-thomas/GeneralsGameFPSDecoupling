@@ -46,7 +46,10 @@ struct DX12W3DRenderTargets::Impl
         unsigned samples = 1;
         ComPtr<ID3D12Device> viewDevice;
         ComPtr<ID3D12DescriptorHeap> viewHeap;
-        ID3D12Resource * viewResource = nullptr; // borrowed, owner is texture or MSAA surface
+        // Keep the previous native generation alive while comparing descriptor
+        // owners. A released texture could otherwise allocate a new COM object
+        // at the same CPU address and incorrectly hit the cached RTV/DSV.
+        ComPtr<ID3D12Resource> viewResource;
         ComPtr<ID3D12Resource> msaa;
         D3D12_RESOURCE_STATES msaaState = D3D12_RESOURCE_STATE_COMMON;
 
@@ -140,7 +143,7 @@ struct DX12W3DRenderTargets::Impl
         ID3D12Resource * const native = Resource(&s, frame);
         if (!native) return Fail("GPU surface has no native texture allocation");
         if (s.viewHeap && s.viewDevice.Get() == frame.NativeDevice() &&
-            s.viewResource == native)
+            s.viewResource.Get() == native)
             return true;
 
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
