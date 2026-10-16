@@ -11,6 +11,9 @@
 namespace DX12W3DSurfaces
 {
     RenderSurfaceHandle Create(const RenderSurfaceDescription & description);
+    // Direct filesystem TGA surface loading. W3D TextureLoader's existing
+    // FileFactory-based DDS/TGA path remains the route for archived assets.
+    RenderSurfaceHandle LoadTGAFile(const char * filename);
     void Retain(RenderSurfaceHandle handle);
     void Release(RenderSurfaceHandle handle);
     bool Describe(RenderSurfaceHandle handle, RenderSurfaceDescription & output);
