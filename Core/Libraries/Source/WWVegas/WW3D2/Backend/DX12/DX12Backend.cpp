@@ -13,6 +13,7 @@
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
+#include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
@@ -39,7 +40,7 @@ namespace
     bool ready = false;
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
-    std::array<RenderTextureHandle, 8> boundTextures = {};
+    DX12W3DTextureStages textureStages;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
 
     bool ValidTransform(RenderTransform transform)
@@ -142,6 +143,14 @@ namespace
     }
 }
 
+// The shared renderer stages are owned by the exclusive DX12 backend.
+// R05's descriptor binding is intentionally separate from the old preview
+// pass, and M01/B07 can call BindForDraw at native draw submission time.
+DX12W3DTextureStages & DX12W3DRendererTextureStages()
+{
+    return textureStages;
+}
+
 bool Renderer::Init(void * window, bool lite)
 {
     Shutdown();
@@ -179,11 +188,7 @@ void Renderer::Shutdown()
 {
     // Stage references may outlive a native frame; keep texture identity
     // independent of graphics device reset, then drop stage caches.
-    for (auto & texture : boundTextures)
-    {
-        DX12W3DTextures::Release(texture);
-        texture = nullptr;
-    }
+    textureStages.Clear();
     ready = false;
     renderThread = 0;
     syncInterval = 0;
@@ -252,11 +257,11 @@ void Renderer::Begin_Scene()
         }
         return;
     }
-    // Deferred TGA/DDS CPU uploads can have completed before the scene.
-    // Re-establish native state on this command list without D3D8 SetTexture.
-    for (auto * texture : boundTextures)
-        if (texture && !DX12W3DTextures::Prepare(primaryWindow.Presentation(), texture))
-            OutputDebugStringA(DX12W3DTextures::LastError());
+    // The native stage cache pins any modified TGA/DDS mip generations
+    // once per command list. Actual shader-visible root-table binding is
+    // performed by the native draw pass after its root signature is set.
+    if (!textureStages.PrepareBound(primaryWindow.Presentation()))
+        OutputDebugStringA(textureStages.LastError());
 }
 
 void Renderer::End_Scene(bool flip_frame)
@@ -651,13 +656,9 @@ void Renderer::Invalidate_Mesh_Cache()
 
 void Renderer::Release_Texture_Resources()
 {
-    for (auto & texture : boundTextures)
-    {
-        DX12W3DTextures::Release(texture);
-        texture = nullptr;
-    }
-    // Individual texture handles retain CPU mip shadows across reset; R05
-    // descriptor cache and R09 eviction remain separate migration items.
+    textureStages.Clear();
+    // The fence retains old immutable descriptor pages and resource
+    // generations while any previously recorded GPU draw is in flight.
 }
 
 RenderVertexBufferHandle Renderer::Create_Vertex_Buffer(const RenderBufferDescription & description)
@@ -951,22 +952,17 @@ RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDes
 
 void Renderer::Bind_Texture(unsigned stage, RenderTextureHandle texture)
 {
-    if (stage >= boundTextures.size())
+    if (!textureStages.Bind(stage, texture))
     {
-        ReportPending("Renderer::Bind_Texture invalid stage");
+        OutputDebugStringA(textureStages.LastError());
         return;
     }
-    if (boundTextures[stage] != texture)
-    {
-        DX12W3DTextures::Retain(texture);
-        DX12W3DTextures::Release(boundTextures[stage]);
-        boundTextures[stage] = texture;
-    }
-    // R04 ensures native texture content is resident on the correct device.
-    // Actual stage SRV descriptors and cache invalidation belong to R05.
-    if (texture && primaryWindow.IsSceneOpen() &&
-        !DX12W3DTextures::Prepare(primaryWindow.Presentation(), texture))
-        OutputDebugStringA(DX12W3DTextures::LastError());
+    // Stage identity is strongly referenced and null explicitly unbinds.
+    // A changed CPU mip generation is uploaded before the next native draw;
+    // BindForDraw snapshots immutable t0/t1 SRVs after root-signature setup.
+    if (primaryWindow.IsSceneOpen() &&
+        !textureStages.PrepareBound(primaryWindow.Presentation()))
+        OutputDebugStringA(textureStages.LastError());
 }
 
 void Renderer::Retain_Texture(RenderTextureHandle texture)
