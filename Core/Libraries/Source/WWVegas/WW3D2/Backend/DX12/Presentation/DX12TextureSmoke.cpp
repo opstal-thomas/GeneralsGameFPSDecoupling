@@ -151,6 +151,11 @@ int wmain()
     desc.mipLevels = 3;
     auto main = Create2D(device.NativeDevice(), desc);
     auto copied = Create2D(device.NativeDevice(), desc);
+    RenderTexture2DDescription renderTarget = desc;
+    renderTarget.renderTarget = true;
+    if (!Check(!Create2D(device.NativeDevice(), renderTarget),
+               "Reject offscreen RTV allocation until R07 establishes attachment contract"))
+        return 1;
     if (!Check(main && copied, "Create native mipmapped ARGB8 textures") ||
         !Check(MipCount(T(main)) == 3, "Mip level count") ||
         !Check(MemoryUsage(T(main)) == 84, "W3D CPU mip allocation accounting"))
@@ -349,7 +354,7 @@ int wmain()
                NativeResource(T(main))->GetDesc().Format == DXGI_FORMAT_B8G8R8A8_UNORM,
                "Actual D3D12 default-heap BGRA8 GPU texture"))
         return 1;
-    Readback rgbaReadback, bcReadback, mipReadback, surfaceReadback;
+    Readback rgbaReadback, bcReadback, mipReadback, surfaceReadback, versionReadback;
     if (!Check(CopyMipToReadback(device, T(main), 0, rgbaReadback),
                "Copy original texture from GPU") ||
         !Check(CopyMipToReadback(device, T(bc), 1, bcReadback),
@@ -358,6 +363,22 @@ int wmain()
                "Readback updated 1x1 mip") ||
         !Check(CopyMipToReadback(device, T(fromSurface), 1, surfaceReadback),
                "Readback W3D CPU surface 2x2 box-filtered mip"))
+        return 1;
+    // Recording an update during the same command list must not overwrite
+    // the GPU generation already copied to rgbaReadback.
+    auto * newer = static_cast<std::uint8_t *>(nullptr);
+    if (!Check(Map2D(main, 0, mapped), "Map uploaded native texture again"))
+        return 1;
+    newer = static_cast<std::uint8_t *>(mapped.data);
+    const std::uint8_t changed[4] = {0xE1, 0xD2, 0xC3, 0xB4};
+    std::memcpy(newer, changed, sizeof(changed));
+    auto * previousGpu = NativeResource(T(main));
+    if (!Check(Unmap2D(main, 0), "Commit partial texture rewrite") ||
+        !Check(Prepare(device, T(main)), "Recreate GPU texture generation") ||
+        !Check(NativeResource(T(main)) != previousGpu,
+               "A texture update never overwrites a recorded GPU sample") ||
+        !Check(CopyMipToReadback(device, T(main), 0, versionReadback),
+               "Read back the replacement GPU texture generation"))
         return 1;
 
     // Released W3D textures are no longer heap owners; the command-list fence
@@ -379,6 +400,9 @@ int wmain()
         !Check(EqualsReadback(surfaceReadback, 0,
                    reinterpret_cast<const std::uint8_t *>("\x12\x34\x56\xFF"), 4),
                "Native surface box-filtered mip reaches DX12 GPU") ||
+        !Check(EqualsReadback(versionReadback, 0,
+                   reinterpret_cast<const std::uint8_t *>("\xE1\xD2\xC3\xB4"), 4),
+               "Replacement GPU generation received new W3D CPU pixels") ||
         !Check(device.InFlightResourceCount() == 0,
                "Staging and texture generations retired by native fence"))
         return 1;
