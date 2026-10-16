@@ -26,6 +26,8 @@ class DX12R07RenderTargetTests(unittest.TestCase):
         self.assertIn("renderTargets.BeginFrame(primaryWindow.Presentation())", code)
         self.assertIn("renderTargets.EndFrame(primaryWindow.Presentation())", code)
         self.assertIn("renderTargets.Clear(", code)
+        self.assertIn("if (primaryWindow.IsSceneOpen())", code)
+        self.assertIn("currently bound RTV/DSV views", code)
         self.assertIn("renderTargets.Owns(surface)", code)
         self.assertIn("renderTargets.Release(surface)", code)
         self.assertIn("primaryWindow.RestorePrimaryViewport()", code)
@@ -119,6 +121,7 @@ class DX12R07RenderTargetTests(unittest.TestCase):
             "Pixel(multisamplePixels",
             "Reject offscreen RTV/DSV dimensions mismatch",
             "Reject MSAA 4x color with single-sample DSV",
+            "Reject depth clear while primary DSV is unbound",
             "Bind depth-only W3D shadow pass without an RTV",
             "Reject color clear when no RTV is bound",
             "Record depth/stencil clear with zero active RTVs",
