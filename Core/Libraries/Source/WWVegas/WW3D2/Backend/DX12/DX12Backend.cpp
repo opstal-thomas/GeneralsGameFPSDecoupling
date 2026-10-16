@@ -405,7 +405,10 @@ void Renderer::Draw_Transformed_Quad(const void * vertices, unsigned vertexStrid
 
 void Renderer::Bind_Immediate_Texture(unsigned stage, RenderTextureHandle texture)
 {
-    ReportPending("Renderer::Bind_Immediate_Texture");
+    // Immediate/sorted W3D geometry previously bypassed the DX8Wrapper
+    // texture cache. DX12 uses the same strongly retained native stage
+    // descriptors; its actual immediate draw setup remains M01/B07.
+    Bind_Texture(stage, texture);
 }
 
 void Renderer::Set_Immediate_Stage_Alpha_Current(unsigned stage)
