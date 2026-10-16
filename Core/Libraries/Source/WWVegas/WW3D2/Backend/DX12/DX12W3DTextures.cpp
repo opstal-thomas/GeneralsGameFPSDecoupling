@@ -517,6 +517,11 @@ namespace DX12W3DTextures
                                    const RenderTexture2DDescription & desc)
     {
         lastError.clear();
+        if (desc.renderTarget)
+        {
+            Fail("Render-to-texture attachments require the native R07 target manager");
+            return nullptr;
+        }
         return reinterpret_cast<RenderTexture2DHandle>(
             Create(device, Kind::Texture2D, desc.width, desc.height, 1,
                    desc.pixelFormat, desc.mipLevels));
@@ -525,6 +530,11 @@ namespace DX12W3DTextures
                                        const RenderTextureCubeDescription & desc)
     {
         lastError.clear();
+        if (desc.renderTarget)
+        {
+            Fail("Cube render targets are not implemented before R07");
+            return nullptr;
+        }
         return reinterpret_cast<RenderTextureCubeHandle>(
             Create(device, Kind::Cube, desc.edgeLength, desc.edgeLength, 1,
                    desc.pixelFormat, desc.mipLevels));
@@ -692,7 +702,10 @@ namespace DX12W3DTextures
     }
     unsigned GetPriority(RenderTextureHandle h)
     {
-        return h ? Object(h)->priority : 0;
+        if (!h) return 0;
+        NativeTexture & t = *Object(h);
+        std::lock_guard<std::mutex> lock(t.mutex);
+        return t.priority;
     }
     unsigned SetPriority(RenderTextureHandle h, unsigned priority)
     {
