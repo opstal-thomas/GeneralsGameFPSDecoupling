@@ -333,12 +333,12 @@ int wmain()
         local.lightCount = 1;
         auto & light = local.lights[0];
         light.type = pass == 2 || pass == 3 ? 2u : 1u;
-        light.position[2] = pass == 1 ? 40.f : 1.5f;
+        light.position[2] = pass == 1 ? 400.f : 5.5f;
         light.diffuse[1] = pass == 4 ? 0.f : 1.f;
         light.specular[0] = pass == 4 ? 1.f : 0.f;
         light.spotDirection[2] = pass == 3 ? 1.f : -1.f;
         light.attenuation[0] = 0.f;
-        light.attenuation[1] = 10.f;
+        light.attenuation[1] = 50.f;
         light.attenuation[2] = 1.f;
         light.attenuation[3] = 0.5f;
         RenderVertexMaterialDescription localMaterial;
