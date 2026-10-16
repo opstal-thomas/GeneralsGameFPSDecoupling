@@ -425,8 +425,9 @@ int wmain()
     for (unsigned y = 0; y < 2; ++y)
         for (unsigned x = 0; x < 2; ++x)
         {
-            const unsigned char primary[4] = {x == 0 ? static_cast<unsigned char>(0u) : static_cast<unsigned char>(255u), 0u,
-                                               x == 0 ? 255u : 0u, 255u};
+            unsigned char primary[4] = {0, 0, 0, 255};
+            primary[0] = x == 0 ? 0 : 255;
+            primary[2] = x == 0 ? 255 : 0;
             const unsigned char detail[4] = {0u, 255u, 0u, 255u};
             std::memcpy(static_cast<unsigned char *>(map0.data) + y * map0.rowPitch + 4*x,
                         primary, sizeof(primary));
