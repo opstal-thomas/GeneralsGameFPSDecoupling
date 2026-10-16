@@ -116,6 +116,26 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn("Renderer::Map_", source)
             self.assertIn("Renderer::Unmap_", source)
 
+    def test_r02_legacy_dynamic_producer_bridges(self):
+        vertex = (WW3D / "dx8vertexbuffer.cpp").read_text(encoding="utf-8")
+        index = (WW3D / "dx8indexbuffer.cpp").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        sorting = (WW3D / "sortingrenderer.cpp").read_text(encoding="utf-8")
+        for source, signature in (
+            (vertex, "Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)"),
+            (index, "Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,"),
+        ):
+            self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", source)
+            self.assertIn(signature, source)
+            self.assertIn("access.Get_Render_Binding()", source)
+        for symbol in ("Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)",
+                       "Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access"):
+            self.assertNotIn(symbol, backend)
+        self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Vertex_Buffer")', backend)
+        self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Index_Buffer")', backend)
+        self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding()", sorting)
+        self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding()", sorting)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")

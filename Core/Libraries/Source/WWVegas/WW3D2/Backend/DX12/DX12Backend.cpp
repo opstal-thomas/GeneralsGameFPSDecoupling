@@ -788,28 +788,31 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & bin
 {
     if (!ready || !primaryWindow.IsSceneOpen())
         return;
+    // CPU-only sorting owners are converted into pooled dynamic W3D geometry
+    // by SortingRenderer::Flush_Sorting_Pool. A missing GPU handle is not an
+    // unbind: reject rather than silently dropping its draw.
+    if (!binding.resource)
+    {
+        OutputDebugStringA("DX12-R02: CPU-only dynamic sorting vertex binding needs M01 submission");
+        return;
+    }
     if (!DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(),
         binding.resource, 0, binding.stride, binding.firstVertex, binding.vertexCount))
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
-}
-
-void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
-{
-    ReportPending("Renderer::Bind_Dynamic_Vertex_Buffer");
 }
 
 void Renderer::Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & binding, unsigned short baseVertexIndex)
 {
     if (!ready || !primaryWindow.IsSceneOpen())
         return;
+    if (!binding.resource)
+    {
+        OutputDebugStringA("DX12-R02: CPU-only dynamic sorting index binding needs M01 submission");
+        return;
+    }
     if (!DX12W3DGeometryBuffers::BindIndex(primaryWindow.Presentation(),
         binding.resource, baseVertexIndex, binding.firstIndex, binding.indexCount))
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
-}
-
-void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)
-{
-    ReportPending("Renderer::Bind_Dynamic_Index_Buffer");
 }
 
 void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer, unsigned short baseVertexIndex)

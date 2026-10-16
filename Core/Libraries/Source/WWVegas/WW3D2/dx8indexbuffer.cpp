@@ -390,6 +390,15 @@ DynamicIBAccessClass::DynamicIBAccessClass(unsigned short type_, unsigned short 
 	}
 }
 
+// DX12-R02: match the C++ W3D accessor overload to the neutral ring slice.
+#if defined(W3D_RENDER_BACKEND_DX12)
+void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
+                                         unsigned short baseVertexIndex)
+{
+    Bind_Dynamic_Index_Buffer(access.Get_Render_Binding(), baseVertexIndex);
+}
+#endif
+
 RenderDynamicIndexBinding DynamicIBAccessClass::Get_Render_Binding() const
 {
     RenderDynamicIndexBinding binding;

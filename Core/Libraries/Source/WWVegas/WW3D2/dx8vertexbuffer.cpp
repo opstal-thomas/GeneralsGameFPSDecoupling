@@ -725,6 +725,17 @@ DynamicVBAccessClass::DynamicVBAccessClass(unsigned t,unsigned fvf,unsigned shor
 	}
 }
 
+// DX12-R02: this overload lives beside the complete W3D accessor type;
+// standalone native DX12 diagnostics do not link the legacy W3D classes.
+#if defined(W3D_RENDER_BACKEND_DX12)
+void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
+{
+    // Same path as sorting/strip/particle callers already using the neutral
+    // binding. The backing dynamic W3D handle uses R02's fence-safe page ring.
+    Bind_Dynamic_Vertex_Buffer(access.Get_Render_Binding());
+}
+#endif
+
 RenderDynamicVertexBinding DynamicVBAccessClass::Get_Render_Binding() const
 {
     RenderDynamicVertexBinding binding;
