@@ -159,8 +159,8 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertNotIn(symbol, backend)
         self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Vertex_Buffer")', backend)
         self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Index_Buffer")', backend)
-        self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access,0)", sorting)
-        self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access)", sorting)
+        self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding()", sorting)
+        self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding()", sorting)
 
     def test_r02_dynamic_line_and_mesh_producers_use_selected_renderer(self):
         # Segment ribbons, ground marks and particle-like dynamic meshes
@@ -401,8 +401,10 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("DX12W3DSortingTrackIndexBinding(binding, baseVertexIndex);", index)
         self.assertIn("DX12W3DSortingCurrentBaseVertexIndex()", header)
         self.assertIn("DX12W3DSortingCurrentBaseVertexIndex()", backend)
-        self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access,0)", sorting)
-        self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access)", sorting)
+        self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding(),0)", sorting)
+        self.assertIn("DX12W3DSortingTrackIndexBinding(dyn_ib_access.Get_Render_Binding()", sorting)
+        self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding())", sorting)
+        self.assertIn("DX12W3DSortingTrackVertexBinding(dyn_vb_access.Get_Render_Binding())", sorting)
         self.assertNotIn("ReportPending(\"Renderer::Multiply_Sorting_World_View\")", backend)
         self.assertNotIn("ReportPending(\"Renderer::Transform_Sorting_Center\")", backend)
         for token in ("result.m[row][column] += world.m[row][inner] * view.m[inner][column]",

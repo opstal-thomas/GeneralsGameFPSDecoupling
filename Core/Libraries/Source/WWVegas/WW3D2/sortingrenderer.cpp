@@ -43,6 +43,9 @@
 #include "dx8indexbuffer.h"
 #include "dx8wrapper.h"
 #include "WW3D2/Renderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "Backend/DX12/DX12W3DSortingBridge.h"
+#endif
 #include "vertmaterial.h"
 #include "texture.h"
 #include "statistics.h"
@@ -508,8 +511,15 @@ void SortingRendererClass::Flush_Sorting_Pool()
 
 		// Set index buffer and render!
 
-		Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access,0); // Override with this buffer (do something to prevent need for this!)
-		Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access); // Override with this buffer (do something to prevent need for this!)
+		// The rendering path must keep the backend-neutral R02 slice
+		// contracts. Only the typed W3D state mirror records borrowed owners
+		// for later deferred/sorted replay, never a DX8 GPU binding.
+#if defined(W3D_RENDER_BACKEND_DX12)
+        DX12W3DSortingTrackIndexBinding(dyn_ib_access.Get_Render_Binding(), 0);
+        DX12W3DSortingTrackVertexBinding(dyn_vb_access.Get_Render_Binding());
+#endif
+		Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding(),0);
+		Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding());
 
 		Renderer::Apply_Pending_State_Changes();
 
