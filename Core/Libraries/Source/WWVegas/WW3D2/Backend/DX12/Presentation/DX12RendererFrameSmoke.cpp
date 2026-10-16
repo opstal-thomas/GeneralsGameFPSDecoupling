@@ -250,8 +250,49 @@ int wmain()
     Renderer::Unmap_Vertex_Buffer(gpuVertex);
     Renderer::Unmap_Index_Buffer(gpuIndex);
 
+    // R07: the public, backend-neutral W3D surface API must operate on
+    // the same native command list as the game-owned primary HWND.
+    RenderSurfaceDescription rttDesc;
+    rttDesc.width = rttDesc.height = 64;
+    rttDesc.pixelFormat = 2;
+    const auto rtt = Renderer::Create_Offscreen_Texture(rttDesc);
+    RenderTexture2DDescription depthTargetDesc;
+    depthTargetDesc.width = depthTargetDesc.height = 64;
+    depthTargetDesc.pixelFormat = 4; // WW3D_ZFORMAT_D24S8
+    depthTargetDesc.mipLevels = 1;
+    const auto depthRTT = Renderer::Create_Depth_Texture_2D(depthTargetDesc);
+    if (!Check(rtt && depthRTT, "R07 Renderer creates GPU RTV and D24S8"))
+        return 1;
+
     Renderer::Clear(true, true, Vector3(0.2f, 0.4f, 0.6f), 1.f);
     Renderer::Begin_Scene();
+    const auto oldRT = Renderer::Acquire_Current_Color_Surface();
+    const auto oldDepth = Renderer::Acquire_Current_Depth_Surface();
+    const auto rttSurface = Renderer::Acquire_Texture_Surface_Level(rtt, 0);
+    const auto dsvSurface = Renderer::Acquire_Texture_Surface_Level(depthRTT, 0);
+    if (!Check(oldRT && oldDepth && rttSurface && dsvSurface,
+               "R07 Renderer acquires primary and GPU texture surface views") ||
+        !Check(Renderer::Set_Render_Target_Surfaces(rttSurface, dsvSurface),
+               "R07 sets 64x64 offscreen target/depth through Renderer"))
+        return 1;
+    Renderer::Clear(true, true, Vector3(0.25f, 0.5f, 0.75f), 1.f, 0.33f, 7);
+    RenderSurfaceDescription rttInfo;
+    Renderer::Describe_Surface(rttSurface, rttInfo);
+    if (!Check(rttInfo.width == 64 && rttInfo.height == 64,
+               "R07 offscreen surface describes its GPU dimensions"))
+        return 1;
+    RenderSurfaceMap invalidGPUMap;
+    Renderer::Lock_Surface(rttSurface, invalidGPUMap);
+    if (!Check(!invalidGPUMap.data, "R07 GPU targets are not CPU lockable before R08") ||
+        !Check(Renderer::Set_Render_Target_Surfaces(oldRT, oldDepth),
+               "R07 restores game HWND RTV and original viewport"))
+        return 1;
+    Renderer::Release_Surface(rttSurface);
+    Renderer::Release_Surface(dsvSurface);
+    Renderer::Release_Surface(oldRT);
+    Renderer::Release_Surface(oldDepth);
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(rtt));
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(depthRTT));
     Renderer::Bind_Vertex_Buffer(gpuVertex, 0, 12);
     Renderer::Bind_Index_Buffer(gpuIndex, 0);
     Renderer::Clear(true, false, Vector3(0.3f, 0.5f, 0.7f), 1.f);
@@ -292,6 +333,6 @@ int wmain()
         return 1;
     SetEnvironmentVariableA("W3D_DX12_B04_DIAGNOSTIC", nullptr);
     SetEnvironmentVariableA("W3D_DX12_GAME_WARP", nullptr);
-    std::cout << "B04/R01/R04 Renderer frame, native geometry/texture handles and game HWND: PASS\\n";
+    std::cout << "B04/R01/R04/R07 Renderer frame, native geometry/texture/RTV handles and game HWND: PASS\\n";
     return 0;
 }
