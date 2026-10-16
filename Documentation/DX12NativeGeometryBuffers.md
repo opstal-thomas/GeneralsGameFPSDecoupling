@@ -84,6 +84,13 @@ game-style primary HWND. Both tests execute on Win32 and x64 in
 `scripts/tests/test_dx12_geometry_buffers.py` verifies the source-level
 backend contract in both CI workflows.
 
+**Verified 2026-10-16:** [Win32/x64 WARP shader, native Renderer and GPU
+geometry-residency workflow](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38826379094)
+passed, including the final null-unbind regression. [All seven Generals
+and Zero Hour Windows build/dependency-audit
+jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38826379107)
+also passed.
+
 **Limitations:** W3D's old renderer may still reference D3D8 for FVF
 translation, draw batches and material/texture state; these are R03, R04
 and B07/M01 tasks. This checkpoint provides **native GPU geometry
