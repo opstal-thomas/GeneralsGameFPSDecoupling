@@ -507,11 +507,6 @@ void Renderer::Set_Legacy_Pixel_Shader_Vector(unsigned registerIndex, float x, f
     ReportPending("Renderer::Set_Legacy_Pixel_Shader_Vector");
 }
 
-void Renderer::Set_Material(const VertexMaterialClass * material)
-{
-    ReportPending("Renderer::Set_Material");
-}
-
 void Renderer::Apply_Pending_State_Changes()
 {
     // Native PSO and texture descriptors are resolved at each draw submission;
@@ -1245,7 +1240,9 @@ void Renderer::Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex)
 
 void Renderer::Set_Vertex_Material(const RenderVertexMaterialDescription & material)
 {
-    ReportPending("Renderer::Set_Vertex_Material");
+    // Unlit diffuse/opacity bridge for M01; lighting and material mapper
+    // permutations remain M03 rather than silently claiming full parity.
+    nativeDraw.SetMaterial(material);
 }
 
 void Renderer::Set_Fixed_Stage_Operation(unsigned stage, bool alpha, RenderFixedStageOperation operation)

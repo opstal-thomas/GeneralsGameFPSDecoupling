@@ -308,7 +308,8 @@ class R01GeometryBuffers(unittest.TestCase):
         texture = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
         backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
         for content, token in ((shader, "void Renderer::Set_Shader(const ShaderClass & shader)"),
-                               (texture, "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)")):
+                               (texture, "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)"),
+                               (texture, "void Renderer::Set_Material(const VertexMaterialClass * material)")):
             self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", content)
             self.assertIn(token, content)
         for token in ("shader.Get_Src_Blend_Func()", "shader.Get_Dst_Blend_Func()",
@@ -316,7 +317,12 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn(token, shader)
         self.assertIn("texture->Peek_Render_Texture()", texture)
         self.assertIn("Bind_Texture(stage,", texture)
-        for token in ("Renderer::Set_Shader(", "Renderer::Set_Texture("):
+        self.assertIn("material->Get_Opacity()", texture)
+        self.assertIn("Set_Vertex_Material(description)", texture)
+        self.assertIn("nativeDraw.SetMaterial(material)", backend)
+        self.assertNotIn('ReportPending("Renderer::Set_Vertex_Material")', backend)
+        self.assertIn("MaterialColor", (DX12 / "DX12W3DNativeDraw.cpp").read_text(encoding="utf-8"))
+        for token in ("Renderer::Set_Shader(", "Renderer::Set_Texture(", "Renderer::Set_Material("):
             self.assertNotIn(token, backend)
         self.assertNotIn('ReportPending("Renderer::Apply_Pending_State_Changes")', backend)
 

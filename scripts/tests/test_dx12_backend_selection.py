@@ -53,6 +53,7 @@ class DX12BackendSelectionTests(unittest.TestCase):
             "void Renderer::Invalidate_Mesh_Cache()",
             "void Renderer::Set_Shader(const ShaderClass & shader)",
             "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)",
+            "void Renderer::Set_Material(const VertexMaterialClass * material)",
         }
         self.assertGreater(len(dx8), 150)
         self.assertEqual(len(dx8), len(set(dx8)), "DX8 defines duplicate signatures")

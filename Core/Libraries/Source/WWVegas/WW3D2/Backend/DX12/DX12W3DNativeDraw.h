@@ -29,6 +29,7 @@ public:
     void BindVertex(const DX12W3DVertexLayout * layout, unsigned count);
     void BindIndex(unsigned count);
     void SetBlend(const RenderBlendState & blend);
+    void SetMaterial(const RenderVertexMaterialDescription & material);
     void SetDepthCompare(RenderCompareFunc compare);
     void SetDepthWrite(bool enabled);
     void SetCull(RenderCullMode cull);

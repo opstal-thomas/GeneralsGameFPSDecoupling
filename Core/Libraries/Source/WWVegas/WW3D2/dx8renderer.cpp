@@ -131,6 +131,28 @@ void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
 {
     Bind_Texture(stage, texture ? texture->Peek_Render_Texture() : nullptr);
 }
+
+// M01: translate the original W3D color and opacity (including per-object
+// alpha overrides) for the native unlit shader. Full lighting is M03.
+void Renderer::Set_Material(const VertexMaterialClass * material)
+{
+    RenderVertexMaterialDescription description;
+    if (material)
+    {
+        Vector3 color;
+        material->Get_Diffuse(&color);
+        description.diffuse = RenderMaterialColor(
+            color.X, color.Y, color.Z, material->Get_Opacity());
+        material->Get_Ambient(&color);
+        description.ambient = RenderMaterialColor(color.X, color.Y, color.Z, 1.0f);
+        material->Get_Emissive(&color);
+        description.emissive = RenderMaterialColor(color.X, color.Y, color.Z, 1.0f);
+        material->Get_Specular(&color);
+        description.specular = RenderMaterialColor(color.X, color.Y, color.Z, 1.0f);
+        description.power = material->Get_Shininess();
+    }
+    Set_Vertex_Material(description);
+}
 #endif
 
 bool DX8TextureCategoryClass::m_gForceMultiply = false; // Forces opaque materials to use the multiply blend - pseudo transparent effect.  jba.

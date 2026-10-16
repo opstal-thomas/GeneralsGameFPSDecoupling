@@ -35,6 +35,7 @@ cbuffer W3DConstants : register(b0)
     uint HasTexture1;
     uint AlphaTest;
     uint AlphaReference;
+    float4 MaterialColor;
 };
 Texture2D Texture0 : register(t0);
 Texture2D Texture1 : register(t1);
@@ -70,9 +71,9 @@ OutVertex W3D_VS(InVertex v)
     o.position = mul(float4(v.position.xyz, 1.0f), WVP);
 #if W3D_HAS_COLOR
     // DX8 D3DCOLOR packs 0xAARRGGBB as little-endian BGRA bytes.
-    o.diffuse = v.diffuse.bgra;
+    o.diffuse = v.diffuse.bgra * float4(1,1,1,MaterialColor.a);
 #else
-    o.diffuse = float4(1,1,1,1);
+    o.diffuse = MaterialColor;
 #endif
 #if W3D_HAS_UV0
     o.uv0 = v.uv0;
@@ -171,8 +172,9 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned texture1;
         unsigned alphaTest;
         unsigned alphaReference;
+        float material[4];
     };
-    static_assert(sizeof(DrawConstants) == 20 * sizeof(unsigned),
+    static_assert(sizeof(DrawConstants) == 24 * sizeof(unsigned),
                   "Native DX12 W3D shader constants mismatch");
 
     bool Compile(const char * entry, const char * profile,
@@ -205,6 +207,7 @@ struct DX12W3DNativeDraw::Impl
     unsigned indices = 0;
     unsigned draws = 0;
     RenderBlendState blend;
+    RenderVertexMaterialDescription material;
     RenderCompareFunc depthCompare = RENDER_COMPARE_LESS_EQUAL;
     bool depthWrite = true;
     RenderCullMode cull = RENDER_CULL_NONE;
@@ -370,6 +373,10 @@ void DX12W3DNativeDraw::BindIndex(unsigned count)
     impl_->indices = count;
 }
 void DX12W3DNativeDraw::SetBlend(const RenderBlendState & state) { impl_->blend = state; }
+void DX12W3DNativeDraw::SetMaterial(const RenderVertexMaterialDescription & state)
+{
+    impl_->material = state;
+}
 void DX12W3DNativeDraw::SetDepthCompare(RenderCompareFunc c) { impl_->depthCompare = c; }
 void DX12W3DNativeDraw::SetDepthWrite(bool enabled) { impl_->depthWrite = enabled; }
 void DX12W3DNativeDraw::SetCull(RenderCullMode cull) { impl_->cull = cull; }
@@ -426,6 +433,10 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     constants.texture1 = stages.Bound(1) && canTexture1 ? 1u : 0u;
     constants.alphaTest = s.blend.alphaTestEnabled ? 1u : 0u;
     constants.alphaReference = s.blend.alphaReference;
+    constants.material[0] = s.material.diffuse.r;
+    constants.material[1] = s.material.diffuse.g;
+    constants.material[2] = s.material.diffuse.b;
+    constants.material[3] = s.material.diffuse.a;
 
     auto * cmd = frame.ActiveCommandList();
     cmd->SetGraphicsRootSignature(s.root.Get());
