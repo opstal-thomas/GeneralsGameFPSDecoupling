@@ -30,6 +30,9 @@ class DX12R07RenderTargetTests(unittest.TestCase):
         self.assertIn("renderTargets.Release(surface)", code)
         self.assertIn("primaryWindow.RestorePrimaryViewport()", code)
         self.assertIn("textureStages.Bound(stage)", code)
+        self.assertIn("renderTargets.BoundDepthTexture()", code)
+        self.assertIn("texture == renderTargets.BoundColorTexture()", code)
+        self.assertIn("texture == renderTargets.BoundDepthTexture()", code)
         self.assertNotIn("DX8Wrapper::", code)
 
     def test_attachment_texture_has_real_native_flags_and_srv_generations(self):
@@ -90,6 +93,10 @@ class DX12R07RenderTargetTests(unittest.TestCase):
             self.assertIn(token, source, token)
         self.assertIn("RenderSurfaceHandle AcquireTextureLevel(", header)
         self.assertIn("RenderSurfaceHandle CreateMSAAColor(", header)
+        self.assertIn("RenderTextureHandle BoundDepthTexture() const", header)
+        self.assertIn("hasColor ? 1u : 0u", source)
+        self.assertIn("impl_->activeDepth ? nullptr : frame.CurrentBackBuffer()", source)
+        self.assertIn("Cannot clear a color target in a depth-only pass", source)
         self.assertIn("RenderTexture2DHandle ResolvedTexture(", header)
         self.assertIn("bool Bind(", header)
         self.assertIn("bool EndFrame(", header)
@@ -112,6 +119,9 @@ class DX12R07RenderTargetTests(unittest.TestCase):
             "Pixel(multisamplePixels",
             "Reject offscreen RTV/DSV dimensions mismatch",
             "Reject MSAA 4x color with single-sample DSV",
+            "Bind depth-only W3D shadow pass without an RTV",
+            "Reject color clear when no RTV is bound",
+            "Record depth/stencil clear with zero active RTVs",
             "Reject stale primary surface handle after resize",
             "Rehydrate offscreen texture/RTV after device reset",
             "frame.InFlightResourceCount() == 0",
@@ -120,6 +130,9 @@ class DX12R07RenderTargetTests(unittest.TestCase):
             # ResolveSubresource is in the manager, not duplicated in smoke.
             self.assertIn(token, smoke if token != "ResolveSubresource" else
                           (DX12 / "DX12W3DRenderTargets.cpp").read_text(encoding="utf-8"))
+        renderer_smoke = (WARP / "DX12RendererFrameSmoke.cpp").read_text(encoding="utf-8")
+        self.assertIn("Renderer supports a depth-only shadow-map pass", renderer_smoke)
+        self.assertIn("prevents binding currently writable depth as an SRV", renderer_smoke)
         workflow = (ROOT / ".github/workflows/dx12-shader-validation.yml").read_text(encoding="utf-8")
         self.assertIn('foreach ($architecture in @("Win32", "x64"))', workflow)
         self.assertIn("ctest --test-dir $build -C Release --output-on-failure", workflow)
