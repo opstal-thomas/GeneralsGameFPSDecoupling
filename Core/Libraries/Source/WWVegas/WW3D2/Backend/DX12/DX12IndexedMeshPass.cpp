@@ -8,6 +8,8 @@
 
 #include "DX12IndexedMeshPass.h"
 #include "DX12PresentationDevice.h"
+#include "DX12W3DTextureStages.h"
+#include "DX12W3DTextures.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -278,16 +280,15 @@ struct DX12W3DIndexedMeshPass::Impl
 {
     struct TextureRecord
     {
-        ComPtr<ID3D12Resource> gpu;
-        ComPtr<ID3D12Resource> upload;
+        // Stable R04 handle, not a preview-specific descriptor or resource.
+        RenderTexture2DHandle native = nullptr;
     };
 
     DX12PresentationDevice * presentation = nullptr;
     std::wstring shaderPath;
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3DBlob> vertexShader;
-    ComPtr<ID3D12DescriptorHeap> texturesHeap;
-    UINT descriptorStride = 0;
+    DX12W3DTextureStages stages;
     std::vector<TextureRecord> textures;
     // Material combiner key alone cannot identify the blend/depth-write PSO.
     std::unordered_map<std::uint64_t, ComPtr<ID3D12PipelineState>> pipelines;
@@ -393,12 +394,14 @@ void DX12W3DIndexedMeshPass::Shutdown()
     if (state.presentation && state.presentation->IsReady())
         state.presentation->WaitForIdle();
     state.pipelines.clear();
+    state.stages.Clear();
+    for (auto & texture : state.textures)
+        DX12W3DTextures::Release(
+            reinterpret_cast<RenderTextureHandle>(texture.native));
     state.textures.clear();
-    state.texturesHeap.Reset();
     state.vertexShader.Reset();
     state.root.Reset();
     state.shaderPath.clear();
-    state.descriptorStride = 0;
     state.presentation = nullptr;
 }
 
@@ -464,16 +467,8 @@ bool DX12W3DIndexedMeshPass::Initialize(DX12PresentationDevice & presentation,
                            "Create W3D mesh root signature"))
         return false;
 
-    D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-    heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    heapDesc.NumDescriptors = MaxTextures;
-    heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    if (!state.CheckResult(device->CreateDescriptorHeap(
-                          &heapDesc, IID_PPV_ARGS(&state.texturesHeap)),
-                          "Create W3D texture descriptor heap"))
-        return false;
-    state.descriptorStride = device->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // No preview-only shader-visible heap: native R04/R05 texture handles
+    // and immutable stage descriptors are shared with the DX12 backend.
     state.shaderPath = shaderSource;
     state.presentation = &presentation;
     return true;
@@ -490,66 +485,57 @@ bool DX12W3DIndexedMeshPass::UploadTextureRGBA8(const std::uint8_t * pixels,
         width > std::numeric_limits<UINT>::max() / 4 ||
         state.textures.size() >= MaxTextures)
     {
-        state.error = "Texture upload requires an active frame, RGBA8 data and descriptor capacity";
+        state.error = "Texture upload requires an active frame, RGBA8 data and texture capacity";
         return false;
     }
 
-    ID3D12Device * device = state.Device();
-    ID3D12GraphicsCommandList * commands = state.presentation->ActiveCommandList();
-    const auto textureDescription = Texture(width, height);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
-    UINT64 uploadBytes = 0;
-    device->GetCopyableFootprints(&textureDescription, 0, 1, 0,
-                                  &layout, nullptr, nullptr, &uploadBytes);
-    if (uploadBytes == 0 || uploadBytes > std::numeric_limits<SIZE_T>::max())
+    // Preview images arrive as RGBA8. R04's W3D A8R8G8B8 input expects
+    // BGRA memory, so normalize channels before handing the CPU mip to
+    // the *same* native texture uploader used by the selected Renderer.
+    RenderTexture2DDescription description;
+    description.width = width;
+    description.height = height;
+    description.mipLevels = 1;
+    description.pixelFormat = 2; // WW3D_FORMAT_A8R8G8B8
+    auto native = DX12W3DTextures::Create2D(state.Device(), description);
+    if (!native)
     {
-        state.error = "Invalid D3D12 texture upload footprint";
+        state.error = DX12W3DTextures::LastError();
         return false;
     }
 
-    Impl::TextureRecord texture;
-    if (!state.CheckResult(CreateResource(device, D3D12_HEAP_TYPE_DEFAULT,
-                           textureDescription, D3D12_RESOURCE_STATE_COPY_DEST,
-                           texture.gpu), "Create W3D GPU texture") ||
-        !state.CheckResult(CreateResource(device, D3D12_HEAP_TYPE_UPLOAD,
-                           Buffer(uploadBytes), D3D12_RESOURCE_STATE_GENERIC_READ,
-                           texture.upload), "Create W3D texture staging buffer"))
+    const auto generic = reinterpret_cast<RenderTextureHandle>(native);
+    RenderSurfaceMap mapped;
+    if (!DX12W3DTextures::Map2D(native, 0, mapped))
+    {
+        state.error = DX12W3DTextures::LastError();
+        DX12W3DTextures::Release(generic);
         return false;
-
-    void * mapped = nullptr;
-    if (!state.CheckResult(texture.upload->Map(0, nullptr, &mapped), "Map texture staging"))
-        return false;
-    std::memset(mapped, 0, static_cast<SIZE_T>(uploadBytes));
-    const SIZE_T rowBytes = static_cast<SIZE_T>(width) * 4;
-    auto * dst = static_cast<std::uint8_t *>(mapped);
+    }
     for (unsigned y = 0; y < height; ++y)
-        std::memcpy(dst + static_cast<SIZE_T>(layout.Footprint.RowPitch) * y,
-                    pixels + rowBytes * y, rowBytes);
-    texture.upload->Unmap(0, nullptr);
-
-    D3D12_TEXTURE_COPY_LOCATION to = {}, from = {};
-    to.pResource = texture.gpu.Get();
-    to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    from.pResource = texture.upload.Get();
-    from.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    from.PlacedFootprint = layout;
-    commands->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
-    const auto barrier = Barrier(texture.gpu.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
-                                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commands->ResourceBarrier(1, &barrier);
-
-    const unsigned slot = static_cast<unsigned>(state.textures.size());
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-    srv.Format = TextureFormat;
-    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv.Texture2D.MipLevels = 1;
-    D3D12_CPU_DESCRIPTOR_HANDLE descriptor =
-        state.texturesHeap->GetCPUDescriptorHandleForHeapStart();
-    descriptor.ptr += static_cast<SIZE_T>(slot) * state.descriptorStride;
-    device->CreateShaderResourceView(texture.gpu.Get(), &srv, descriptor);
-    state.textures.push_back(std::move(texture));
-    textureId = slot;
+    {
+        auto * dst = static_cast<std::uint8_t *>(mapped.data) +
+                     static_cast<std::size_t>(y) * mapped.rowPitch;
+        const auto * src = pixels + static_cast<std::size_t>(y) * width * 4;
+        for (unsigned x = 0; x < width; ++x)
+        {
+            dst[x*4]     = src[x*4+2];
+            dst[x*4+1]   = src[x*4+1];
+            dst[x*4+2]   = src[x*4];
+            dst[x*4+3]   = src[x*4+3];
+        }
+    }
+    if (!DX12W3DTextures::Unmap2D(native, 0) ||
+        !DX12W3DTextures::Prepare(*state.presentation, generic))
+    {
+        state.error = DX12W3DTextures::LastError();
+        DX12W3DTextures::Release(generic);
+        return false;
+    }
+    Impl::TextureRecord record;
+    record.native = native;
+    textureId = static_cast<unsigned>(state.textures.size());
+    state.textures.push_back(record);
     return true;
 }
 
@@ -592,19 +578,19 @@ bool DX12W3DIndexedMeshPass::Draw(const DX12W3DIndexedMesh & mesh,
     constants.alphaCompare = static_cast<UINT>(blend.alphaCompare);
 
     ID3D12GraphicsCommandList * commands = state.presentation->ActiveCommandList();
-    ID3D12DescriptorHeap * heaps[] = {state.texturesHeap.Get()};
-    commands->SetDescriptorHeaps(1, heaps);
     commands->SetGraphicsRootSignature(state.root.Get());
     commands->SetPipelineState(pipeline);
     commands->SetGraphicsRoot32BitConstants(0, sizeof(constants) / sizeof(UINT),
                                            &constants, 0);
-
-    const auto heapStart = state.texturesHeap->GetGPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE t0 = heapStart, t1 = heapStart;
-    t0.ptr += static_cast<UINT64>(texture0) * state.descriptorStride;
-    t1.ptr += static_cast<UINT64>(texture1) * state.descriptorStride;
-    commands->SetGraphicsRootDescriptorTable(1, t0);
-    commands->SetGraphicsRootDescriptorTable(2, t1);
+    if (!state.stages.Bind(0, reinterpret_cast<RenderTextureHandle>(
+                                  state.textures[texture0].native)) ||
+        !state.stages.Bind(1, reinterpret_cast<RenderTextureHandle>(
+                                  state.textures[texture1].native)) ||
+        !state.stages.BindForDraw(*state.presentation, 1))
+    {
+        state.error = state.stages.LastError();
+        return false;
+    }
 
     const float width = static_cast<float>(state.presentation->Width());
     const float height = static_cast<float>(state.presentation->Height());
