@@ -74,6 +74,12 @@ public:
     unsigned long long RecordingSerial() const;
     unsigned long long CompletedFenceValue() const;
     unsigned long long LastSubmittedFenceValue() const;
+    // R02: one per-presentation pool, shared between vertex and index uploads.
+    // Returns a borrowed resource (valid while this device lives); callers
+    // retain the resulting slice through RetainFrameResource for submitted work.
+    bool ReserveTransientGeometry(unsigned bytes, ID3D12Resource * & resource, unsigned & offset);
+    unsigned TransientGeometryPageCount() const;
+    unsigned long long TransientGeometryResidentBytes() const;
     // DX8 SetIndices carried a base-vertex offset. D3D12 applies it during
     // DrawIndexedInstanced, not IASetIndexBuffer; cache for B07 submission.
     void SetBoundBaseVertexIndex(unsigned index);

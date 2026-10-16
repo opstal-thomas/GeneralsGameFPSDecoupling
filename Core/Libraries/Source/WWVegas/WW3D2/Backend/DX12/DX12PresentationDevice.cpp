@@ -69,6 +69,104 @@ struct DX12PresentationDevice::Impl
     std::deque<std::pair<UINT64, std::vector<ComPtr<ID3D12Resource>>>> retiredResources;
     std::vector<ComPtr<IUnknown>> recordingObjects;
     std::deque<std::pair<UINT64, std::vector<ComPtr<IUnknown>>>> retiredObjects;
+    // R02: pool belongs to this presentation/device generation. Never keep
+    // a device alive from a global allocator after Shutdown.
+    static constexpr UINT UploadPageBytes = 1024u * 1024u;
+    static constexpr UINT64 UploadCacheBytes = 64ull * UploadPageBytes;
+    struct UploadPage
+    {
+        ComPtr<ID3D12Resource> resource;
+        UINT capacity = 0;
+        UINT cursor = 0;
+        UINT64 recordingId = 0;
+        UINT64 retireFence = 0;
+    };
+    std::vector<UploadPage> uploadPages;
+
+    void CollectTransientPages()
+    {
+        if (!fence || fence->GetCompletedValue() == UINT64_MAX)
+            return;
+        const UINT64 completed = fence->GetCompletedValue();
+        // This is a soft *idle* cache target, not an allocation limit. In
+        // flight pages are never released or overwritten; more can be added
+        // freely when geometry demand increases.
+        UINT64 retained = 0;
+        for (auto it = uploadPages.begin(); it != uploadPages.end();)
+        {
+            if (it->retireFence && it->retireFence <= completed)
+            {
+                if (retained + it->capacity > UploadCacheBytes)
+                {
+                    it = uploadPages.erase(it);
+                    continue;
+                }
+                retained += it->capacity;
+            }
+            ++it;
+        }
+    }
+
+    bool ReserveTransientGeometry(unsigned bytes, ID3D12Resource * & result, unsigned & offset)
+    {
+        result = nullptr;
+        offset = 0;
+        if (!recording || !device || !fence || !bytes ||
+            bytes > UINT_MAX - 15u)
+            return Fail("Invalid transient geometry allocation or recording", E_INVALIDARG);
+        const UINT64 completed = fence->GetCompletedValue();
+        if (completed == UINT64_MAX)
+            return Fail("Transient geometry fence unavailable", DXGI_ERROR_DEVICE_REMOVED);
+
+        const UINT aligned = (bytes + 15u) & ~15u;
+        for (auto & page : uploadPages)
+        {
+            if (page.recordingId != recordingSerial)
+            {
+                // Submission assigns retireFence. An unsubmitted/failed page
+                // is never recycled; Shutdown destroys it instead.
+                if (!page.retireFence || page.retireFence > completed)
+                    continue;
+                page.cursor = 0;
+                page.recordingId = recordingSerial;
+                page.retireFence = 0;
+            }
+            if (aligned <= page.capacity - page.cursor)
+            {
+                offset = page.cursor;
+                page.cursor += aligned;
+                result = page.resource.Get();
+                return true;
+            }
+        }
+
+        UploadPage page;
+        page.capacity = aligned > UploadPageBytes ? aligned : UploadPageBytes;
+        page.cursor = aligned;
+        page.recordingId = recordingSerial;
+        const D3D12_HEAP_PROPERTIES heap = [] {
+            D3D12_HEAP_PROPERTIES result = {};
+            result.Type = D3D12_HEAP_TYPE_UPLOAD;
+            result.CreationNodeMask = result.VisibleNodeMask = 1;
+            return result;
+        }();
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = page.capacity;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.SampleDesc.Count = 1;
+        if (!Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE,
+                       &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                       IID_PPV_ARGS(&page.resource)), "Create pooled geometry upload page"))
+            return false;
+        result = page.resource.Get();
+        offset = 0;
+        uploadPages.push_back(std::move(page));
+        return true;
+    }
     void CollectRetired()
     {
         if (!fence)
@@ -214,6 +312,7 @@ struct DX12PresentationDevice::Impl
         retiredResources.clear();
         recordingObjects.clear();
         retiredObjects.clear();
+        uploadPages.clear();
         passGraph.Reset();
     }
 };
@@ -392,6 +491,7 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
     if (!state.WaitForFence(state.frameFences[index]))
         return false;
     state.CollectRetired();
+    state.CollectTransientPages();
     state.boundBaseVertexIndex = 0;
     if (!state.recordingResources.empty() || !state.recordingObjects.empty())
         return state.Fail("Unsubmitted frame resource/descriptor retention remained", E_FAIL);
@@ -486,6 +586,11 @@ bool DX12PresentationDevice::EndFrame(unsigned syncInterval, bool present)
         return false;
     }
     state.frameFences[state.currentBuffer] = signalValue;
+    // Pin every slice to the fence of the submission that actually uses it.
+    // Never infer retirement from a later recording or idle-only signal.
+    for (auto & page : state.uploadPages)
+        if (page.recordingId == state.recordingSerial && !page.retireFence)
+            page.retireFence = signalValue;
     if (!state.recordingResources.empty())
     {
         state.retiredResources.emplace_back(
@@ -606,6 +711,25 @@ unsigned long long DX12PresentationDevice::CompletedFenceValue() const
 unsigned long long DX12PresentationDevice::LastSubmittedFenceValue() const
 {
     return impl_->nextFence ? impl_->nextFence - 1 : 0;
+}
+
+bool DX12PresentationDevice::ReserveTransientGeometry(
+    unsigned bytes, ID3D12Resource * & resource, unsigned & offset)
+{
+    return impl_->ReserveTransientGeometry(bytes, resource, offset);
+}
+
+unsigned DX12PresentationDevice::TransientGeometryPageCount() const
+{
+    return static_cast<unsigned>(impl_->uploadPages.size());
+}
+
+unsigned long long DX12PresentationDevice::TransientGeometryResidentBytes() const
+{
+    unsigned long long bytes = 0;
+    for (const auto & page : impl_->uploadPages)
+        bytes += page.capacity;
+    return bytes;
 }
 
 unsigned DX12PresentationDevice::InFlightObjectCount() const

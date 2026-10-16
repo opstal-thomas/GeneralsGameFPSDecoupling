@@ -12,7 +12,6 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <new>
 #include <string>
 #include <vector>
@@ -60,69 +59,7 @@ namespace
             &heap, D3D12_HEAP_FLAG_NONE, &desc, initial, nullptr,
             IID_PPV_ARGS(&resource)));
     }
-    // Dynamic suballocations are immutable for the lifetime of a submitted
-    // command list. Only completed queue fences permit upload-page recycling.
-    constexpr unsigned UploadPageBytes = 1024u * 1024u;
-    struct UploadPage
-    {
-        ComPtr<ID3D12Device> owner;
-        ComPtr<ID3D12Resource> resource;
-        unsigned capacity = 0;
-        unsigned cursor = 0;
-        unsigned long long serial = 0;
-        unsigned long long retireFence = 0;
-    };
-    std::mutex uploadMutex;
-    std::vector<UploadPage> uploadPages;
-    bool ReserveUpload(DX12PresentationDevice & device, unsigned length,
-                       ComPtr<ID3D12Resource> & resource, unsigned & offset)
-    {
-        const auto serial = device.RecordingSerial();
-        if (!serial || !length)
-            return Fail("Transient geometry allocation requires an active frame");
-        const auto completed = device.CompletedFenceValue();
-        if (completed == UINT64_MAX)
-            return Fail("Transient geometry fence is invalid");
-        const auto submitted = device.LastSubmittedFenceValue();
-        if (length > UINT32_MAX - 15u)
-            return Fail("Transient geometry size overflow");
-        const unsigned aligned = (length + 15u) & ~15u;
-        std::lock_guard<std::mutex> lock(uploadMutex);
-        for (auto & page : uploadPages)
-        {
-            if (page.owner.Get() != device.NativeDevice())
-                continue;
-            if (page.serial != serial)
-            {
-                if (page.serial && page.retireFence == 0)
-                    page.retireFence = submitted;
-                if (page.retireFence > completed)
-                    continue;
-                page.cursor = 0;
-                page.serial = serial;
-                page.retireFence = 0;
-            }
-            if (aligned <= page.capacity - page.cursor)
-            {
-                offset = page.cursor;
-                page.cursor += aligned;
-                resource = page.resource;
-                return true;
-            }
-        }
-        UploadPage page;
-        page.owner = device.NativeDevice();
-        page.capacity = aligned > UploadPageBytes ? aligned : UploadPageBytes;
-        if (!MakeBuffer(page.owner.Get(), page.capacity, D3D12_HEAP_TYPE_UPLOAD,
-                        D3D12_RESOURCE_STATE_GENERIC_READ, page.resource))
-            return Fail("Creating transient upload page failed");
-        page.cursor = aligned;
-        page.serial = serial;
-        resource = page.resource;
-        offset = 0;
-        uploadPages.push_back(std::move(page));
-        return true;
-    }
+
 }
 
 // One opaque handle owns W3D byte storage, native resource generations, and
@@ -202,9 +139,11 @@ struct DX12W3DBufferState
             if (dynamic)
             {
                 // DISCARD and NO_OVERWRITE each receive an immutable slice.
-                if (!ReserveUpload(device, static_cast<unsigned>(shadow.size()),
-                                   newNative, nativeOffset))
-                    return false;
+                ID3D12Resource * borrowed = nullptr;
+                if (!device.ReserveTransientGeometry(
+                        static_cast<unsigned>(shadow.size()), borrowed, nativeOffset))
+                    return Fail(device.LastError());
+                newNative = borrowed; // retain independently of the pool
                 void * mappedBytes = nullptr;
                 const D3D12_RANGE noRead = {0, 0};
                 if (FAILED(newNative->Map(0, &noRead, &mappedBytes)) || !mappedBytes)

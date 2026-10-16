@@ -76,20 +76,25 @@ class R01GeometryBuffers(unittest.TestCase):
         geometry = (DX12 / "DX12W3DGeometryBuffers.cpp").read_text(encoding="utf-8")
         presentation = (DX12 / "DX12PresentationDevice.cpp").read_text(encoding="utf-8")
         header = (DX12 / "DX12PresentationDevice.h").read_text(encoding="utf-8")
-        for token in ("struct UploadPage", "ReserveUpload(", "UploadPageBytes",
-                      "page.capacity - page.cursor", "page.retireFence > completed",
-                      "page.owner.Get() != device.NativeDevice()",
-                      "nativeOffset + offset", "RetainFrameResource(native.Get())",
-                      "RENDER_MAP_DISCARD", "RENDER_MAP_NO_OVERWRITE"):
-            self.assertIn(token, geometry)
-        for token in ("CompletedFenceValue()", "LastSubmittedFenceValue()"):
-            self.assertIn(token, geometry)
+        for token in ("struct UploadPage", "ReserveTransientGeometry(",
+                      "UploadPageBytes", "page.capacity - page.cursor",
+                      "page.retireFence > completed", "page.recordingId",
+                      "uploadPages.clear()", "CollectTransientPages()",
+                      "page.retireFence = signalValue", "UploadCacheBytes",
+                      "D3D12_HEAP_TYPE_UPLOAD"):
             self.assertIn(token, presentation)
+        for token in ("ReserveTransientGeometry(", "TransientGeometryPageCount()",
+                      "TransientGeometryResidentBytes()"):
             self.assertIn(token, header)
+            self.assertIn(token, presentation)
+        self.assertNotIn("std::vector<UploadPage> uploadPages;", geometry)
+        for token in ("nativeOffset + offset",
+                      "RetainFrameResource(native.Get())",
+                      "RENDER_MAP_DISCARD", "RENDER_MAP_NO_OVERWRITE",
+                      "ReserveTransientGeometry(", "newNative = borrowed;"):
+            self.assertIn(token, geometry)
         self.assertIn("GetCompletedValue()", presentation)
         self.assertIn("const D3D12_RANGE written = {nativeOffset,", geometry)
-        # Mapping the UPLOAD page itself is required; each generation writes to
-        # its own offset, rather than requiring a distinct resource per update.
         self.assertIn("newNative->Map(0, &noRead, &mappedBytes)", geometry)
         self.assertIn("std::memcpy(static_cast<unsigned char *>(mappedBytes) + nativeOffset,", geometry)
         smoke = (PRESENTATION / "DX12GeometryBufferSmoke.cpp").read_text(encoding="utf-8")
