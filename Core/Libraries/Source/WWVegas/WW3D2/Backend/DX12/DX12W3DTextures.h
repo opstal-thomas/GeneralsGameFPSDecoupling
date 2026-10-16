@@ -39,6 +39,18 @@ namespace DX12W3DTextures
                                        const RenderTextureCubeDescription & description);
     RenderTextureVolumeHandle CreateVolume(ID3D12Device * device,
                                            const RenderTextureVolumeDescription & description);
+    // R07 attachment textures share R04/R05 handle identities and SRVs.
+    // RTV/DSV views and target switching are owned by DX12W3DRenderTargets.
+    // GPU targets are not CPU-mappable; R08 owns readback and CPU transfers.
+    RenderTexture2DHandle CreateDepth2D(ID3D12Device * device,
+                                        const RenderTexture2DDescription & description);
+    bool IsAttachment(RenderTextureHandle texture);
+    bool IsDepthAttachment(RenderTextureHandle texture);
+    bool EnsureAttachment(ID3D12Device * device, RenderTextureHandle texture);
+    bool TransitionAttachment(DX12PresentationDevice & frame, RenderTextureHandle texture,
+                              D3D12_RESOURCE_STATES desired);
+    DXGI_FORMAT AttachmentViewFormat(RenderTextureHandle texture);
+
 
     unsigned MipCount(RenderTextureHandle handle);
     unsigned MemoryUsage(RenderTextureHandle handle);
