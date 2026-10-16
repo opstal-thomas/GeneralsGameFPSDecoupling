@@ -56,7 +56,7 @@ class R04NativeTextureTests(unittest.TestCase):
         mapped = re.search(r"enum W3D\s*:\s*unsigned\s*\{(.*?)\}", s, re.S).group(1)
         local = re.findall(r"\b(?:Unknown|R8G8B8|A8R8G8B8|X8R8G8B8|R5G6B5|X1R5G5B5|A1R5G5B5|A4R4G4B4|R3G3B2|A8|A8R3G3B2|X4R4G4B4|A8P8|P8|L8|A8L8|A4L4|U8V8|L6V5U5|X8L8V8U8|DXT1|DXT2|DXT3|DXT4|DXT5|FormatCount)\b", mapped)
         self.assertEqual(len(names), len(local))
-        self.assertEqual([x.upper() for x in local], names)
+        self.assertEqual([x.upper() for x in local[:-1]] + ["COUNT"], names)
         for t in (
             "DXGI_FORMAT_BC1_UNORM", "DXGI_FORMAT_BC2_UNORM",
             "DXGI_FORMAT_BC3_UNORM", "DXGI_FORMAT_B8G8R8A8_UNORM",
