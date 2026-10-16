@@ -316,6 +316,72 @@ int wmain()
             !CheckReadback(readback.Get(), rowPitch, pass == 0 ? 1 : 3))
             return 1;
     }
+
+    // M03: physically localized lighting is evaluated at each vertex,
+    // rather than pre-attenuating a single directional light at mesh center.
+    // The same original W3D FVF is tested with point range, spotlight cone
+    // rejection, and red specular (added after the texture-stage cascade).
+    const float eyeView[16] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, -2.f, 1.f
+    };
+    for (unsigned pass = 0; pass < 5; ++pass)
+    {
+        RenderLightingEnvironmentDescription local;
+        local.lightCount = 1;
+        auto & light = local.lights[0];
+        light.type = pass == 2 || pass == 3 ? 2u : 1u;
+        light.position[2] = pass == 1 ? 40.f : 1.5f;
+        light.diffuse[1] = pass == 4 ? 0.f : 1.f;
+        light.specular[0] = pass == 4 ? 1.f : 0.f;
+        light.spotDirection[2] = pass == 3 ? 1.f : -1.f;
+        light.attenuation[0] = 0.f;
+        light.attenuation[1] = 10.f;
+        light.attenuation[2] = 1.f;
+        light.attenuation[3] = 0.5f;
+        RenderVertexMaterialDescription localMaterial;
+        if (pass == 4)
+        {
+            localMaterial.diffuse = RenderMaterialColor(0.f, 0.f, 0.f, 1.f);
+            localMaterial.specular = RenderMaterialColor(1.f, 0.f, 0.f, 1.f);
+            localMaterial.power = 8.f;
+        }
+        if (!Check(device.BeginFrame(clear), "begin native local-light frame") ||
+            !Check(targets.BeginFrame(device), "attach local-light render targets") ||
+            !Check(BindVertex(device, lit, 0, sizeof(LitVertex)),
+                   "bind local-light W3D geometry", LastError()) ||
+            !Check(BindIndex(device, indices16, 0), "bind local-light indices", LastError()))
+            return 1;
+        const D3D12_VIEWPORT viewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT scissor = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &scissor);
+        draw.BeginFrame();
+        draw.BindVertex(NativeVertexLayout(lit), 4);
+        draw.BindIndex(4);
+        draw.SetMaterial(localMaterial);
+        draw.SetMaterialColorSources(sources);
+        draw.SetLightingEnvironment(local);
+        draw.SetSpecularEnabled(pass == 4);
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             false, 0, 1, 0, 4, Identity,
+                             pass == 4 ? eyeView : Identity),
+                   "shade W3D point, spot or material specular", draw.LastError()))
+            return 1;
+        ComPtr<ID3D12Resource> readback;
+        UINT rowPitch = 0;
+        unsigned char unused[4] = {};
+        const unsigned expected = pass == 1 || pass == 3 ? 3u : pass == 4 ? 0u : 1u;
+        if (!ReadPixel(device, unused, readback, rowPitch) ||
+            !Check(targets.EndFrame(device), "end local-light target") ||
+            !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+                   "submit and fence point/spot/specular draw", device.LastError()) ||
+            !CheckReadback(readback.Get(), rowPitch, expected))
+            return 1;
+    }
+    draw.SetSpecularEnabled(false);
     draw.SetLightingEnabled(false);
     ReleaseVertex(lit);
     ReleaseVertex(red);
