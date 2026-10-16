@@ -107,6 +107,30 @@ int wmain()
     Matrix4x4 world(true);
     world[0][3] = 4.f;
     world[1][3] = -2.f;
+    // M01: CPU transparency sorting must use D3DX's row-vector convention.
+    // Translation followed by anisotropic scaling is intentionally
+    // noncommutative, and the center test must not divide by W.
+    RenderSortingMatrix sortWorld = {};
+    RenderSortingMatrix sortView = {};
+    for (unsigned i = 0; i < 4; ++i)
+        sortWorld.m[i][i] = sortView.m[i][i] = 1.f;
+    sortWorld.m[3][0] = 4.f;
+    sortWorld.m[3][1] = 5.f;
+    sortWorld.m[3][2] = 6.f;
+    sortView.m[0][0] = 2.f;
+    sortView.m[1][1] = 3.f;
+    sortView.m[2][2] = 4.f;
+    const auto sortCombined = Renderer::Multiply_Sorting_World_View(sortWorld, sortView);
+    const auto sortCenter = Renderer::Transform_Sorting_Center(
+        sortWorld, sortView, Vector3(1.f, 2.f, 3.f));
+    if (!Check(std::fabs(sortCombined.m[3][0] - 8.f) < 1.e-5f &&
+               std::fabs(sortCombined.m[3][1] - 15.f) < 1.e-5f &&
+               std::fabs(sortCombined.m[3][2] - 24.f) < 1.e-5f &&
+               std::fabs(sortCenter.X - 10.f) < 1.e-5f &&
+               std::fabs(sortCenter.Y - 21.f) < 1.e-5f &&
+               std::fabs(sortCenter.Z - 36.f) < 1.e-5f,
+               "DX12 M01 sorted W3D transform order and center"))
+        return 1;
     Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, world);
     Matrix4x4 fetched(true);
     Renderer::Get_Transform(RENDER_TRANSFORM_WORLD, fetched);

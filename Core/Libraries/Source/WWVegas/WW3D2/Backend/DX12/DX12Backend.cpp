@@ -436,14 +436,28 @@ void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_st
 
 RenderSortingMatrix Renderer::Multiply_Sorting_World_View( const RenderSortingMatrix & world, const RenderSortingMatrix & view)
 {
-    ReportPending("Renderer::Multiply_Sorting_World_View");
-    return {};
+    RenderSortingMatrix result = {};
+    // These snapshots use the original D3DX row-vector convention:
+    // the translation is in m[3][0..2], and World * View is the order.
+    for (unsigned row = 0; row < 4; ++row)
+        for (unsigned column = 0; column < 4; ++column)
+            for (unsigned inner = 0; inner < 4; ++inner)
+                result.m[row][column] += world.m[row][inner] * view.m[inner][column];
+    return result;
 }
 
 Vector3 Renderer::Transform_Sorting_Center( const RenderSortingMatrix & world, const RenderSortingMatrix & view, const Vector3 & center)
 {
-    ReportPending("Renderer::Transform_Sorting_Center");
-    return {};
+    const RenderSortingMatrix m = Multiply_Sorting_World_View(world, view);
+    // D3DXVec3Transform returns the first three *homogeneous* components.
+    // It deliberately does not perform a perspective divide.
+    return Vector3(
+        center.X * m.m[0][0] + center.Y * m.m[1][0] +
+            center.Z * m.m[2][0] + m.m[3][0],
+        center.X * m.m[0][1] + center.Y * m.m[1][1] +
+            center.Z * m.m[2][1] + m.m[3][1],
+        center.X * m.m[0][2] + center.Y * m.m[1][2] +
+            center.Z * m.m[2][2] + m.m[3][2]);
 }
 
 bool Renderer::Is_Triangle_Draw_Enabled()
