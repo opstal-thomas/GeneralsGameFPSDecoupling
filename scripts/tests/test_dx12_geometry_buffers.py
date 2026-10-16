@@ -162,6 +162,26 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding()", sorting)
         self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding()", sorting)
 
+    def test_r02_dynamic_line_and_mesh_producers_use_selected_renderer(self):
+        # Segment ribbons, ground marks and particle-like dynamic meshes
+        # formerly bypassed the backend seam through DX8Wrapper methods.
+        # The DX8 adapter delegates the neutral calls unchanged, while DX12
+        # now receives W3D dynamic-buffer accessors through its pooled upload.
+        for filename in ("seglinerenderer.cpp", "dynamesh.cpp"):
+            source = (WW3D / filename).read_text(encoding="utf-8")
+            self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(", source)
+            self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(", source)
+            self.assertIn("Renderer::Draw_Triangles(", source)
+            self.assertNotIn("DX8Wrapper::Set_Vertex_Buffer(", source)
+            self.assertNotIn("DX8Wrapper::Set_Index_Buffer(", source)
+            self.assertNotIn("DX8Wrapper::Draw_Triangles(", source)
+        for filename in ("streakRender.cpp", "pointgr.cpp", "line3d.cpp",
+                         "sortingrenderer.cpp"):
+            source = (WW3D / filename).read_text(encoding="utf-8")
+            self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(", source)
+        dx8 = (WW3D / "Backend/DX8Backend.cpp").read_text(encoding="utf-8")
+        self.assertIn("DX8Wrapper::Draw_Triangles(startIndex, triangleCount,", dx8)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")
