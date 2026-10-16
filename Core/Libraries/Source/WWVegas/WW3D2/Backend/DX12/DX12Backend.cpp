@@ -808,8 +808,7 @@ RenderTexture2DHandle Renderer::Create_Texture_2D(const RenderTexture2DDescripti
     return DX12W3DTextures::Create2D(primaryWindow.Presentation().NativeDevice(), description);
 }
 
-RenderTexture2DHandle Renderer::Create_Texture_From_Surface(RenderSurfaceHandle surface,
-                                                           unsigned mipLevels)
+RenderTexture2DHandle Renderer::Create_Texture_From_Surface( RenderSurfaceHandle surface, unsigned mipLevels)
 {
     // Image surfaces remain an R04 follow-up to the W3D SurfaceClass DX8
     // decoupling; never reinterpret an IDirect3DSurface8 as a DX12 resource.
