@@ -110,11 +110,18 @@ namespace
 
     bool CheckReadback(ID3D12Resource * readback, UINT pitch, unsigned expectedChannel)
     {
-        const D3D12_RANGE range = {0, static_cast<SIZE_T>(pitch) * 120};
         void * pixels = nullptr;
-        if (!Check(SUCCEEDED(readback->Map(0, &range, &pixels)) && pixels,
-                   "Map actual native WARP render target"))
-            return false;
+        // Readback heaps are CPU-readable in their entirety. A nullptr range
+        // avoids rejecting a renderer-dependent padded footprint size.
+        const HRESULT mapResult = readback->Map(0, nullptr, &pixels);
+        if (FAILED(mapResult) || !pixels)
+        {
+            std::cerr << "M01: readback Map HRESULT=0x" << std::hex
+                      << static_cast<unsigned>(mapResult) << std::dec
+                      << " resourceWidth=" << readback->GetDesc().Width
+                      << " pitch=" << pitch << '\n';
+            return Check(false, "Map actual native WARP render target");
+        }
         const auto * pixel = static_cast<const unsigned char *>(pixels) + 60 * pitch + 80 * 4;
         const bool correct = pixel[expectedChannel] > 180 &&
                              pixel[(expectedChannel + 1) % 3] < 80 &&
