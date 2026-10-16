@@ -7,6 +7,7 @@
 
 #include "../../Renderer.h"
 #include <d3d12.h>
+#include <wrl/client.h>
 #include <cstddef>
 #include <cstdint>
 
@@ -14,6 +15,21 @@ class DX12PresentationDevice;
 
 namespace DX12W3DTextures
 {
+    // Identity is monotonically allocated and never the CPU pointer value.
+    // GPU generations change on uploads and device recreation; snapshots
+    // own a COM reference so a concurrent W3D texture release cannot leave
+    // the descriptor allocator with a dangling native resource.
+    struct ViewSnapshot
+    {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        D3D12_SHADER_RESOURCE_VIEW_DESC descriptor = {};
+        std::uint64_t identity = 0;
+        std::uint64_t contentRevision = 0;
+        std::uint64_t gpuGeneration = 0;
+        bool dirty = true;
+    };
+    bool Snapshot(RenderTextureHandle texture, ViewSnapshot & view);
+
     // Native D3D12 textures with persistent CPU mip shadows. W3D's existing
     // DDS/TGA/thumbnail decoders write into Map* and Unmap*; GPU upload is
     // deferred until an active native command list can record a copy.
