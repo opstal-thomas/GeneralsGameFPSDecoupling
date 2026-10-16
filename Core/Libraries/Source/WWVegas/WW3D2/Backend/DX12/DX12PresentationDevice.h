@@ -72,6 +72,8 @@ public:
     // Incremented at every successful BeginFrame, including after reset.
     // Descriptor caches can never reuse tables recorded for an older list.
     unsigned long long RecordingSerial() const;
+    unsigned long long CompletedFenceValue() const;
+    unsigned long long LastSubmittedFenceValue() const;
     // DX8 SetIndices carried a base-vertex offset. D3D12 applies it during
     // DrawIndexedInstanced, not IASetIndexBuffer; cache for B07 submission.
     void SetBoundBaseVertexIndex(unsigned index);
