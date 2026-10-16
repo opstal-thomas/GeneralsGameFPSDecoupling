@@ -488,6 +488,12 @@ Int WaterTracksObj::render(DX8VertexBufferClass	*vertexBuffer, Int batchStart)
 
 	Renderer::Unmap_Vertex_Buffer(bufferHandle);
 
+	// R02: unlike DX8's mutable vertex storage, the DX12 renderer binds an
+	// immutable snapshot. Rebind AFTER the NO_OVERWRITE/DISCARD write so the
+	// following strip references these newly committed CPU shadow bytes.
+	// DX8 simply rebinds the same underlying buffer, preserving its draw path.
+	Renderer::Bind_Legacy_Vertex_Buffer(vertexBuffer);
+
 	Int idxCount=(m_y-1)*(m_x*2+2) - 2;	//index count
 
 	Renderer::Bind_Legacy_Index_Buffer(TheWaterTracksRenderSystem->m_indexBuffer,batchStart);

@@ -248,6 +248,13 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(", particles)
         self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(", particles)
         self.assertIn("Renderer::Draw_Triangle_Strip(", water)
+        self.assertIn("Renderer::Bind_Legacy_Vertex_Buffer(vertexBuffer)", water)
+        # The mutable DX8 pattern binds once before Map. DX12 must snapshot
+        # the newly written range before its subsequent indexed strip draw.
+        self.assertLess(water.index("Renderer::Unmap_Vertex_Buffer(bufferHandle);"),
+                        water.index("Renderer::Bind_Legacy_Vertex_Buffer(vertexBuffer)"))
+        self.assertLess(water.index("Renderer::Bind_Legacy_Vertex_Buffer(vertexBuffer)"),
+                        water.index("Renderer::Bind_Legacy_Index_Buffer(TheWaterTracksRenderSystem->m_indexBuffer,batchStart)"))
         smoke = (PRESENTATION / "DX12GeometryBufferSmoke.cpp").read_text(encoding="utf-8")
         for token in ("Bind first borrowed sorting vertex slice",
                       "Bind first borrowed R16 sorting index slice",
