@@ -995,10 +995,13 @@ RenderTexture2DHandle Renderer::Create_Depth_Texture_2D(const RenderTexture2DDes
 
 void Renderer::Bind_Texture(unsigned stage, RenderTextureHandle texture)
 {
-    if (texture && texture == renderTargets.BoundColorTexture() &&
-        primaryWindow.IsSceneOpen())
+    if (texture && primaryWindow.IsSceneOpen() &&
+        (texture == renderTargets.BoundColorTexture() ||
+         texture == renderTargets.BoundDepthTexture()))
     {
-        OutputDebugStringA("[DX12-R07] refusing to sample the current RTV output\n");
+        // Depth-only and color+depth passes both forbid simultaneous
+        // shader reads of the resource selected as their writable output.
+        OutputDebugStringA("[DX12-R07] refusing SRV feedback from bound RTV/DSV\n");
         return;
     }
     if (!textureStages.Bind(stage, texture))
