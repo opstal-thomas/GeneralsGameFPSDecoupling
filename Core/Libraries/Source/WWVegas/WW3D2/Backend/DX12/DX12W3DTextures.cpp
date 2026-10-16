@@ -231,7 +231,11 @@ namespace
         unsigned priority = 0;
         bool compressed = false;
         bool dirty = true;
+        bool attachment = false;
+        bool depthAttachment = false;
         DXGI_FORMAT dxgi = DXGI_FORMAT_UNKNOWN;
+        DXGI_FORMAT attachmentViewFormat = DXGI_FORMAT_UNKNOWN;
+        D3D12_RESOURCE_STATES attachmentState = D3D12_RESOURCE_STATE_COMMON;
         ComPtr<ID3D12Device> owner;
         ComPtr<ID3D12Resource> gpu;
         std::vector<Level> levels;
@@ -239,6 +243,46 @@ namespace
         unsigned Subresource(unsigned face, unsigned mip) const
         {
             return face * mipLevels + mip; // D3D12 cube array slice order
+        }
+
+        bool EnsureAttachmentNative(ID3D12Device * device)
+        {
+            if (!attachment || !device || kind != Kind::Texture2D || mipLevels != 1)
+                return Fail("R07 attachment requires one-mip 2D texture and D3D12 device");
+            if (gpu && owner.Get() == device)
+                return true;
+            const D3D12_HEAP_PROPERTIES heap = Heap(D3D12_HEAP_TYPE_DEFAULT);
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = width;
+            desc.Height = height;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            desc.Format = dxgi;
+            desc.Flags = depthAttachment ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL :
+                                            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            D3D12_CLEAR_VALUE clear = {};
+            clear.Format = attachmentViewFormat;
+            if (depthAttachment)
+            {
+                clear.DepthStencil.Depth = 1.f;
+                clear.DepthStencil.Stencil = 0;
+            }
+            else
+                clear.Color[3] = 1.f;
+            ComPtr<ID3D12Resource> next;
+            if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                    D3D12_RESOURCE_STATE_COMMON, &clear, IID_PPV_ARGS(&next))))
+                return Fail("Creating GPU-native R07 render/depth attachment failed");
+            gpu = std::move(next);
+            owner = device;
+            attachmentState = D3D12_RESOURCE_STATE_COMMON;
+            dirty = false;
+            ++gpuGeneration;
+            ++contentRevision;
+            return true;
         }
 
         bool Describe(unsigned mip, RenderTextureLevelDescription & result) const
@@ -258,6 +302,8 @@ namespace
         {
             out = RenderSurfaceMap();
             if (volume) *volume = RenderVolumeMap();
+            if (attachment)
+                return Fail("R07 GPU render targets cannot be CPU-mapped; R08 owns readback");
             const unsigned faces = kind == Kind::Cube ? 6u : 1u;
             if (face >= faces || mip >= mipLevels)
                 return Fail("Texture face/mip out of bounds");
@@ -297,6 +343,23 @@ namespace
             ID3D12GraphicsCommandList * cmd = frame.ActiveCommandList();
             if (!device || !cmd)
                 return Fail("Texture upload requires an active native DX12 frame");
+            const D3D12_RESOURCE_STATES sampled =
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            if (attachment)
+            {
+                if (!EnsureAttachmentNative(device))
+                    return false;
+                D3D12_RESOURCE_STATES tracked = D3D12_RESOURCE_STATE_COMMON;
+                if (!frame.GetFrameResourceState(gpu.Get(), tracked) &&
+                    !frame.RegisterFrameResource(gpu.Get(), attachmentState))
+                    return Fail(frame.LastError());
+                if (!frame.TransitionFrameResource(gpu.Get(), sampled) ||
+                    !frame.RetainFrameResource(gpu.Get()))
+                    return Fail(frame.LastError());
+                attachmentState = sampled;
+                return true;
+            }
             for (const Level & l : levels)
                 if (l.mapped)
                     return Fail("Cannot upload texture with locked mip levels");
@@ -308,9 +371,6 @@ namespace
                 gpu.Reset();
                 dirty = true;
             }
-            const D3D12_RESOURCE_STATES sampled =
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
-                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
             if (!gpu || dirty)
             {
                 D3D12_RESOURCE_DESC desc = {};
@@ -526,13 +586,124 @@ namespace DX12W3DTextures
         lastError.clear();
         if (desc.renderTarget)
         {
-            Fail("Render-to-texture attachments require the native R07 target manager");
-            return nullptr;
+            if (desc.mipLevels > 1 || (desc.pixelFormat != A8R8G8B8 &&
+                                      desc.pixelFormat != X8R8G8B8))
+            {
+                Fail("R07 render targets require BGRA8/XRGB8 and one mip");
+                return nullptr;
+            }
+            NativeTexture * result = Create(device, Kind::Texture2D,
+                desc.width, desc.height, 1, desc.pixelFormat, 1);
+            if (!result) return nullptr;
+            result->attachment = true;
+            result->attachmentViewFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
+            if (!result->EnsureAttachmentNative(device))
+            {
+                delete result;
+                return nullptr;
+            }
+            for (auto & level : result->levels) level.bytes.clear();
+            return reinterpret_cast<RenderTexture2DHandle>(result);
         }
         return reinterpret_cast<RenderTexture2DHandle>(
             Create(device, Kind::Texture2D, desc.width, desc.height, 1,
                    desc.pixelFormat, desc.mipLevels));
     }
+    RenderTexture2DHandle CreateDepth2D(ID3D12Device * device,
+                                        const RenderTexture2DDescription & desc)
+    {
+        lastError.clear();
+        if (!desc.Is_Valid() || desc.mipLevels > 1)
+        {
+            Fail("Depth attachments require positive dimensions and one mip");
+            return nullptr;
+        }
+        DXGI_FORMAT resourceFmt = DXGI_FORMAT_UNKNOWN;
+        DXGI_FORMAT depthFmt = DXGI_FORMAT_UNKNOWN;
+        DXGI_FORMAT shaderFmt = DXGI_FORMAT_UNKNOWN;
+        switch (desc.pixelFormat)
+        {
+            case 2: // WW3D_ZFORMAT_D32
+                resourceFmt = DXGI_FORMAT_R32_TYPELESS;
+                depthFmt = DXGI_FORMAT_D32_FLOAT;
+                shaderFmt = DXGI_FORMAT_R32_FLOAT;
+                break;
+            case 4: // WW3D_ZFORMAT_D24S8
+            case 6: // WW3D_ZFORMAT_D24X8; stencil bits not read
+                resourceFmt = DXGI_FORMAT_R24G8_TYPELESS;
+                depthFmt = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                shaderFmt = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                break;
+            case 5: // WW3D_ZFORMAT_D16
+                resourceFmt = DXGI_FORMAT_R16_TYPELESS;
+                depthFmt = DXGI_FORMAT_D16_UNORM;
+                shaderFmt = DXGI_FORMAT_R16_UNORM;
+                break;
+            default:
+                Fail("Unsupported native W3D depth/stencil format");
+                return nullptr;
+        }
+        NativeTexture * result = Create(device, Kind::Texture2D,
+            desc.width, desc.height, 1, A8R8G8B8, 1);
+        if (!result) return nullptr;
+        result->format = desc.pixelFormat;
+        result->dxgi = resourceFmt;
+        result->attachmentViewFormat = depthFmt;
+        result->attachment = true;
+        result->depthAttachment = true;
+        if (!result->EnsureAttachmentNative(device))
+        {
+            delete result;
+            return nullptr;
+        }
+        for (auto & level : result->levels) level.bytes.clear();
+        return reinterpret_cast<RenderTexture2DHandle>(result);
+    }
+
+    bool IsAttachment(RenderTextureHandle h)
+    {
+        return h && Object(h)->attachment;
+    }
+    bool IsDepthAttachment(RenderTextureHandle h)
+    {
+        return h && Object(h)->depthAttachment;
+    }
+    DXGI_FORMAT AttachmentViewFormat(RenderTextureHandle h)
+    {
+        return h && Object(h)->attachment ? Object(h)->attachmentViewFormat :
+                                           DXGI_FORMAT_UNKNOWN;
+    }
+    bool EnsureAttachment(ID3D12Device * device, RenderTextureHandle h)
+    {
+        lastError.clear();
+        if (!h) return Fail("Null attachment texture");
+        NativeTexture & t = *Object(h);
+        std::lock_guard<std::mutex> lock(t.mutex);
+        return t.EnsureAttachmentNative(device);
+    }
+    bool TransitionAttachment(DX12PresentationDevice & frame, RenderTextureHandle h,
+                              D3D12_RESOURCE_STATES state)
+    {
+        lastError.clear();
+        if (!h || !frame.IsRecording()) return Fail("Transition needs attachment and active frame");
+        NativeTexture & t = *Object(h);
+        std::lock_guard<std::mutex> lock(t.mutex);
+        if (!t.EnsureAttachmentNative(frame.NativeDevice()))
+            return false;
+        D3D12_RESOURCE_STATES tracked = D3D12_RESOURCE_STATE_COMMON;
+        if (!frame.GetFrameResourceState(t.gpu.Get(), tracked) &&
+            !frame.RegisterFrameResource(t.gpu.Get(), t.attachmentState))
+            return Fail(frame.LastError());
+        if (!frame.TransitionFrameResource(t.gpu.Get(), state) ||
+            !frame.RetainFrameResource(t.gpu.Get()))
+            return Fail(frame.LastError());
+        t.attachmentState = state;
+        if (state == D3D12_RESOURCE_STATE_RENDER_TARGET ||
+            state == D3D12_RESOURCE_STATE_DEPTH_WRITE)
+            ++t.contentRevision;
+        return true;
+    }
+
     RenderTextureCubeHandle CreateCube(ID3D12Device * device,
                                        const RenderTextureCubeDescription & desc)
     {
@@ -664,6 +835,8 @@ namespace DX12W3DTextures
         if (!source || !target || source == target)
             return source && source == target ? true : Fail("UpdateTexture needs valid handles");
         NativeTexture * src = Object(source), * dst = Object(target);
+        if (src->attachment || dst->attachment)
+            return Fail("GPU attachment copies require R08 native GPU operations");
         std::scoped_lock guard(src->mutex, dst->mutex);
         if (src->kind != dst->kind || src->width != dst->width ||
             src->height != dst->height || src->depth != dst->depth ||
@@ -691,7 +864,11 @@ namespace DX12W3DTextures
         view.contentRevision = t.contentRevision;
         view.gpuGeneration = t.gpuGeneration;
         view.dirty = t.dirty;
-        view.descriptor.Format = t.dxgi;
+        view.descriptor.Format = t.depthAttachment
+            ? (t.attachmentViewFormat == DXGI_FORMAT_D32_FLOAT ? DXGI_FORMAT_R32_FLOAT :
+               t.attachmentViewFormat == DXGI_FORMAT_D16_UNORM ? DXGI_FORMAT_R16_UNORM :
+               DXGI_FORMAT_R24_UNORM_X8_TYPELESS)
+            : t.dxgi;
         view.descriptor.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         switch (t.kind)
         {
