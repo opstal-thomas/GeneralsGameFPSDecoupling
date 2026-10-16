@@ -376,28 +376,39 @@ namespace
     {
         if (!ready || renderThread != GetCurrentThreadId() || !primaryWindow.IsSceneOpen())
             return false;
-        // Row-major W3D matrix convention matches the native SM5.1 shader's
-        // mul(vertex, World*View*Projection) convention.
+        // Matrix4x4 is Westwood column-vector storage, whereas the
+        // original DX8Wrapper calls To_D3DMATRIX (a transpose) for all
+        // world/view/projection states. Match the authoritative DX8
+        // world * view * projection order in row-vector shader space.
         const Matrix4x4 & w = transforms[RENDER_TRANSFORM_WORLD];
         const Matrix4x4 & v = transforms[RENDER_TRANSFORM_VIEW];
         const Matrix4x4 & p = transforms[RENDER_TRANSFORM_PROJECTION];
+        float nativeWorld[4][4], nativeView[4][4], nativeProjection[4][4];
+        for (unsigned row = 0; row < 4; ++row)
+            for (unsigned column = 0; column < 4; ++column)
+            {
+                nativeWorld[row][column] = w[column][row];
+                nativeView[row][column] = v[column][row];
+                nativeProjection[row][column] = p[column][row];
+            }
         float worldView[4][4] = {};
         float wvp[16] = {};
         for (unsigned row = 0; row < 4; ++row)
             for (unsigned column = 0; column < 4; ++column)
                 for (unsigned inner = 0; inner < 4; ++inner)
-                    worldView[row][column] += w[row][inner] * v[inner][column];
+                    worldView[row][column] += nativeWorld[row][inner] * nativeView[inner][column];
         for (unsigned row = 0; row < 4; ++row)
             for (unsigned column = 0; column < 4; ++column)
                 for (unsigned inner = 0; inner < 4; ++inner)
-                    wvp[row * 4 + column] += worldView[row][inner] * p[inner][column];
+                    wvp[row * 4 + column] += worldView[row][inner] * nativeProjection[inner][column];
 
         float normalWorld[16] = {};
         normalWorld[15] = 1.f;
-        // adjugate-transpose / det of world.upper3x3, for n(row) * N
-        const float a = w[0][0], b = w[0][1], c = w[0][2];
-        const float d = w[1][0], e = w[1][1], f = w[1][2];
-        const float g = w[2][0], h = w[2][1], i = w[2][2];
+        // adjugate-transpose / det of *native* row-vector world,
+        // not Westwood's pre-transpose column-vector matrix.
+        const float a = nativeWorld[0][0], b = nativeWorld[0][1], c = nativeWorld[0][2];
+        const float d = nativeWorld[1][0], e = nativeWorld[1][1], f = nativeWorld[1][2];
+        const float g = nativeWorld[2][0], h = nativeWorld[2][1], i = nativeWorld[2][2];
         const float cof[9] = {
             e*i-f*h, f*g-d*i, d*h-e*g,
             c*h-b*i, a*i-c*g, b*g-a*h,
@@ -563,7 +574,7 @@ void Renderer::Get_Transform_Elements(RenderTransform transform, float matrix[16
     const Matrix4x4 & value = ValidTransform(transform) ? transforms[transform] : transforms[0];
     for (unsigned row = 0; row < 4; ++row)
         for (unsigned column = 0; column < 4; ++column)
-            matrix[row * 4 + column] = value[row][column];
+            matrix[row * 4 + column] = value[column][row];
 }
 
 void Renderer::Set_World_Identity()

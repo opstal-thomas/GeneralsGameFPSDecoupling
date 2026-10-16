@@ -328,6 +328,12 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("lighting=src.lighting", (WW3D / "dx8wrapper.h").read_text(encoding="utf-8"))
         for symbol in ("RENDER_VERTEX_COLOR_1", "RenderLightingEnvironmentDescription"):
             self.assertIn(symbol, types)
+        for symbol in ("nativeWorld[row][column] = w[column][row]",
+                       "nativeView[row][column] = v[column][row]",
+                       "nativeProjection[row][column] = p[column][row]",
+                       "matrix[row * 4 + column] = value[column][row]",
+                       "const float a = nativeWorld[0][0]"):
+            self.assertIn(symbol, backend)
         for symbol in ("Get_Ambient_Color_Source()", "Get_Diffuse_Color_Source()",
                        "Get_Emissive_Color_Source()", "Set_Vertex_Lighting(material && material->Get_Lighting())"):
             self.assertIn(symbol, mesh)

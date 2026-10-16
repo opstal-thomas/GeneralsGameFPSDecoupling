@@ -136,8 +136,12 @@ int wmain()
     Renderer::Get_Transform(RENDER_TRANSFORM_WORLD, fetched);
     float raw[16] = {};
     Renderer::Get_Transform_Elements(RENDER_TRANSFORM_WORLD, raw);
+    // Get_Transform returns Westwood convention; Get_Transform_Elements
+    // returns the DX8-compatible row-vector transform stored on the GPU.
     if (!Check(std::fabs(fetched[0][3] - 4.f) < 0.001f &&
-               std::fabs(raw[7] + 2.f) < 0.001f, "Native transform round-trip"))
+               std::fabs(raw[12] - 4.f) < 0.001f &&
+               std::fabs(raw[13] + 2.f) < 0.001f &&
+               std::fabs(raw[7]) < 0.001f, "Native transform round-trip"))
         return 1;
     Renderer::Set_World_Identity();
     Renderer::Get_Transform_Elements(RENDER_TRANSFORM_WORLD, raw);
