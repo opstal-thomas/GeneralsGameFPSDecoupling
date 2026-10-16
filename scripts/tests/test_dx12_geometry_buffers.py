@@ -88,8 +88,17 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn(token, header)
         self.assertIn("GetCompletedValue()", presentation)
         self.assertIn("const D3D12_RANGE written = {nativeOffset,", geometry)
-        # The page must be mapped to copy the immutable generation into its slice.
+        # Mapping the UPLOAD page itself is required; each generation writes to
+        # its own offset, rather than requiring a distinct resource per update.
         self.assertIn("newNative->Map(0, &noRead, &mappedBytes)", geometry)
+        self.assertIn("std::memcpy(static_cast<unsigned char *>(mappedBytes) + nativeOffset,", geometry)
+        smoke = (PRESENTATION / "DX12GeometryBufferSmoke.cpp").read_text(encoding="utf-8")
+        for token in ("NativeVertexOffset(", "NativeIndexOffset(",
+                      "firstVertexReadback", "secondVertexReadback", "dynamicIndexReadback",
+                      "First pooled dynamic snapshot survives NO_OVERWRITE on WARP",
+                      "Updated pooled dynamic slice contains the new bytes on WARP",
+                      "Recycle the pooled upload page only after the submission fence"):
+            self.assertIn(token, smoke)
 
     def test_old_w3d_buffer_classes_use_selected_renderer(self):
         for filename in ("dx8vertexbuffer.cpp", "dx8indexbuffer.cpp"):
