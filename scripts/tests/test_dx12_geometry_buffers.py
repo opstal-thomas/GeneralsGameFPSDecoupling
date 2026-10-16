@@ -273,11 +273,11 @@ class R01GeometryBuffers(unittest.TestCase):
                       "bool Draw(", "SetBlend(", "SetCull(", "SetDepthCompare("):
             self.assertIn(token, header)
         for token in ("DrawIndexedInstanced(", "D3DCompile(", "CreateGraphicsPipelineState(",
-                      "layout.NativeInputLayout()", "SetGraphicsRoot32BitConstants(",
+                      "layout.NativeInputLayout()", "SetGraphicsRootConstantBufferView(",
                       "stages.BindForDraw(frame, 1)", "frame.RetainFrameObject(pipeline)",
                       "D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP",
                       "D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST",
-                      "o.diffuse = v.diffuse.bgra",
+                      "float4 color1 = v.diffuse.bgra",
                       "firstIndex > s.indices - usedIndices"):
             self.assertIn(token, impl)
         for token in ("SubmitGameTriangles(false,", "SubmitGameTriangles(true,",
@@ -304,6 +304,41 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("draw.SetColorWriteMask(false, false)", smoke)
         for text in (cmake, game):
             self.assertIn("DX12W3DNativeDraw.cpp", text)
+
+    def test_m01_directional_lighting_uses_real_w3d_material_and_fence_safe_cbv(self):
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        native = (DX12 / "DX12W3DNativeDraw.cpp").read_text(encoding="utf-8")
+        mesh = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
+        smoke = (PRESENTATION / "DX12NativeDrawSmoke.cpp").read_text(encoding="utf-8")
+        types = (WW3D / "Renderer.h").read_text(encoding="utf-8")
+        for symbol in ("Set_Ambient", "Set_Light_Environment",
+                       "Set_Vertex_Lighting", "Set_Vertex_Color_Sources"):
+            self.assertNotIn('ReportPending("Renderer::' + symbol, backend)
+        for symbol in ("light_env->Get_Equivalent_Ambient()",
+                       "light_env->Get_Light_Count()",
+                       "light_env->Get_Light_Direction(j)",
+                       "light_env->Get_Light_Diffuse(j)",
+                       "nativeDraw.SetLightingEnvironment(lighting)",
+                       "normalWorld[row * 4 + column] = cof[row * 3 + column] / determinant"):
+            self.assertIn(symbol, backend)
+        for symbol in ("RENDER_VERTEX_COLOR_1", "RenderLightingEnvironmentDescription"):
+            self.assertIn(symbol, types)
+        for symbol in ("Get_Ambient_Color_Source()", "Get_Diffuse_Color_Source()",
+                       "Get_Emissive_Color_Source()", "Set_Vertex_Lighting(material && material->Get_Lighting())"):
+            self.assertIn(symbol, mesh)
+        for symbol in ("W3D_HAS_NORMAL", "W3D_HAS_SPECULAR",
+                       "normalWorld = normalize(", "LightDiffuse[index].rgb",
+                       "W3DColorSource(", "MaterialEmissive",
+                       "D3D12_ROOT_PARAMETER_TYPE_CBV",
+                       "ReserveTransientGeometry(", "RetainFrameResource(upload)",
+                       "SetGraphicsRootConstantBufferView(",
+                       "static_assert(sizeof(DrawConstants) == 92"):
+            self.assertIn(symbol, native)
+        for symbol in ("XYZ | NORMAL | DIFFUSE",
+                       "native W3D normal receives directional light",
+                       "pass == 0 ? 1.f : -1.f",
+                       "fence-safe directional lighting submission"):
+            self.assertIn(symbol, smoke)
 
     def test_m01_w3d_shader_and_texture_adapters_are_native(self):
         shader = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")

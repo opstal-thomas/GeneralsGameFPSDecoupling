@@ -61,6 +61,8 @@ namespace
     };
     struct Vertex { float xyz[3]; std::uint32_t diffuse; };
     static_assert(sizeof(Vertex) == 16, "FVF XYZ|DIFFUSE");
+    struct LitVertex { float xyz[3]; float normal[3]; std::uint32_t diffuse; };
+    static_assert(sizeof(LitVertex) == 28, "FVF XYZ|NORMAL|DIFFUSE");
     constexpr float Identity[16] = {
         1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1
     };
@@ -123,9 +125,11 @@ namespace
             return Check(false, "Map actual native WARP render target");
         }
         const auto * pixel = static_cast<const unsigned char *>(pixels) + 60 * pitch + 80 * 4;
-        const bool correct = pixel[expectedChannel] > 180 &&
-                             pixel[(expectedChannel + 1) % 3] < 80 &&
-                             pixel[(expectedChannel + 2) % 3] < 80;
+        const bool correct = expectedChannel == 3 ?
+            pixel[0] < 8 && pixel[1] < 8 && pixel[2] < 8 :
+            (pixel[expectedChannel] > 180 &&
+             pixel[(expectedChannel + 1) % 3] < 80 &&
+             pixel[(expectedChannel + 2) % 3] < 80);
         if (!correct)
             std::cerr << "M01 readback pixel RGBA=("
                       << unsigned(pixel[0]) << "," << unsigned(pixel[1])
@@ -151,6 +155,9 @@ int wmain()
     RenderBufferDescription vbDesc;
     vbDesc.byteSize = sizeof(Vertex) * 4;
     vbDesc.legacyVertexFormat = 0x0042; // XYZ|DIFFUSE, original D3DCOLOR
+    RenderBufferDescription litDesc;
+    litDesc.byteSize = sizeof(LitVertex) * 4;
+    litDesc.legacyVertexFormat = 0x0052; // XYZ | NORMAL | DIFFUSE
     RenderBufferDescription r16;
     r16.byteSize = sizeof(std::uint16_t) * 4;
     RenderBufferDescription r32;
@@ -158,9 +165,10 @@ int wmain()
     r32.indexFormat = RENDER_INDEX_UINT32;
     auto * red = CreateVertex(device.NativeDevice(), vbDesc);
     auto * green = CreateVertex(device.NativeDevice(), vbDesc);
+    auto * lit = CreateVertex(device.NativeDevice(), litDesc);
     auto * indices16 = CreateIndex(device.NativeDevice(), r16);
     auto * indices32 = CreateIndex(device.NativeDevice(), r32);
-    if (!Check(red && green && indices16 && indices32,
+    if (!Check(red && green && lit && indices16 && indices32,
                "allocate actual W3D FVF vertex and R16/R32 index resources")) return 1;
 
     const std::array<Vertex, 4> vRed = {{
@@ -175,18 +183,26 @@ int wmain()
         {{0.8f, -0.8f, 0.5f}, 0xff00ff00},
         {{0.8f, 0.8f, 0.5f}, 0xff00ff00}
     }};
+    const std::array<LitVertex, 4> vLit = {{
+        {{-0.8f, -0.8f, 0.5f}, {0.f, 0.f, 1.f}, 0xffff0000},
+        {{0.f, 0.8f, 0.5f}, {0.f, 0.f, 1.f}, 0xffff0000},
+        {{0.8f, -0.8f, 0.5f}, {0.f, 0.f, 1.f}, 0xffff0000},
+        {{0.8f, 0.8f, 0.5f}, {0.f, 0.f, 1.f}, 0xffff0000}
+    }};
     const std::array<std::uint16_t, 4> i16 = {0,1,2,3};
     const std::array<std::uint32_t, 4> i32 = {0,1,2,3};
     void * a = MapVertex(red, 0, sizeof(vRed), RENDER_MAP_NONE);
     void * b = MapVertex(green, 0, sizeof(vGreen), RENDER_MAP_NONE);
+    void * e = MapVertex(lit, 0, sizeof(vLit), RENDER_MAP_NONE);
     void * c = MapIndex(indices16, 0, sizeof(i16), RENDER_MAP_NONE);
     void * d = MapIndex(indices32, 0, sizeof(i32), RENDER_MAP_NONE);
-    if (!Check(a && b && c && d, "Map four W3D resource shadows")) return 1;
+    if (!Check(a && b && c && d && e, "Map W3D resource shadows")) return 1;
     std::memcpy(a, vRed.data(), sizeof(vRed));
     std::memcpy(b, vGreen.data(), sizeof(vGreen));
+    std::memcpy(e, vLit.data(), sizeof(vLit));
     std::memcpy(c, i16.data(), sizeof(i16));
     std::memcpy(d, i32.data(), sizeof(i32));
-    if (!Check(UnmapVertex(red) && UnmapVertex(green) &&
+    if (!Check(UnmapVertex(red) && UnmapVertex(green) && UnmapVertex(lit) &&
                UnmapIndex(indices16) && UnmapIndex(indices32), "commit W3D geometry"))
         return 1;
 
@@ -211,11 +227,11 @@ int wmain()
         draw.BindIndex(4);
         // Verify out-of-bounds draws are rejected rather than submitting bad
         // D3D12 index ranges that could remove a device.
-        if (!Check(!draw.Draw(device, targets, textureStages, Identity,
+        if (!Check(!draw.Draw(device, targets, textureStages, Identity, Identity,
                               false, 3, 2, 0, 4),
                    "reject out-of-range game draw"))
             return 1;
-        if (!Check(draw.Draw(device, targets, textureStages, Identity,
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
                              pass != 0, 0, pass != 0 ? 2 : 1, 0, 4),
                    "draw raw FVF game geometry, no preview mesh", draw.LastError()) ||
             !Check(draw.DrawCount() == 1 && draw.PipelineCount() >= 1,
@@ -232,7 +248,7 @@ int wmain()
             draw.SetBlendOperation(RENDER_BLEND_OPERATION_REVERSE_SUBTRACT);
             draw.SetBlendingEnabled(true);
             draw.SetColorWriteMask(false, false);
-            if (!Check(draw.Draw(device, targets, textureStages, Identity,
+            if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
                                  false, 0, 1, 0, 4),
                        "sorted alpha state records a second native PSO",
                        draw.LastError()) ||
@@ -255,11 +271,58 @@ int wmain()
             return 1;
     }
 
+    // M01: light environment and material color sources must affect
+    // real WARP pixels when the original FVF contains normal vectors.
+    // The vertices are pure red; an enabled green directional light with
+    // material-sourced white diffuse must output green, not the old red.
+    // Reversing the light gives zero Lambert contribution (black).
+    RenderLightingEnvironmentDescription lights;
+    lights.lightCount = 1;
+    lights.lights[0].direction[2] = 1.f;
+    lights.lights[0].diffuse[1] = 1.f;
+    RenderVertexMaterialDescription material;
+    RenderMaterialColorSources sources;
+    for (unsigned pass = 0; pass < 2; ++pass)
+    {
+        if (!Check(device.BeginFrame(clear), "begin lit W3D frame") ||
+            !Check(targets.BeginFrame(device), "begin native lit render target") ||
+            !Check(BindVertex(device, lit, 0, sizeof(LitVertex)),
+                   "bind XYZ NORMAL DIFFUSE FVF", LastError()) ||
+            !Check(BindIndex(device, indices16, 0), "bind lit triangle index", LastError()))
+            return 1;
+        const D3D12_VIEWPORT viewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT scissor = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &scissor);
+        draw.BeginFrame();
+        draw.BindVertex(NativeVertexLayout(lit), 4);
+        draw.BindIndex(4);
+        draw.SetMaterial(material);
+        draw.SetMaterialColorSources(sources);
+        draw.SetLightingEnabled(true);
+        lights.lights[0].direction[2] = pass == 0 ? 1.f : -1.f;
+        draw.SetLightingEnvironment(lights);
+        if (!Check(draw.Draw(device, targets, textureStages,
+                             Identity, Identity, false, 0, 1, 0, 4),
+                   "native W3D normal receives directional light", draw.LastError()))
+            return 1;
+        ComPtr<ID3D12Resource> readback;
+        UINT rowPitch = 0;
+        unsigned char unused[4] = {};
+        if (!ReadPixel(device, unused, readback, rowPitch) ||
+            !Check(targets.EndFrame(device), "end lit render target") ||
+            !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+                   "fence-safe directional lighting submission", device.LastError()) ||
+            !CheckReadback(readback.Get(), rowPitch, pass == 0 ? 1 : 3))
+            return 1;
+    }
+    draw.SetLightingEnabled(false);
+    ReleaseVertex(lit);
     ReleaseVertex(red);
     ReleaseVertex(green);
     ReleaseIndex(indices16);
     ReleaseIndex(indices32);
     device.Shutdown();
-    std::cout << "M01 PASS: original FVF R16 triangles and R32 strips draw natively with WARP readback\n";
+    std::cout << "M01 PASS: FVF indexed triangles/strips, directional normal lighting and alpha mask PSOs via WARP readback\n";
     return 0;
 }
