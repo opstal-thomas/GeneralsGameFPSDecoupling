@@ -38,6 +38,7 @@ cbuffer W3DConstants : register(b0)
     uint AlphaCompare;
     float3 AlphaPadding;
     float4 MaterialColor;
+    float4 TextureFactor;
     row_major float4x4 NormalToWorld;
     float4 MaterialAmbient;
     float4 MaterialEmissive;
@@ -151,13 +152,69 @@ OutVertex W3D_VS(InVertex v)
 #endif
     return o;
 }
+
+uint W3DOp(uint channel) { return channel & 15u; }
+uint W3DArg1(uint channel) { return (channel >> 4) & 3u; }
+uint W3DArg2(uint channel) { return (channel >> 6) & 3u; }
+float4 W3DArgument(uint source, float4 current, float4 texel, float4 diffuse)
+{
+    return source == 1u ? texel :
+           source == 2u ? diffuse :
+           source == 3u ? TextureFactor : current;
+}
+float4 W3DCombine(uint operation, float4 a, float4 b, float4 current, float4 texel)
+{
+    if (operation == 1u) return a;
+    if (operation == 2u) return b;
+    if (operation == 3u) return saturate(a * b);
+    if (operation == 4u) return saturate(2.f * a * b);
+    if (operation == 5u) return saturate(a + b);
+    if (operation == 6u) return saturate(a + b - a * b);
+    if (operation == 7u) return saturate(a - b);
+    if (operation == 8u) return saturate(lerp(b, a, texel.a));
+    if (operation == 9u) return saturate(lerp(b, a, current.a));
+    if (operation == 10u) return saturate(a + b - 0.5f);
+    if (operation == 11u) return saturate(2.f * (a + b - 0.5f));
+    if (operation == 12u) return saturate(a + a.a * b);
+    // BUMP_ENV_MAP is explicitly rejected before recording native draws.
+    return current;
+}
+float4 W3DStage(uint colorChannel, uint alphaChannel, float4 current,
+                float4 texel, float4 diffuse)
+{
+    uint op = W3DOp(colorChannel);
+    if (op == 0u) return current;
+    float4 a = W3DArgument(W3DArg1(colorChannel), current, texel, diffuse);
+    float4 b = W3DArgument(W3DArg2(colorChannel), current, texel, diffuse);
+    float4 color = W3DCombine(op, a, b, current, texel);
+    uint alphaOp = W3DOp(alphaChannel);
+    if (alphaOp == 0u) return float4(color.rgb, current.a);
+    float4 aa = W3DArgument(W3DArg1(alphaChannel), current, texel, diffuse);
+    float4 ab = W3DArgument(W3DArg2(alphaChannel), current, texel, diffuse);
+    float4 alpha = W3DCombine(alphaOp, aa, ab, current, texel);
+    return float4(color.rgb, alpha.a);
+}
+
 float4 W3D_PS(OutVertex v) : SV_TARGET
 {
+    // Compile-time specialization: interpreting a dynamic combiner key
+    // previously caused WARP device removal in the R06 smoke test.
+    const uint key = W3D_COMBINER_KEY;
+    const uint color0 = key & 255u;
+    const uint alpha0 = (key >> 8) & 255u;
+    const uint color1 = (key >> 16) & 255u;
+    const uint alpha1 = (key >> 24) & 255u;
     float4 result = v.diffuse;
-    if (HasTexture0 != 0u)
-        result *= Texture0.Sample(Sampler0, v.uv0);
-    if (HasTexture1 != 0u)
-        result *= Texture1.Sample(Sampler1, v.uv1);
+    if (HasTexture0 != 0u && W3DOp(color0) != 0u)
+    {
+        float4 texel0 = Texture0.Sample(Sampler0, v.uv0);
+        result = W3DStage(color0, alpha0, result, texel0, v.diffuse);
+        if (HasTexture1 != 0u && W3DOp(color1) != 0u)
+        {
+            float4 texel1 = Texture1.Sample(Sampler1, v.uv1);
+            result = W3DStage(color1, alpha1, result, texel1, v.diffuse);
+        }
+    }
     if (AlphaTest != 0u)
     {
         float alpha = saturate(result.a);
@@ -264,6 +321,7 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned alphaCompare;
         unsigned alphaPadding[3];
         float material[4];
+        float textureFactor[4];
         float normalToWorld[16];
         float materialAmbient[4];
         float materialEmissive[4];
@@ -277,7 +335,7 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned emissiveSource;
         unsigned reserved[3];
     };
-    static_assert(sizeof(DrawConstants) == 96 * sizeof(unsigned),
+    static_assert(sizeof(DrawConstants) == 100 * sizeof(unsigned),
                   "Native DX12 W3D constant buffer does not match shader packing");
 
     bool Compile(const char * entry, const char * profile,
@@ -321,8 +379,17 @@ struct DX12W3DNativeDraw::Impl
     RenderCullMode cull = RENDER_CULL_NONE;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12RootSignature> root;
-    ComPtr<ID3DBlob> pixelShader;
-    std::map<std::array<unsigned, 14>, ComPtr<ID3D12PipelineState>> pipelines;
+    RenderTextureCombinerKey combiner;
+    unsigned textureFactor = 0xffffffffu;
+    std::map<std::array<unsigned, 15>, ComPtr<ID3D12PipelineState>> pipelines;
+
+    Impl()
+    {
+        const RenderTextureStageChannel base(RENDER_TEXOP_MODULATE,
+            RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+        combiner.color[0] = base;
+        combiner.alpha[0] = base;
+    }
     std::string error;
 
     bool Fail(const char * description)
@@ -339,7 +406,6 @@ struct DX12W3DNativeDraw::Impl
         // Presentation shutdown and submission fences retain previously
         // referenced PSOs and signatures; this cache only owns future draws.
         pipelines.clear();
-        pixelShader.Reset();
         root.Reset();
         device = current;
         if (!device)
@@ -377,8 +443,6 @@ struct DX12W3DNativeDraw::Impl
         if (FAILED(device->CreateRootSignature(0, serialized->GetBufferPointer(),
             serialized->GetBufferSize(), IID_PPV_ARGS(&root))))
             return Fail("Cannot create native W3D game drawing root signature");
-        if (!Compile("W3D_PS", "ps_5_1", nullptr, pixelShader, error))
-            return false;
         return true;
     }
 
@@ -404,7 +468,7 @@ struct DX12W3DNativeDraw::Impl
             Fail("W3D native draw requires a rigid XYZ/XYZW vertex layout");
             return nullptr;
         }
-        const auto key = std::array<unsigned, 14>{{
+        const auto key = std::array<unsigned, 15>{{
             layout.legacyFVF, static_cast<unsigned>(color), static_cast<unsigned>(depth),
             samples, sampleQuality, static_cast<unsigned>(cull),
             static_cast<unsigned>(depthCompare), depthWrite ? 1u : 0u,
@@ -414,7 +478,8 @@ struct DX12W3DNativeDraw::Impl
             (static_cast<unsigned>(blend.colorWriteEnabled) << 1) |
             static_cast<unsigned>(blend.alphaTestEnabled),
             static_cast<unsigned>(equation),
-            static_cast<unsigned>(writeMask)
+            static_cast<unsigned>(writeMask),
+            combiner.Encode()
         }};
         const auto existing = pipelines.find(key);
         if (existing != pipelines.end())
@@ -429,8 +494,15 @@ struct DX12W3DNativeDraw::Impl
             {"W3D_POSITION4", position4 ? "1" : "0"},
             {nullptr, nullptr}
         };
-        ComPtr<ID3DBlob> vertexShader;
+        ComPtr<ID3DBlob> vertexShader, pixelShader;
         if (!Compile("W3D_VS", "vs_5_1", macros, vertexShader, error))
+            return nullptr;
+        const std::string keyText = std::to_string(combiner.Encode()) + "u";
+        const D3D_SHADER_MACRO pixelMacros[] = {
+            {"W3D_COMBINER_KEY", keyText.c_str()},
+            {nullptr, nullptr}
+        };
+        if (!Compile("W3D_PS", "ps_5_1", pixelMacros, pixelShader, error))
             return nullptr;
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature = root.Get();
@@ -524,6 +596,19 @@ void DX12W3DNativeDraw::SetMaterial(const RenderVertexMaterialDescription & stat
 {
     impl_->material = state;
 }
+void DX12W3DNativeDraw::SetTextureChannel(
+    unsigned stage, bool alpha, const RenderTextureStageChannel & channel)
+{
+    if (stage < 2u)
+    {
+        if (alpha) impl_->combiner.alpha[stage] = channel;
+        else impl_->combiner.color[stage] = channel;
+    }
+}
+void DX12W3DNativeDraw::SetTextureFactor(unsigned packedARGB)
+{
+    impl_->textureFactor = packedARGB;
+}
 void DX12W3DNativeDraw::SetLightingEnabled(bool enabled)
 {
     impl_->vertexLighting = enabled;
@@ -588,6 +673,8 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     if (desc.SampleDesc.Count == 0 || desc.Format == DXGI_FORMAT_UNKNOWN)
         return s.Fail("Invalid native W3D render target format");
     const auto depth = DepthFormat(depthTarget);
+    if (s.combiner.Requires_Bump_Shader())
+        return s.Fail("W3D bump environment-map combiner requires a dedicated UV shader");
     if (!s.EnsureRoot(frame))
         return false;
     auto * pipeline = s.Pipeline(frame, desc.Format, depth,
@@ -610,6 +697,10 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     constants.material[1] = s.material.diffuse.g;
     constants.material[2] = s.material.diffuse.b;
     constants.material[3] = s.material.diffuse.a;
+    constants.textureFactor[0] = ((s.textureFactor >> 16) & 255u) / 255.f;
+    constants.textureFactor[1] = ((s.textureFactor >> 8) & 255u) / 255.f;
+    constants.textureFactor[2] = (s.textureFactor & 255u) / 255.f;
+    constants.textureFactor[3] = ((s.textureFactor >> 24) & 255u) / 255.f;
     const float * materialAmbient = &s.material.ambient.r;
     const float * materialEmissive = &s.material.emissive.r;
     std::memcpy(constants.materialAmbient, materialAmbient, sizeof(constants.materialAmbient));

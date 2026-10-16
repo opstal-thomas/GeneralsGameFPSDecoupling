@@ -35,6 +35,10 @@ public:
     void SetBlendingEnabled(bool enabled);
     void SetColorWriteMask(bool rgbEnabled, bool alphaEnabled);
     void SetMaterial(const RenderVertexMaterialDescription & material);
+    // Original W3D fixed-function color and alpha ops, evaluated by a
+    // shader permutation rather than treating both stages as multiply.
+    void SetTextureChannel(unsigned stage, bool alpha, const RenderTextureStageChannel & channel);
+    void SetTextureFactor(unsigned packedARGB);
     void SetLightingEnabled(bool enabled);
     void SetMaterialColorSources(const RenderMaterialColorSources & sources);
     void SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights);

@@ -1318,14 +1318,16 @@ void Renderer::Set_Texture_Transform_2D(unsigned stage, bool enabled)
     ReportPending("Renderer::Set_Texture_Transform_2D");
 }
 
-void Renderer::Apply_Texture_Stage_Color( unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+void Renderer::Apply_Texture_Stage_Color(unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
 {
-    ReportPending("Renderer::Apply_Texture_Stage_Color");
+    (void)uncached;
+    nativeDraw.SetTextureChannel(stage, false, channel);
 }
 
-void Renderer::Apply_Texture_Stage_Alpha( unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+void Renderer::Apply_Texture_Stage_Alpha(unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
 {
-    ReportPending("Renderer::Apply_Texture_Stage_Alpha");
+    (void)uncached;
+    nativeDraw.SetTextureChannel(stage, true, channel);
 }
 
 void Renderer::Set_Texture_Filter(unsigned stage, RenderSamplerFilterField field, RenderSamplerFilter filter)
@@ -1365,7 +1367,7 @@ void Renderer::Set_Blending_Enabled(bool enabled)
 
 void Renderer::Set_Texture_Factor(unsigned packedARGB)
 {
-    ReportPending("Renderer::Set_Texture_Factor");
+    nativeDraw.SetTextureFactor(packedARGB);
 }
 
 void Renderer::Set_Color_Write_Mask(bool rgbEnabled, bool alphaEnabled)
