@@ -81,6 +81,12 @@ format mapping, native backend implementation and test coverage.
 These tests run alongside previous WARP smoke tests and both Generals
 and Zero Hour Windows build configurations.
 
+**DX12-specific CI passed:** [Win32 and x64 R04 WARP upload/readback,
+game-owned HWND Renderer integration, shader compilation and source
+contracts](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38829454476).
+The broader Windows game-build/dependency-audit matrix is a separate
+regression gate.
+
 ## Remaining boundaries
 
 - **R05:** Stable shader-visible SRV descriptor allocations, texture stage
@@ -92,6 +98,9 @@ and Zero Hour Windows build configurations.
 - **R07:** Render targets, depth/stencil and offscreen texture attachment
   creation. R04 intentionally rejects `renderTarget=true` instead of
   supplying a non-renderable resource.
+- **R08:** GPU surface-level acquisition, texture-to-surface transfers,
+  screen readback and full image blit/copy parity. R04 handles ordinary CPU
+  image surfaces, but not every legacy DX8 surface operation.
 - **R09/M01/B07:** Efficient streaming/eviction, fully native W3D draws and
   actual DX12 gameplay.
 - The legacy W3D `SurfaceClass` and `TextureClass` headers still expose
