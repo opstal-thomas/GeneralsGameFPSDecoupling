@@ -341,6 +341,99 @@ void Renderer::Set_Shader(const ShaderClass & shader)
     case ShaderClass::DSTBLEND_ONE_MINUS_SRC_ALPHA: state.destination = RENDER_BLEND_INV_SRC_ALPHA; break;
     default: state.destination = RENDER_BLEND_ZERO; break;
     }
+
+    // Material shader bits are authoritative on the DX12 selection.
+    // ShaderClass::Apply() is a DX8 state-cache path and cannot be called
+    // just to infer these W3D fixed-function texture operations.
+    RenderTextureStageChannel color0(RENDER_TEXOP_SELECT_ARG1,
+        RENDER_TEXARG_DIFFUSE, RENDER_TEXARG_DIFFUSE);
+    RenderTextureStageChannel alpha0 = color0;
+    RenderTextureStageChannel color1, alpha1;
+    if (shader.Get_Texturing() == ShaderClass::TEXTURING_ENABLE)
+    {
+        const RenderTextureArgument tex = RENDER_TEXARG_TEXTURE;
+        const RenderTextureArgument diffuse = RENDER_TEXARG_DIFFUSE;
+        color0 = RenderTextureStageChannel(RENDER_TEXOP_MODULATE, tex, diffuse);
+        alpha0 = color0;
+        switch (shader.Get_Primary_Gradient())
+        {
+        case ShaderClass::GRADIENT_DISABLE:
+            color0 = RenderTextureStageChannel(RENDER_TEXOP_SELECT_ARG1, tex);
+            alpha0 = color0;
+            break;
+        case ShaderClass::GRADIENT_ADD:
+            color0.operation = RENDER_TEXOP_ADD;
+            break;
+        case ShaderClass::GRADIENT_MODULATE2X:
+            color0.operation = RENDER_TEXOP_MODULATE2X;
+            break;
+        case ShaderClass::GRADIENT_BUMPENVMAP:
+        case ShaderClass::GRADIENT_BUMPENVMAPLUMINANCE:
+            color0.operation = shader.Get_Primary_Gradient() == ShaderClass::GRADIENT_BUMPENVMAP ?
+                RENDER_TEXOP_BUMP_ENV_MAP : RENDER_TEXOP_BUMP_ENV_MAP_LUMINANCE;
+            alpha0.operation = RENDER_TEXOP_DISABLE;
+            break;
+        default: break;
+        }
+
+        color1 = RenderTextureStageChannel(RENDER_TEXOP_DISABLE, tex, RENDER_TEXARG_CURRENT);
+        alpha1 = color1;
+        switch (shader.Get_Post_Detail_Color_Func())
+        {
+        case ShaderClass::DETAILCOLOR_DETAIL:
+            color1.operation = RENDER_TEXOP_SELECT_ARG1; break;
+        case ShaderClass::DETAILCOLOR_SCALE:
+            color1.operation = RENDER_TEXOP_MODULATE; break;
+        case ShaderClass::DETAILCOLOR_INVSCALE:
+            color1.operation = RENDER_TEXOP_ADD_SMOOTH; break;
+        case ShaderClass::DETAILCOLOR_ADD:
+            color1.operation = RENDER_TEXOP_ADD; break;
+        case ShaderClass::DETAILCOLOR_SUB:
+            color1.operation = RENDER_TEXOP_SUBTRACT; break;
+        case ShaderClass::DETAILCOLOR_SUBR:
+            color1 = RenderTextureStageChannel(RENDER_TEXOP_SUBTRACT,
+                RENDER_TEXARG_CURRENT, tex); break;
+        case ShaderClass::DETAILCOLOR_BLEND:
+            color1.operation = RENDER_TEXOP_BLEND_TEXTURE_ALPHA; break;
+        case ShaderClass::DETAILCOLOR_DETAILBLEND:
+            color1.operation = RENDER_TEXOP_BLEND_CURRENT_ALPHA; break;
+        case ShaderClass::DETAILCOLOR_ADDSIGNED:
+            color1.operation = RENDER_TEXOP_ADD_SIGNED; break;
+        case ShaderClass::DETAILCOLOR_ADDSIGNED2X:
+            color1.operation = RENDER_TEXOP_ADD_SIGNED2X; break;
+        case ShaderClass::DETAILCOLOR_SCALE2X:
+            color1.operation = RENDER_TEXOP_MODULATE2X; break;
+        case ShaderClass::DETAILCOLOR_MODALPHAADDCOLOR:
+            color1 = RenderTextureStageChannel(RENDER_TEXOP_MODULATE_ALPHA_ADD_COLOR,
+                RENDER_TEXARG_CURRENT, tex); break;
+        default: break;
+        }
+        switch (shader.Get_Post_Detail_Alpha_Func())
+        {
+        case ShaderClass::DETAILALPHA_DETAIL:
+            alpha1.operation = RENDER_TEXOP_SELECT_ARG1; break;
+        case ShaderClass::DETAILALPHA_SCALE:
+            alpha1.operation = RENDER_TEXOP_MODULATE; break;
+        case ShaderClass::DETAILALPHA_INVSCALE:
+            alpha1.operation = RENDER_TEXOP_ADD_SMOOTH; break;
+        default: break;
+        }
+        // D3D8 stops the fixed-function cascade only if COLOROP is
+        // DISABLE, so a detail-alpha-only pass requires color passthrough.
+        if (color1.operation == RENDER_TEXOP_DISABLE &&
+            alpha1.operation != RENDER_TEXOP_DISABLE)
+            color1 = RenderTextureStageChannel(RENDER_TEXOP_SELECT_ARG1,
+                RENDER_TEXARG_CURRENT);
+        if (color1.operation != RENDER_TEXOP_DISABLE &&
+            alpha1.operation == RENDER_TEXOP_DISABLE)
+            alpha1 = RenderTextureStageChannel(RENDER_TEXOP_SELECT_ARG1,
+                RENDER_TEXARG_CURRENT);
+    }
+    Apply_Texture_Stage_Color(0, color0);
+    Apply_Texture_Stage_Alpha(0, alpha0);
+    Apply_Texture_Stage_Color(1, color1);
+    Apply_Texture_Stage_Alpha(1, alpha1);
+
     state.blendEnabled = state.source != RENDER_BLEND_ONE ||
                          state.destination != RENDER_BLEND_ZERO;
     state.alphaTestEnabled = shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_ENABLE;
