@@ -10,7 +10,6 @@
 // must stay fail-closed unless the native-frame diagnostic is explicitly
 // enabled. This is not a DX12-only playable-game launch (B10).
 #include "WW3D2/Renderer.h"
-#include "WW3D2/lightenvironment.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WW3D2/Backend/DX12/DX12W3DNativeDraw.h"
@@ -578,30 +577,25 @@ void Renderer::Set_Ambient(const Vector3 & color)
     nativeDraw.SetAmbient(color.X, color.Y, color.Z);
 }
 
-void Renderer::Set_Light_Environment(LightEnvironmentClass * light_env)
+// The standalone WARP backend never depends on the WW3D light classes.
+// The complete typed adapter in dx8renderer.cpp translates game objects.
+void DX12W3DApplyLightingEnvironment(const RenderLightingEnvironmentDescription & lighting)
+{
+    nativeDraw.SetLightingEnvironment(lighting);
+}
+
+RenderLightingEnvironmentDescription DX12W3DCurrentLightingEnvironment()
+{
+    return nativeDraw.GetLightingEnvironment();
+}
+
+RenderLightingEnvironmentDescription DX12W3DDefaultLightingEnvironment()
 {
     RenderLightingEnvironmentDescription lighting;
-    const Vector3 ambient = light_env ? light_env->Get_Equivalent_Ambient() : globalAmbient;
-    lighting.ambient[0] = ambient.X;
-    lighting.ambient[1] = ambient.Y;
-    lighting.ambient[2] = ambient.Z;
-    if (light_env)
-    {
-        const int count = light_env->Get_Light_Count();
-        lighting.lightCount = static_cast<unsigned>(count < 0 ? 0 : (count > 4 ? 4 : count));
-        for (unsigned j = 0; j < lighting.lightCount; ++j)
-        {
-            const Vector3 & direction = light_env->Get_Light_Direction(j);
-            const Vector3 & diffuse = light_env->Get_Light_Diffuse(j);
-            lighting.lights[j].direction[0] = direction.X;
-            lighting.lights[j].direction[1] = direction.Y;
-            lighting.lights[j].direction[2] = direction.Z;
-            lighting.lights[j].diffuse[0] = diffuse.X;
-            lighting.lights[j].diffuse[1] = diffuse.Y;
-            lighting.lights[j].diffuse[2] = diffuse.Z;
-        }
-    }
-    nativeDraw.SetLightingEnvironment(lighting);
+    lighting.ambient[0] = globalAmbient.X;
+    lighting.ambient[1] = globalAmbient.Y;
+    lighting.ambient[2] = globalAmbient.Z;
+    return lighting;
 }
 
 bool Renderer::Set_Render_Device(const char * name, int width, int height, int bits, int windowed, bool resize_window)

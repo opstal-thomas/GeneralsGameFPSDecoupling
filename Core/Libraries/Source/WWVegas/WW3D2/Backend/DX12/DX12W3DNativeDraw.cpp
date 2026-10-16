@@ -523,6 +523,10 @@ void DX12W3DNativeDraw::SetLightingEnvironment(const RenderLightingEnvironmentDe
     if (impl_->lighting.lightCount > 4)
         impl_->lighting.lightCount = 4;
 }
+RenderLightingEnvironmentDescription DX12W3DNativeDraw::GetLightingEnvironment() const
+{
+    return impl_->lighting;
+}
 void DX12W3DNativeDraw::SetAmbient(float red, float green, float blue)
 {
     impl_->lighting.ambient[0] = red;

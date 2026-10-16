@@ -175,6 +175,36 @@ void DX12W3DSortingTrackIndexBinding(const RenderDynamicIndexBinding & binding,
     state.index_base_offset = owner ? baseVertexIndex : 0;
 }
 
+// Convert the complete WW3D light environment here: DX12Backend.cpp must
+// continue compiling without any game-only lightenvironment.h dependency.
+void Renderer::Set_Light_Environment(LightEnvironmentClass * light_env)
+{
+    RenderLightingEnvironmentDescription lighting =
+        DX12W3DDefaultLightingEnvironment();
+    if (light_env)
+    {
+        const Vector3 ambient = light_env->Get_Equivalent_Ambient();
+        lighting.ambient[0] = ambient.X;
+        lighting.ambient[1] = ambient.Y;
+        lighting.ambient[2] = ambient.Z;
+        const int count = light_env->Get_Light_Count();
+        lighting.lightCount = static_cast<unsigned>(
+            count < 0 ? 0 : (count > 4 ? 4 : count));
+        for (unsigned i = 0; i < lighting.lightCount; ++i)
+        {
+            const Vector3 & direction = light_env->Get_Light_Direction(i);
+            const Vector3 & diffuse = light_env->Get_Light_Diffuse(i);
+            lighting.lights[i].direction[0] = direction.X;
+            lighting.lights[i].direction[1] = direction.Y;
+            lighting.lights[i].direction[2] = direction.Z;
+            lighting.lights[i].diffuse[0] = diffuse.X;
+            lighting.lights[i].diffuse[1] = diffuse.Y;
+            lighting.lights[i].diffuse[2] = diffuse.Z;
+        }
+    }
+    DX12W3DApplyLightingEnvironment(lighting);
+}
+
 void Renderer::Capture_Sorting_State(RenderStateStruct & state)
 {
     RenderStateStruct & tracked = NativeSortingState();
@@ -185,8 +215,10 @@ void Renderer::Capture_Sorting_State(RenderStateStruct & state)
     tracked.view = ToSortingMatrix(matrix);
     tracked.index_base_offset = static_cast<unsigned short>(
         DX12W3DSortingCurrentBaseVertexIndex());
-    // Sorting light environments are not yet native. Never advertise
-    // unknown or stale DX8 lights as though they were real DX12 lighting.
+    // Capture a *value* copy of the equivalent ambient and up to four
+    // attenuated light directions, not a borrowed LightEnvironmentClass*.
+    // The original emitter may change before this deferred alpha draw.
+    tracked.lighting = DX12W3DCurrentLightingEnvironment();
     std::memset(tracked.LightEnable, 0, sizeof(tracked.LightEnable));
     state = tracked; // retains every referenced W3D buffer/texture/material
 }
@@ -195,17 +227,10 @@ void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_st
 {
     Set_Transform(RENDER_TRANSFORM_WORLD, FromSortingMatrix(render_state.world));
     Set_Transform(RENDER_TRANSFORM_VIEW, FromSortingMatrix(render_state.view));
-    if (render_state.material && render_state.material->Get_Lighting())
-    {
-        // M03 will provide real native light permutations. The baseline
-        // unlit material must never dereference uninitialized light data.
-        static bool warned = false;
-        if (!warned)
-        {
-            OutputDebugStringA("[DX12 M01] sorted vertex lighting requires M03\n");
-            warned = true;
-        }
-    }
+    // The state copied into each CPU sorted draw includes its own lighting;
+    // an unrelated opaque mesh may have changed the native light environment
+    // while the deferred triangles were awaiting flush.
+    DX12W3DApplyLightingEnvironment(render_state.lighting);
 }
 
 void Renderer::Restore_Sorting_State(const RenderStateStruct & state)

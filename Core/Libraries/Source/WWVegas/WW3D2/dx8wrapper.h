@@ -213,6 +213,9 @@ struct RenderStateStruct
 	VertexBufferClass* vertex_buffers[MAX_VERTEX_STREAMS];
 	IndexBufferClass* index_buffer;
 	unsigned short index_base_offset;
+    // M01: DX12-only deferred W3D light approximation, kept distinct from
+    // the old fixed-function light snapshot. DX8 ignores this value.
+    RenderLightingEnvironmentDescription lighting;
 
 	RenderStateStruct();
 	~RenderStateStruct();
@@ -1450,6 +1453,7 @@ WWINLINE RenderStateStruct& RenderStateStruct::operator= (const RenderStateStruc
 		}
 	}
 
+	lighting=src.lighting;
 	shader=src.shader;
 	world=src.world;
 	view=src.view;

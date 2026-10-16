@@ -38,6 +38,7 @@ public:
     void SetLightingEnabled(bool enabled);
     void SetMaterialColorSources(const RenderMaterialColorSources & sources);
     void SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights);
+    RenderLightingEnvironmentDescription GetLightingEnvironment() const;
     void SetAmbient(float red, float green, float blue);
     void SetDepthCompare(RenderCompareFunc compare);
     void SetDepthWrite(bool enabled);

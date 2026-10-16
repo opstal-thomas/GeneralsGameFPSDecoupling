@@ -316,11 +316,16 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertNotIn('ReportPending("Renderer::' + symbol, backend)
         for symbol in ("light_env->Get_Equivalent_Ambient()",
                        "light_env->Get_Light_Count()",
-                       "light_env->Get_Light_Direction(j)",
-                       "light_env->Get_Light_Diffuse(j)",
-                       "nativeDraw.SetLightingEnvironment(lighting)",
+                       "light_env->Get_Light_Direction(i)",
+                       "light_env->Get_Light_Diffuse(i)"):
+            self.assertIn(symbol, mesh)
+        for symbol in ("DX12W3DApplyLightingEnvironment(", "nativeDraw.SetLightingEnvironment(lighting)",
                        "normalWorld[row * 4 + column] = cof[row * 3 + column] / determinant"):
             self.assertIn(symbol, backend)
+        self.assertNotIn('#include "WW3D2/lightenvironment.h"', backend)
+        self.assertIn("DX12W3DCurrentLightingEnvironment()", mesh)
+        self.assertIn("DX12W3DApplyLightingEnvironment(render_state.lighting)", mesh)
+        self.assertIn("lighting=src.lighting", (WW3D / "dx8wrapper.h").read_text(encoding="utf-8"))
         for symbol in ("RENDER_VERTEX_COLOR_1", "RenderLightingEnvironmentDescription"):
             self.assertIn(symbol, types)
         for symbol in ("Get_Ambient_Color_Source()", "Get_Diffuse_Color_Source()",
