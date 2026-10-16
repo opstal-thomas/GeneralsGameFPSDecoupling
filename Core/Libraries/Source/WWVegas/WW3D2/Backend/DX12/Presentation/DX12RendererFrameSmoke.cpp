@@ -1,6 +1,7 @@
 // DX12-B04: exercise the actual Renderer entry points against the primary
 // game HWND on the Windows software adapter. Never link a D3D8 implementation.
 #include "WW3D2/Renderer.h"
+#include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WWMath/matrix4.h"
 #include "WWMath/vector3.h"
 #include "WWMath/vector4.h"
@@ -284,7 +285,20 @@ int wmain()
     RenderSurfaceMap invalidGPUMap;
     Renderer::Lock_Surface(rttSurface, invalidGPUMap);
     if (!Check(!invalidGPUMap.data, "R07 GPU targets are not CPU lockable before R08") ||
-        !Check(Renderer::Set_Render_Target_Surfaces(oldRT, oldDepth),
+        !Check(Renderer::Set_Render_Target_Surfaces(nullptr, dsvSurface),
+               "R07 Renderer supports a depth-only shadow-map pass"))
+        return 1;
+    auto depthOnlyColor = Renderer::Acquire_Current_Color_Surface();
+    if (!Check(depthOnlyColor == nullptr, "Depth-only pass exposes no active color") ||
+        !Check(DX12W3DRendererTextureStages().Bound(2) == nullptr,
+               "Texture stage 2 starts unbound"))
+        return 1;
+    Renderer::Bind_Texture(2, reinterpret_cast<RenderTextureHandle>(depthRTT));
+    if (!Check(DX12W3DRendererTextureStages().Bound(2) == nullptr,
+               "R07 prevents binding currently writable depth as an SRV"))
+        return 1;
+    Renderer::Clear(false, true, Vector3(0.f, 0.f, 0.f), 1.f, 0.2f, 0xA5);
+    if (!Check(Renderer::Set_Render_Target_Surfaces(oldRT, oldDepth),
                "R07 restores game HWND RTV and original viewport"))
         return 1;
     Renderer::Release_Surface(rttSurface);
