@@ -318,6 +318,8 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("texture->Peek_Render_Texture()", texture)
         self.assertIn("Bind_Texture(stage,", texture)
         self.assertIn("material->Get_Opacity()", texture)
+        self.assertIn("ShaderClass::Is_Backface_Culling_Inverted()", shader)
+        self.assertIn("RENDER_CULL_CW", shader)
         self.assertIn("Set_Vertex_Material(description)", texture)
         self.assertIn("nativeDraw.SetMaterial(material)", backend)
         self.assertNotIn('ReportPending("Renderer::Set_Vertex_Material")', backend)

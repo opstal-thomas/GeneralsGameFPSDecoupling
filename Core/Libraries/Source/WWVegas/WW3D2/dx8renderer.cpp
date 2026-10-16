@@ -121,8 +121,10 @@ void Renderer::Set_Shader(const ShaderClass & shader)
     Apply_Blend_State(state);
     Set_Depth_Compare(static_cast<RenderCompareFunc>(shader.Get_Depth_Compare()));
     Set_Depth_Write(shader.Get_Depth_Mask() == ShaderClass::DEPTH_WRITE_ENABLE);
+    // W3D defaults to culling clockwise faces; reflection passes invert it.
     Set_Cull_Mode(shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ?
-                  RENDER_CULL_CCW : RENDER_CULL_NONE);
+                  (ShaderClass::Is_Backface_Culling_Inverted() ?
+                      RENDER_CULL_CCW : RENDER_CULL_CW) : RENDER_CULL_NONE);
 }
 
 // Typed texture adapter lives beside shader/material mesh batching so that
