@@ -14,6 +14,7 @@ add_library(W3DDX12PresentationDevice STATIC
     ../DX12W3DTextures.cpp
     ../DX12W3DTextureStages.cpp
     ../DX12W3DSurfaces.cpp
+    ../DX12W3DRenderTargets.cpp
     ../DX12PrimaryWindow.cpp
     ../DX12IndexedMeshPass.cpp
 )
