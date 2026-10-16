@@ -4,9 +4,8 @@
 ** Distributed under the GNU General Public License, v3 or later.
 */
 
-// R01: check actual WARP GPU allocation, index format, byte-range mapping,
-// IA binding, partial static updates, dynamic generation isolation, and
-// upload-staging lifetimes through the submitted frame fence.
+// R01/R02: check actual WARP GPU allocation, index format, byte-range mapping,
+// IA bindings, pooled dynamic snapshot isolation, and fence-gated page reuse.
 #include "../DX12PresentationDevice.h"
 #include "../DX12W3DGeometryBuffers.h"
 
@@ -220,9 +219,29 @@ int wmain()
                "Dynamic geometry uses CPU-visible D3D12 UPLOAD heaps"))
         return 1;
 
+    // R02: both streams share an UPLOAD page, but their independent byte
+    // ranges and every subsequent dynamic generation must remain immutable.
+    ID3D12Resource * firstGpu = NativeVertexResource(dynamicVertex);
+    const unsigned firstVertexOffset = NativeVertexOffset(dynamicVertex);
+    const unsigned firstIndexOffset = NativeIndexOffset(dynamicIndex);
+    ComPtr<ID3D12Resource> firstVertexReadback, secondVertexReadback, dynamicIndexReadback;
+    if (!Check(firstGpu == NativeIndexResource(dynamicIndex),
+               "Small vertex and index snapshots share an upload page") ||
+        !Check(firstVertexOffset != firstIndexOffset,
+               "Dynamic vertex and index offsets cannot alias") ||
+        !Check(MakeReadback(device.NativeDevice(), vertexDesc.byteSize, firstVertexReadback) &&
+               MakeReadback(device.NativeDevice(), vertexDesc.byteSize, secondVertexReadback) &&
+               MakeReadback(device.NativeDevice(), indexDesc.byteSize, dynamicIndexReadback),
+               "Allocate pooled geometry GPU readbacks"))
+        return 1;
+    device.ActiveCommandList()->CopyBufferRegion(
+        firstVertexReadback.Get(), 0, firstGpu, firstVertexOffset, vertexDesc.byteSize);
+    device.ActiveCommandList()->CopyBufferRegion(
+        dynamicIndexReadback.Get(), 0, NativeIndexResource(dynamicIndex),
+        firstIndexOffset, indexDesc.byteSize);
+
     // Emulate multiple dynamic writes/binds in one frame; the previous GPU
     // generation must remain valid through the command-list fence.
-    ID3D12Resource * firstGpu = NativeVertexResource(dynamicVertex);
     auto * changed = static_cast<unsigned char *>(
         MapVertex(dynamicVertex, 4, 8, RENDER_MAP_NO_OVERWRITE));
     if (!Check(changed != nullptr, "Partial NO_OVERWRITE map"))
@@ -231,9 +250,19 @@ int wmain()
     if (!Check(UnmapVertex(dynamicVertex) &&
                BindVertex(device, dynamicVertex, 1, 12), "Rebind new dynamic generation") ||
         !Check(firstGpu == NativeVertexResource(dynamicVertex),
-               "Dynamic writes share an upload page with distinct offsets") ||
+               "Dynamic writes share an upload page") ||
+        !Check(NativeVertexOffset(dynamicVertex) != firstVertexOffset &&
+               NativeVertexOffset(dynamicVertex) != firstIndexOffset,
+               "NO_OVERWRITE receives a nonoverlapping slice") ||
         !Check(device.InFlightResourceCount() >= 6, "Old generations and staging pinned"))
         return 1;
+    device.ActiveCommandList()->CopyBufferRegion(
+        secondVertexReadback.Get(), 0, NativeVertexResource(dynamicVertex),
+        NativeVertexOffset(dynamicVertex), vertexDesc.byteSize);
+
+    std::array<unsigned char, 48> changedDynamicVertexBytes = {};
+    std::memcpy(changedDynamicVertexBytes.data(), vertexBytes.data(), vertexDesc.byteSize);
+    std::memset(changedDynamicVertexBytes.data() + 4, 0x5A, 8);
 
     // A partial static write after binding must not modify the version
     // referenced by the earlier GPU readback or the first indexed draw.
@@ -290,6 +319,13 @@ int wmain()
         !Check(VerifyBytes(updatedReadback.Get(), updatedVertexBytes.data(),
                            vertexDesc.byteSize),
                "Partial static update matches new GPU allocation without corrupting old version") ||
+        !Check(VerifyBytes(firstVertexReadback.Get(), vertexBytes.data(), vertexDesc.byteSize),
+               "First pooled dynamic snapshot survives NO_OVERWRITE on WARP") ||
+        !Check(VerifyBytes(secondVertexReadback.Get(), changedDynamicVertexBytes.data(),
+                           vertexDesc.byteSize),
+               "Updated pooled dynamic slice contains the new bytes on WARP") ||
+        !Check(VerifyBytes(dynamicIndexReadback.Get(), indices.data(), indexDesc.byteSize),
+               "Shared-page index bytes are not corrupted by vertex updates") ||
         !Check(device.InFlightResourceCount() == 0,
                "GPU frame-fence retirement has released staging generations"))
     {
@@ -297,15 +333,30 @@ int wmain()
         return 1;
     }
 
-    // No cross-frame implicit resource reuse after resize/reset.
-    if (!Check(device.Resize(128, 96), "Resize while resources retired") ||
+    // A completed fence allows recycling the existing page without allocating
+    // another megabyte, including after a swap-chain resize.
+    auto recycled = CreateVertex(device.NativeDevice(), dynamicDesc);
+    if (!Check(recycled != nullptr, "Create post-fence dynamic geometry"))
+        return 1;
+    auto * recycledBytes = static_cast<unsigned char *>(
+        MapVertex(recycled, 0, 0, RENDER_MAP_DISCARD));
+    if (!Check(recycledBytes != nullptr, "Map recycled DISCARD range"))
+        return 1;
+    std::memcpy(recycledBytes, vertexBytes.data(), vertexDesc.byteSize);
+    if (!Check(UnmapVertex(recycled), "Commit recycled dynamic bytes") ||
+        !Check(device.Resize(128, 96), "Resize while resources retired") ||
         !Check(device.BeginFrame(clear), "Begin frame after resize") ||
-        !Check(device.EndFrame(0), "Submit empty resized frame") ||
+        !Check(BindVertex(device, recycled, 0, 12), "Rebind on recycled page") ||
+        !Check(NativeVertexResource(recycled) == firstGpu &&
+               NativeVertexOffset(recycled) == firstVertexOffset,
+               "Recycle the pooled upload page only after the submission fence") ||
+        !Check(device.EndFrame(0), "Submit resized frame with recycled geometry") ||
         !Check(device.WaitForIdle(), "Final fence"))
         return 1;
+    ReleaseVertex(recycled);
 
     device.Shutdown();
-    std::cout << "R01 PASS: native static/default and dynamic/upload resources, "
+    std::cout << "R01/R02 PASS: native static/default and pooled dynamic/upload resources, "
                  "mapped byte ranges, indexed IA views and WARP GPU readback\n";
     return 0;
 }
