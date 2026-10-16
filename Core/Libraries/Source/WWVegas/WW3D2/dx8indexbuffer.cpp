@@ -42,6 +42,9 @@
 #include "dx8wrapper.h"
 #include "dx8caps.h"
 #include "Renderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "Backend/DX12/DX12W3DSortingBridge.h"
+#endif
 #include "WWMath/sphere.h"
 #include "WWLib/thread.h"
 #include "WWDebug/wwmemlog.h"
@@ -395,7 +398,9 @@ DynamicIBAccessClass::DynamicIBAccessClass(unsigned short type_, unsigned short 
 void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
                                          unsigned short baseVertexIndex)
 {
-    Bind_Dynamic_Index_Buffer(access.Get_Render_Binding(), baseVertexIndex);
+    const RenderDynamicIndexBinding binding = access.Get_Render_Binding();
+    Bind_Dynamic_Index_Buffer(binding, baseVertexIndex);
+    DX12W3DSortingTrackIndexBinding(binding, baseVertexIndex);
 }
 #endif
 
@@ -403,6 +408,14 @@ void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
 void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
                                         unsigned short baseVertexIndex)
 {
+    RenderDynamicIndexBinding tracked;
+    tracked.legacyOwner = buffer;
+    if (buffer)
+    {
+        tracked.bufferType = buffer->Type();
+        tracked.indexCount = buffer->Get_Index_Count();
+    }
+    DX12W3DSortingTrackIndexBinding(tracked, baseVertexIndex);
     if (!buffer)
     {
         Bind_Index_Buffer(nullptr, 0);

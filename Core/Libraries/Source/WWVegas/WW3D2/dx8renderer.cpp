@@ -60,12 +60,237 @@
 #include "camera.h"
 #include "stripoptimizer.h"
 #include "meshgeometry.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "Backend/DX12/DX12W3DSortingBridge.h"
+#include <cstring>
+#endif
 
 /*
 ** Global Instance of the DX8MeshRender
 */
 DX8MeshRendererClass TheDX8MeshRenderer;
 #if defined(W3D_RENDER_BACKEND_DX12)
+// The cached state pins WW3D's CPU buffer/material/texture containers.
+// Deferred sorting nodes copy this via RenderStateStruct::operator=, so
+// a buffer cannot be destroyed before its triangles are replayed.
+namespace
+{
+    RenderStateStruct & NativeSortingState()
+    {
+        static RenderStateStruct state;
+        static bool initialized = false;
+        if (!initialized)
+        {
+            for (unsigned i = 0; i < MAX_VERTEX_STREAMS; ++i)
+                state.vertex_buffer_types[i] = BUFFER_TYPE_INVALID;
+            state.index_buffer_type = BUFFER_TYPE_INVALID;
+            state.vba_offset = state.vba_count = state.iba_offset = 0;
+            state.index_base_offset = 0;
+            std::memset(state.LightEnable, 0, sizeof(state.LightEnable));
+            std::memset(&state.world, 0, sizeof(state.world));
+            std::memset(&state.view, 0, sizeof(state.view));
+            for (unsigned i = 0; i < 4; ++i)
+            {
+                state.world.m[i][i] = 1.f;
+                state.view.m[i][i] = 1.f;
+            }
+            initialized = true;
+        }
+        return state;
+    }
+
+    void NativeSortingResetReferences()
+    {
+        RenderStateStruct & state = NativeSortingState();
+        for (unsigned i = 0; i < MAX_VERTEX_STREAMS; ++i)
+        {
+            if (state.vertex_buffers[i])
+                state.vertex_buffers[i]->Release_Engine_Ref();
+            REF_PTR_RELEASE(state.vertex_buffers[i]);
+            state.vertex_buffer_types[i] = BUFFER_TYPE_INVALID;
+        }
+        if (state.index_buffer)
+            state.index_buffer->Release_Engine_Ref();
+        REF_PTR_RELEASE(state.index_buffer);
+        state.index_buffer_type = BUFFER_TYPE_INVALID;
+        REF_PTR_RELEASE(state.material);
+        for (unsigned i = 0; i < MAX_TEXTURE_STAGES; ++i)
+            REF_PTR_RELEASE(state.Textures[i]);
+        state.vba_offset = state.vba_count = state.iba_offset = 0;
+        state.index_base_offset = 0;
+        state.shader.Reset();
+        std::memset(state.LightEnable, 0, sizeof(state.LightEnable));
+    }
+
+    RenderSortingMatrix ToSortingMatrix(const Matrix4x4 & matrix)
+    {
+        // DX8's To_D3DMATRIX converts Westwood's column-vector matrix
+        // into a D3DX row-vector matrix. Preserve this transpose for the
+        // existing sorting-depth and bounding-sphere calculations.
+        RenderSortingMatrix result = {};
+        for (unsigned r = 0; r < 4; ++r)
+            for (unsigned c = 0; c < 4; ++c)
+                result.m[r][c] = matrix[c][r];
+        return result;
+    }
+
+    Matrix4x4 FromSortingMatrix(const RenderSortingMatrix & matrix)
+    {
+        Matrix4x4 result(true);
+        for (unsigned r = 0; r < 4; ++r)
+            for (unsigned c = 0; c < 4; ++c)
+                result[r][c] = matrix.m[c][r];
+        return result;
+    }
+}
+
+void DX12W3DSortingTrackVertexBinding(const RenderDynamicVertexBinding & binding)
+{
+    RenderStateStruct & state = NativeSortingState();
+    VertexBufferClass * owner = const_cast<VertexBufferClass *>(
+        static_cast<const VertexBufferClass *>(binding.legacyOwner));
+    if (state.vertex_buffers[0])
+        state.vertex_buffers[0]->Release_Engine_Ref();
+    REF_PTR_SET(state.vertex_buffers[0], owner);
+    if (owner)
+        owner->Add_Engine_Ref();
+    state.vertex_buffer_types[0] = owner ? binding.bufferType : BUFFER_TYPE_INVALID;
+    state.vba_offset = owner ? binding.firstVertex : 0;
+    state.vba_count = owner ? binding.vertexCount : 0;
+}
+
+void DX12W3DSortingTrackIndexBinding(const RenderDynamicIndexBinding & binding,
+                                     unsigned short baseVertexIndex)
+{
+    RenderStateStruct & state = NativeSortingState();
+    IndexBufferClass * owner = const_cast<IndexBufferClass *>(
+        static_cast<const IndexBufferClass *>(binding.legacyOwner));
+    if (state.index_buffer)
+        state.index_buffer->Release_Engine_Ref();
+    REF_PTR_SET(state.index_buffer, owner);
+    if (owner)
+        owner->Add_Engine_Ref();
+    state.index_buffer_type = owner ? binding.bufferType : BUFFER_TYPE_INVALID;
+    state.iba_offset = owner ? binding.firstIndex : 0;
+    state.index_base_offset = owner ? baseVertexIndex : 0;
+}
+
+void Renderer::Capture_Sorting_State(RenderStateStruct & out)
+{
+    RenderStateStruct & state = NativeSortingState();
+    Matrix4x4 matrix(true);
+    Get_Transform(RENDER_TRANSFORM_WORLD, matrix);
+    state.world = ToSortingMatrix(matrix);
+    Get_Transform(RENDER_TRANSFORM_VIEW, matrix);
+    state.view = ToSortingMatrix(matrix);
+    state.index_base_offset = static_cast<unsigned short>(
+        DX12W3DSortingCurrentBaseVertexIndex());
+    // Sorting light environments are not yet native. Never advertise
+    // unknown or stale DX8 lights as though they were real DX12 lighting.
+    std::memset(state.LightEnable, 0, sizeof(state.LightEnable));
+    out = state; // retains every referenced W3D buffer/texture/material
+}
+
+void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & state)
+{
+    Set_Transform(RENDER_TRANSFORM_WORLD, FromSortingMatrix(state.world));
+    Set_Transform(RENDER_TRANSFORM_VIEW, FromSortingMatrix(state.view));
+    if (state.material && state.material->Get_Lighting())
+    {
+        // M03 will provide real native light permutations. The baseline
+        // unlit material must never dereference uninitialized light data.
+        static bool warned = false;
+        if (!warned)
+        {
+            OutputDebugStringA("[DX12 M01] sorted vertex lighting requires M03\n");
+            warned = true;
+        }
+    }
+}
+
+void Renderer::Restore_Sorting_State(const RenderStateStruct & original)
+{
+    // Keep source references alive while re-binding: the current tracked
+    // state may be the sole other reference to the buffer we replace.
+    RenderStateStruct state;
+    state = original;
+    Set_Shader(state.shader);
+    Set_Material(state.material);
+    const unsigned stageCount = Get_Capabilities().maxTexturesPerPass;
+    for (unsigned i = 0; i < MAX_TEXTURE_STAGES; ++i)
+    {
+        if (i < stageCount)
+            Set_Texture(i, state.Textures[i]);
+    }
+    Apply_Sorting_Transforms_And_Lights(state);
+
+    const VertexBufferClass * vertex = state.vertex_buffers[0];
+    if (!vertex || state.vertex_buffer_types[0] == BUFFER_TYPE_INVALID)
+        Bind_Legacy_Vertex_Buffer(nullptr);
+    else if (state.vertex_buffer_types[0] == BUFFER_TYPE_DX8 ||
+             state.vertex_buffer_types[0] == BUFFER_TYPE_SORTING)
+        Bind_Legacy_Vertex_Buffer(vertex);
+    else
+    {
+        RenderDynamicVertexBinding binding;
+        binding.legacyOwner = vertex;
+        binding.bufferType = state.vertex_buffer_types[0];
+        binding.firstVertex = state.vba_offset;
+        binding.vertexCount = state.vba_count;
+        binding.legacyVertexFormat = vertex->FVF_Info().Get_FVF();
+        binding.stride = vertex->FVF_Info().Get_FVF_Size();
+        if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
+            binding.resource = static_cast<const DX8VertexBufferClass *>(vertex)->
+                Get_Render_Vertex_Buffer();
+        else if (binding.bufferType == BUFFER_TYPE_DYNAMIC_SORTING)
+        {
+            const auto * array = static_cast<const SortingVertexBufferClass *>(vertex)->
+                Get_Sorting_Vertex_Array();
+            binding.cpuData = array ? array + state.vba_offset : nullptr;
+        }
+        Bind_Dynamic_Vertex_Buffer(binding);
+        DX12W3DSortingTrackVertexBinding(binding);
+    }
+
+    const IndexBufferClass * index = state.index_buffer;
+    if (!index || state.index_buffer_type == BUFFER_TYPE_INVALID)
+        Bind_Legacy_Index_Buffer(nullptr, 0);
+    else if (state.index_buffer_type == BUFFER_TYPE_DX8 ||
+             state.index_buffer_type == BUFFER_TYPE_SORTING)
+        Bind_Legacy_Index_Buffer(index, state.index_base_offset);
+    else
+    {
+        RenderDynamicIndexBinding binding;
+        binding.legacyOwner = index;
+        binding.bufferType = state.index_buffer_type;
+        binding.firstIndex = state.iba_offset;
+        binding.indexCount = index->Get_Index_Count() - state.iba_offset;
+        if (binding.bufferType == BUFFER_TYPE_DYNAMIC_DX8)
+            binding.resource = static_cast<const DX8IndexBufferClass *>(index)->
+                Get_Render_Index_Buffer();
+        else if (binding.bufferType == BUFFER_TYPE_DYNAMIC_SORTING)
+        {
+            const auto * array = static_cast<const SortingIndexBufferClass *>(index)->
+                Get_Sorting_Index_Array();
+            binding.cpuData = array ? array + state.iba_offset : nullptr;
+        }
+        Bind_Dynamic_Index_Buffer(binding, state.index_base_offset);
+        DX12W3DSortingTrackIndexBinding(binding, state.index_base_offset);
+    }
+    // W3D's index_base_offset is a vertex-base offset. Set this after
+    // IA rebinding because that operation also resets the native base.
+    Set_Index_Buffer_Index_Offset(state.index_base_offset);
+}
+
+void Renderer::Release_Sorting_State()
+{
+    NativeSortingResetReferences();
+    // An in-flight R02 upload and its PSO/textures remain owned by the
+    // submitted DX12 frame fence; the CPU pointers may now be released.
+    Bind_Legacy_Index_Buffer(nullptr, 0);
+    Bind_Legacy_Vertex_Buffer(nullptr);
+}
+
 // The queue/layout manager is shared with DX8, but its dispatch is now
 // backend-neutral. GPU resource creation and authoritative draws go through
 // the exclusive DX12 Renderer on the game's own primary HWND.
@@ -91,12 +316,14 @@ void Renderer::Clear_Pending_Mesh_Deletes()
 void Renderer::Invalidate_Mesh_Cache()
 {
     TheDX8MeshRenderer.Invalidate();
+    NativeSortingResetReferences();
 }
 
 // ShaderClass is the original W3D bitfield, not a D3D8 shader object.
 // Translate only the portable PSO state at the renderer contract boundary.
 void Renderer::Set_Shader(const ShaderClass & shader)
 {
+    NativeSortingState().shader = shader;
     RenderBlendState state;
     switch (shader.Get_Src_Blend_Func())
     {
@@ -131,6 +358,8 @@ void Renderer::Set_Shader(const ShaderClass & shader)
 // DX12Backend.cpp does not import legacy W3D objects or D3D8 types.
 void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
 {
+    if (stage < MAX_TEXTURE_STAGES)
+        REF_PTR_SET(NativeSortingState().Textures[stage], texture);
     Bind_Texture(stage, texture ? texture->Peek_Render_Texture() : nullptr);
 }
 
@@ -138,6 +367,7 @@ void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
 // alpha overrides) for the native unlit shader. Full lighting is M03.
 void Renderer::Set_Material(const VertexMaterialClass * material)
 {
+    REF_PTR_SET(NativeSortingState().material, const_cast<VertexMaterialClass *>(material));
     RenderVertexMaterialDescription description;
     if (material)
     {

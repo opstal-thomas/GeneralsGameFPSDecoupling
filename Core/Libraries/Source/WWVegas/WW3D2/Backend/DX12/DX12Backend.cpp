@@ -13,6 +13,7 @@
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WW3D2/Backend/DX12/DX12W3DNativeDraw.h"
+#include "WW3D2/Backend/DX12/DX12W3DSortingBridge.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
@@ -414,24 +415,11 @@ void Renderer::Draw_Triangle_Strip(unsigned short startIndex, unsigned short pri
     SubmitGameTriangles(true, startIndex, primitiveCount, minVertexIndex, vertexCount);
 }
 
-void Renderer::Capture_Sorting_State(RenderStateStruct & state)
+unsigned DX12W3DSortingCurrentBaseVertexIndex()
 {
-    ReportPending("Renderer::Capture_Sorting_State");
-}
-
-void Renderer::Restore_Sorting_State(const RenderStateStruct & state)
-{
-    ReportPending("Renderer::Restore_Sorting_State");
-}
-
-void Renderer::Release_Sorting_State()
-{
-    ReportPending("Renderer::Release_Sorting_State");
-}
-
-void Renderer::Apply_Sorting_Transforms_And_Lights(RenderStateStruct & render_state)
-{
-    ReportPending("Renderer::Apply_Sorting_Transforms_And_Lights");
+    return ready && primaryWindow.IsSceneOpen() &&
+        renderThread == GetCurrentThreadId() ?
+        primaryWindow.Presentation().BoundBaseVertexIndex() : 0;
 }
 
 RenderSortingMatrix Renderer::Multiply_Sorting_World_View( const RenderSortingMatrix & world, const RenderSortingMatrix & view)

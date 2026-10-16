@@ -44,6 +44,9 @@
 #include "dx8fvf.h"
 #include "dx8caps.h"
 #include "Renderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "Backend/DX12/DX12W3DSortingBridge.h"
+#endif
 #include "WWLib/thread.h"
 #include "WWDebug/wwmemlog.h"
 #include <d3dx8core.h>
@@ -732,7 +735,9 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 {
     // Same path as sorting/strip/particle callers already using the neutral
     // binding. The backing dynamic W3D handle uses R02's fence-safe page ring.
-    Bind_Dynamic_Vertex_Buffer(access.Get_Render_Binding());
+    const RenderDynamicVertexBinding binding = access.Get_Render_Binding();
+    Bind_Dynamic_Vertex_Buffer(binding);
+    DX12W3DSortingTrackVertexBinding(binding);
 }
 #endif
 
@@ -740,6 +745,16 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 #if defined(W3D_RENDER_BACKEND_DX12)
 void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)
 {
+    RenderDynamicVertexBinding tracked;
+    tracked.legacyOwner = buffer;
+    if (buffer)
+    {
+        tracked.bufferType = buffer->Type();
+        tracked.vertexCount = buffer->Get_Vertex_Count();
+        tracked.legacyVertexFormat = buffer->FVF_Info().Get_FVF();
+        tracked.stride = buffer->FVF_Info().Get_FVF_Size();
+    }
+    DX12W3DSortingTrackVertexBinding(tracked);
     if (!buffer)
     {
         Bind_Vertex_Buffer(nullptr, 0, 0);

@@ -159,8 +159,8 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertNotIn(symbol, backend)
         self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Vertex_Buffer")', backend)
         self.assertNotIn('ReportPending("Renderer::Bind_Dynamic_Index_Buffer")', backend)
-        self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access.Get_Render_Binding()", sorting)
-        self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access.Get_Render_Binding()", sorting)
+        self.assertIn("Bind_Dynamic_Index_Buffer(dyn_ib_access,0)", sorting)
+        self.assertIn("Bind_Dynamic_Vertex_Buffer(dyn_vb_access)", sorting)
 
     def test_r02_dynamic_line_and_mesh_producers_use_selected_renderer(self):
         # Segment ribbons, ground marks and particle-like dynamic meshes
@@ -362,6 +362,41 @@ class R01GeometryBuffers(unittest.TestCase):
         # Raw D3D8 render-state overrides are confined to the DX8 build:
         # M03 will implement their native depth-bias/alpha semantics.
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", mesh)
+
+    def test_m01_deferred_sorting_state_survives_native_rebinding(self):
+        mesh = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
+        vertex = (WW3D / "dx8vertexbuffer.cpp").read_text(encoding="utf-8")
+        index = (WW3D / "dx8indexbuffer.cpp").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        sorting = (WW3D / "sortingrenderer.cpp").read_text(encoding="utf-8")
+        header = (DX12 / "DX12W3DSortingBridge.h").read_text(encoding="utf-8")
+        for name in ("Capture_Sorting_State", "Restore_Sorting_State",
+                     "Release_Sorting_State", "Apply_Sorting_Transforms_And_Lights"):
+            self.assertIn("Renderer::" + name + "(", mesh)
+            self.assertNotIn("Renderer::" + name + "(", backend)
+        for token in ("NativeSortingState()", "out = state;",
+                      "state.index_base_offset", "ToSortingMatrix(", "FromSortingMatrix(",
+                      "state.vba_offset", "state.iba_offset",
+                      "state.vertex_buffer_types[0]", "state.index_buffer_type",
+                      "REF_PTR_SET(state.vertex_buffers[0], owner)",
+                      "REF_PTR_SET(state.index_buffer, owner)",
+                      "REF_PTR_SET(NativeSortingState().material",
+                      "REF_PTR_SET(NativeSortingState().Textures",
+                      "Get_Transform(RENDER_TRANSFORM_WORLD",
+                      "Get_Transform(RENDER_TRANSFORM_VIEW",
+                      "Set_Index_Buffer_Index_Offset(state.index_base_offset)"):
+            self.assertIn(token, mesh)
+        self.assertIn("DX12W3DSortingTrackVertexBinding(binding);", vertex)
+        self.assertIn("DX12W3DSortingTrackIndexBinding(binding, baseVertexIndex);", index)
+        self.assertIn("DX12W3DSortingCurrentBaseVertexIndex()", header)
+        self.assertIn("DX12W3DSortingCurrentBaseVertexIndex()", backend)
+        self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(dyn_ib_access,0)", sorting)
+        self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(dyn_vb_access)", sorting)
+        self.assertNotIn("ReportPending(\"Renderer::Multiply_Sorting_World_View\")", backend)
+        self.assertNotIn("ReportPending(\"Renderer::Transform_Sorting_Center\")", backend)
+        for token in ("result.m[row][column] += world.m[row][inner] * view.m[inner][column]",
+                      "center.X * m.m[0][0]", "center.Z * m.m[2][2]"):
+            self.assertIn(token, backend)
 
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
