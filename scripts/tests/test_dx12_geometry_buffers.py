@@ -72,6 +72,24 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("state.retiredResources.emplace_back(", presentation)
         self.assertIn("SetBoundBaseVertexIndex(", presentation)
 
+    def test_r02_pooled_dynamic_uploads_and_fence_recycling(self):
+        geometry = (DX12 / "DX12W3DGeometryBuffers.cpp").read_text(encoding="utf-8")
+        presentation = (DX12 / "DX12PresentationDevice.cpp").read_text(encoding="utf-8")
+        header = (DX12 / "DX12PresentationDevice.h").read_text(encoding="utf-8")
+        for token in ("struct UploadPage", "ReserveUpload(", "UploadPageBytes",
+                      "page.capacity - page.cursor", "page.retireFence > completed",
+                      "page.owner.Get() != device.NativeDevice()",
+                      "nativeOffset + offset", "RetainFrameResource(native.Get())",
+                      "RENDER_MAP_DISCARD", "RENDER_MAP_NO_OVERWRITE"):
+            self.assertIn(token, geometry)
+        for token in ("CompletedFenceValue()", "LastSubmittedFenceValue()"):
+            self.assertIn(token, geometry)
+            self.assertIn(token, presentation)
+            self.assertIn(token, header)
+        self.assertIn("GetCompletedValue()", presentation)
+        self.assertIn("const D3D12_RANGE written = {nativeOffset,", geometry)
+        self.assertNotIn("newNative->Map(", geometry)
+
     def test_old_w3d_buffer_classes_use_selected_renderer(self):
         for filename in ("dx8vertexbuffer.cpp", "dx8indexbuffer.cpp"):
             source = (WW3D / filename).read_text(encoding="utf-8")
