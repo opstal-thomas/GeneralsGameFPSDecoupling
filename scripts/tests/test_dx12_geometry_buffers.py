@@ -195,6 +195,66 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertLess(section.index("DynamicIBAccessClass::_Deinit();"),
                         section.index("Renderer::Shutdown();"))
 
+    def test_r02_sorting_terrain_and_water_source_coverage(self):
+        vertex = (WW3D / "dx8vertexbuffer.cpp").read_text(encoding="utf-8")
+        index = (WW3D / "dx8indexbuffer.cpp").read_text(encoding="utf-8")
+        vertex_header = (WW3D / "dx8vertexbuffer.h").read_text(encoding="utf-8")
+        index_header = (WW3D / "dx8indexbuffer.h").read_text(encoding="utf-8")
+        backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
+        geometry = (DX12 / "DX12W3DGeometryBuffers.cpp").read_text(encoding="utf-8")
+        geometry_header = (DX12 / "DX12W3DGeometryBuffers.h").read_text(encoding="utf-8")
+        neutral = (WW3D / "Renderer.h").read_text(encoding="utf-8")
+        for token in ("const void * cpuData", "legacyVertexFormat"):
+            self.assertIn(token, neutral)
+        for token in ("Get_Sorting_Vertex_Array() + VertexBufferOffset",
+                      "binding.legacyVertexFormat = FVFInfo.Get_FVF()",
+                      "Renderer::Bind_Legacy_Vertex_Buffer("):
+            self.assertIn(token, vertex)
+        for token in ("Get_Sorting_Index_Array() + IndexBufferOffset",
+                      "Renderer::Bind_Legacy_Index_Buffer("):
+            self.assertIn(token, index)
+        self.assertIn("Get_Sorting_Vertex_Array()", vertex_header)
+        self.assertIn("Get_Sorting_Index_Array()", index_header)
+        for token in ("BindTransientVertex(", "BindTransientIndex(",
+                      "UploadTransientCPU(", "RetainFrameResource(resource)",
+                      "D3D12_RESOURCE_STATE_GENERIC_READ", "IASetVertexBuffers(",
+                      "IASetIndexBuffer(", "SetBoundBaseVertexIndex(baseVertexIndex)"):
+            self.assertIn(token, geometry)
+        for token in ("BindTransientVertex(", "BindTransientIndex(",
+                      "TransientGeometrySnapshot"):
+            self.assertIn(token, geometry_header)
+        for token in ("binding.cpuData", "binding.legacyVertexFormat",
+                      "DX12W3DGeometryBuffers::BindTransientVertex(",
+                      "DX12W3DGeometryBuffers::BindTransientIndex(",
+                      "SetBoundBaseVertexIndex(offset)"):
+            self.assertIn(token, backend)
+        for op in ("Bind_Legacy_Vertex_Buffer", "Bind_Legacy_Index_Buffer",
+                   "Set_Index_Buffer_Index_Offset", "Unbind_Sorting_Geometry"):
+            self.assertNotIn('ReportPending("Renderer::' + op, backend)
+        terrain = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp"
+                   ).read_text(encoding="utf-8")
+        water = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/Water/W3DWaterTracks.cpp"
+                 ).read_text(encoding="utf-8")
+        particles = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainParticles.cpp"
+                     ).read_text(encoding="utf-8")
+        for token in ("Renderer::Bind_Legacy_Index_Buffer(m_indexBuffer,0)",
+                      "Renderer::Bind_Legacy_Vertex_Buffer(m_vertexBuffer)",
+                      "Renderer::Set_Index_Buffer_Index_Offset(trackStartIndex)"):
+            self.assertIn(token, terrain)
+        for token in ("RENDER_MAP_NO_OVERWRITE", "RENDER_MAP_DISCARD",
+                      "Renderer::Bind_Legacy_Vertex_Buffer(m_vertexBuffer)",
+                      "Renderer::Bind_Legacy_Index_Buffer(TheWaterTracksRenderSystem->m_indexBuffer,batchStart)"):
+            self.assertIn(token, water)
+        self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(", particles)
+        self.assertIn("Renderer::Bind_Dynamic_Index_Buffer(", particles)
+        self.assertIn("Renderer::Draw_Triangle_Strip(", water)
+        smoke = (PRESENTATION / "DX12GeometryBufferSmoke.cpp").read_text(encoding="utf-8")
+        for token in ("Bind first borrowed sorting vertex slice",
+                      "Bind first borrowed R16 sorting index slice",
+                      "Snapshot rewritten CPU sorting vertices",
+                      "Borrowed CPU sorting data remains immutable on WARP after owner rewrite"):
+            self.assertIn(token, smoke)
+
     def test_ci_warp_real_gpu_readback(self):
         cmake = (PRESENTATION / "CMakeLists.txt").read_text(encoding="utf-8")
         game = (WW3D / "CMakeLists.txt").read_text(encoding="utf-8")

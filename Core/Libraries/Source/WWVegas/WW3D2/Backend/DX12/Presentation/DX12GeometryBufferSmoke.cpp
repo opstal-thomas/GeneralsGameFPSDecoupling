@@ -466,6 +466,94 @@ int wmain()
         !Check(device.BeginFrame(clear) && device.EndFrame(0) && device.WaitForIdle(),
                "Recreated device submits a clean frame"))
         return 1;
+
+    // The W3D CPU sorting pool is borrowed: the GPU must retain the original
+    // vertex/index bytes even after their owners rewrite the same arrays.
+    std::array<unsigned char, 88> sortingVertices = {};
+    sortingVertices.fill(0x36);
+    const auto originalSortingVertices = sortingVertices;
+    const std::array<std::uint16_t, 6> originalSortingIndices = {0, 1, 0, 1, 0, 1};
+    std::array<std::uint16_t, 6> sortingIndices = originalSortingIndices;
+    DX12W3DGeometryBuffers::TransientGeometrySnapshot firstSortVertex, secondSortVertex;
+    DX12W3DGeometryBuffers::TransientGeometrySnapshot firstSortIndex, secondSortIndex;
+    if (!Check(device.BeginFrame(clear), "Begin CPU sorting R02 frame") ||
+        !Check(!BindTransientVertex(device, sortingVertices.data(),
+                                   static_cast<unsigned>(sortingVertices.size()),
+                                   40, 0x0252),
+               "Reject sorting vertex stride smaller than decoded W3D FVF") ||
+        !Check(!BindTransientIndex(device, sortingIndices.data(), 5, 0),
+               "Reject half-element CPU sorting index range") ||
+        !Check(BindTransientVertex(device, sortingVertices.data(),
+                                  static_cast<unsigned>(sortingVertices.size()),
+                                  44, 0x0252, &firstSortVertex),
+               "Bind first borrowed sorting vertex slice") ||
+        !Check(BindTransientIndex(device, sortingIndices.data(),
+                                 static_cast<unsigned>(sizeof(sortingIndices)),
+                                 4, &firstSortIndex),
+               "Bind first borrowed R16 sorting index slice"))
+        return 1;
+    sortingVertices.fill(0xC4);
+    sortingIndices.fill(1);
+    if (!Check(BindTransientVertex(device, sortingVertices.data(),
+                                  static_cast<unsigned>(sortingVertices.size()),
+                                  44, 0x0252, &secondSortVertex),
+               "Snapshot rewritten CPU sorting vertices") ||
+        !Check(BindTransientIndex(device, sortingIndices.data(),
+                                 static_cast<unsigned>(sizeof(sortingIndices)),
+                                 7, &secondSortIndex),
+               "Snapshot rewritten CPU sorting indices") ||
+        !Check(device.BoundBaseVertexIndex() == 7,
+               "R02 sorting index binding preserves DX8 base vertex") ||
+        !Check(firstSortVertex.resource == secondSortVertex.resource &&
+               firstSortVertex.resource == firstSortIndex.resource &&
+               firstSortIndex.resource == secondSortIndex.resource &&
+               firstSortVertex.offset != secondSortVertex.offset &&
+               firstSortIndex.offset != secondSortIndex.offset &&
+               (firstSortVertex.offset % 16u) == 0u &&
+               (firstSortIndex.offset % 16u) == 0u &&
+               firstSortVertex.bytes == sortingVertices.size() &&
+               firstSortIndex.bytes == sizeof(sortingIndices),
+               "CPU sorting vertices/indices share one immutable aligned upload page") ||
+        !Check(HeapType(firstSortVertex.resource, D3D12_HEAP_TYPE_UPLOAD),
+               "CPU sorting data resides in a real GPU upload page"))
+        return 1;
+
+    ComPtr<ID3D12Resource> sortingReadback0, sortingReadback1;
+    ComPtr<ID3D12Resource> sortingIndexReadback0, sortingIndexReadback1;
+    if (!Check(MakeReadback(device.NativeDevice(),
+                            static_cast<unsigned>(sortingVertices.size()), sortingReadback0) &&
+               MakeReadback(device.NativeDevice(),
+                            static_cast<unsigned>(sortingVertices.size()), sortingReadback1) &&
+               MakeReadback(device.NativeDevice(),
+                            static_cast<unsigned>(sizeof(sortingIndices)), sortingIndexReadback0) &&
+               MakeReadback(device.NativeDevice(),
+                            static_cast<unsigned>(sizeof(sortingIndices)), sortingIndexReadback1),
+               "Allocate native sorting GPU readbacks"))
+        return 1;
+    device.ActiveCommandList()->CopyBufferRegion(
+        sortingReadback0.Get(), 0, firstSortVertex.resource,
+        firstSortVertex.offset, firstSortVertex.bytes);
+    device.ActiveCommandList()->CopyBufferRegion(
+        sortingReadback1.Get(), 0, secondSortVertex.resource,
+        secondSortVertex.offset, secondSortVertex.bytes);
+    device.ActiveCommandList()->CopyBufferRegion(
+        sortingIndexReadback0.Get(), 0, firstSortIndex.resource,
+        firstSortIndex.offset, firstSortIndex.bytes);
+    device.ActiveCommandList()->CopyBufferRegion(
+        sortingIndexReadback1.Get(), 0, secondSortIndex.resource,
+        secondSortIndex.offset, secondSortIndex.bytes);
+    if (!Check(device.EndFrame(0), "Submit native CPU sorting snapshots") ||
+        !Check(device.WaitForIdle(), "Fence native CPU sorting GPU readbacks") ||
+        !Check(VerifyBytes(sortingReadback0.Get(), originalSortingVertices.data(),
+                           static_cast<unsigned>(originalSortingVertices.size())) &&
+               VerifyBytes(sortingReadback1.Get(), sortingVertices.data(),
+                           static_cast<unsigned>(sortingVertices.size())) &&
+               VerifyBytes(sortingIndexReadback0.Get(), originalSortingIndices.data(),
+                           static_cast<unsigned>(sizeof(originalSortingIndices))) &&
+               VerifyBytes(sortingIndexReadback1.Get(), sortingIndices.data(),
+                           static_cast<unsigned>(sizeof(sortingIndices))),
+               "Borrowed CPU sorting data remains immutable on WARP after owner rewrite"))
+        return 1;
     device.Shutdown();
     std::cout << "R01/R02 PASS: native static/default and pooled dynamic/upload resources, "
                  "mapped byte ranges, indexed IA views and WARP GPU readback\n";
