@@ -248,9 +248,9 @@ int wmain()
     if (!Check(targets.EndFrame(frame), "Close R07 target recording") ||
         !Check(frame.EndFrame(0), "Execute GPU frame and present") ||
         !Check(frame.WaitForIdle(), "Wait WARP fence") ||
-        !Check(Pixel(offscreenPixels, {51, 102, 153, 255}),
+        !Check(Pixel(offscreenPixels, {153, 102, 51, 255}),
                "Offscreen RTV clear matches GPU BGRA readback") ||
-        !Check(Pixel(multisamplePixels, {204, 26, 51, 255}),
+        !Check(Pixel(multisamplePixels, {51, 26, 204, 255}),
                "MSAA resolve color matches WARP GPU readback") ||
         !Check(frame.InFlightResourceCount() == 0 &&
                frame.InFlightObjectCount() == 0,
