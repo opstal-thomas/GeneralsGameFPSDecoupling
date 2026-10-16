@@ -47,7 +47,10 @@ class DX12BackendSelectionTests(unittest.TestCase):
             "void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)",
             "void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)",
             "void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer, unsigned short baseVertexIndex)",
+            "void Renderer::Set_Mesh_Camera(CameraClass * camera)",
             "void Renderer::Flush_Mesh_Batches()",
+            "void Renderer::Clear_Pending_Mesh_Deletes()",
+            "void Renderer::Invalidate_Mesh_Cache()",
             "void Renderer::Set_Shader(const ShaderClass & shader)",
             "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)",
         }

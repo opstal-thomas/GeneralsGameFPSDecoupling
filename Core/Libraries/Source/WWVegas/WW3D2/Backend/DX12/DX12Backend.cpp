@@ -692,21 +692,6 @@ RenderCapabilities Renderer::Get_Capabilities()
     return caps;
 }
 
-void Renderer::Set_Mesh_Camera(CameraClass * camera)
-{
-    ReportPending("Renderer::Set_Mesh_Camera");
-}
-
-void Renderer::Clear_Pending_Mesh_Deletes()
-{
-    ReportPending("Renderer::Clear_Pending_Mesh_Deletes");
-}
-
-void Renderer::Invalidate_Mesh_Cache()
-{
-    ReportPending("Renderer::Invalidate_Mesh_Cache");
-}
-
 void Renderer::Release_Texture_Resources()
 {
     textureStages.Clear();

@@ -69,11 +69,28 @@ DX8MeshRendererClass TheDX8MeshRenderer;
 // The queue/layout manager is shared with DX8, but its dispatch is now
 // backend-neutral. GPU resource creation and authoritative draws go through
 // the exclusive DX12 Renderer on the game's own primary HWND.
+// M01: camera, geometry registration and CPU mesh-batch lifetime are still
+// managed by WW3D's existing CPU queue. Only the GPU submission has changed.
+void Renderer::Set_Mesh_Camera(CameraClass * camera)
+{
+    TheDX8MeshRenderer.Set_Camera(camera);
+}
+
 void Renderer::Flush_Mesh_Batches()
 {
     if (!Has_Active_Device()) return;
     TheDX8MeshRenderer.Init();
     TheDX8MeshRenderer.Flush();
+}
+
+void Renderer::Clear_Pending_Mesh_Deletes()
+{
+    TheDX8MeshRenderer.Clear_Pending_Delete_Lists();
+}
+
+void Renderer::Invalidate_Mesh_Cache()
+{
+    TheDX8MeshRenderer.Invalidate();
 }
 
 // ShaderClass is the original W3D bitfield, not a D3D8 shader object.

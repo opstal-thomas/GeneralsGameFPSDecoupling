@@ -325,7 +325,13 @@ class R01GeometryBuffers(unittest.TestCase):
         polygon = (WW3D / "dx8polygonrenderer.h").read_text(encoding="utf-8")
         backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
         self.assertIn("void Renderer::Flush_Mesh_Batches()", mesh)
+        self.assertIn("TheDX8MeshRenderer.Set_Camera(camera);", mesh)
         self.assertIn("TheDX8MeshRenderer.Flush();", mesh)
+        self.assertIn("TheDX8MeshRenderer.Clear_Pending_Delete_Lists();", mesh)
+        self.assertIn("TheDX8MeshRenderer.Invalidate();", mesh)
+        for name in ("Set_Mesh_Camera", "Flush_Mesh_Batches",
+                     "Clear_Pending_Mesh_Deletes", "Invalidate_Mesh_Cache"):
+            self.assertNotIn('ReportPending("Renderer::' + name, backend)
         self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(vb);", mesh)
         self.assertNotIn("Renderer::Bind_Legacy_Vertex_Buffer(vb);", mesh)
         # A guarded DX8-only statement must not leave a bare if with no
