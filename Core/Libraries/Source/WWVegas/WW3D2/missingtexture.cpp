@@ -68,7 +68,7 @@ IDirect3DSurface8* MissingTexture::_Create_Missing_Surface()
             row[x] = ((x / 16 + y / 16) & 1) ? 0x7FFF00FFu : 0x7F200020u;
     }
     Renderer::Unlock_Surface(native);
-    return reinterpret_cast<IDirect3DSurface8 *>(native);
+    return reinterpret_cast<decltype(MissingTexture::_Create_Missing_Surface())>(native);
 #else
 	IDirect3DSurface8 *texture_surface = nullptr;
 	DX8_ErrorCode(_MissingTexture->GetSurfaceLevel(0, &texture_surface));
@@ -124,7 +124,7 @@ void MissingTexture::_Init()
         Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(native));
         return;
     }
-    _MissingTexture = reinterpret_cast<IDirect3DTexture8 *>(native);
+    _MissingTexture = reinterpret_cast<decltype(_MissingTexture)>(native);
 #else
 
 	IDirect3DTexture8* tex=DX8Wrapper::_Create_DX8_Texture
