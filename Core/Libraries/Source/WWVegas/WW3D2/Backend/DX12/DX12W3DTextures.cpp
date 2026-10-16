@@ -23,6 +23,7 @@ using Microsoft::WRL::ComPtr;
 namespace
 {
     thread_local std::string lastError;
+    std::atomic<std::uint64_t> nextTextureIdentity{1};
 
     bool Fail(const char * text)
     {
@@ -221,6 +222,9 @@ namespace
     {
         std::atomic<unsigned> refs{1};
         std::mutex mutex;
+        std::uint64_t identity = 0;
+        std::uint64_t contentRevision = 1;
+        std::uint64_t gpuGeneration = 0;
         Kind kind = Kind::Texture2D;
         unsigned width = 0, height = 0, depth = 1, mipLevels = 0;
         unsigned format = 0, cpuBytes = 0, gpuBlockBytes = 0;
@@ -283,6 +287,7 @@ namespace
                 return Fail("Unmap without a locked texture mip");
             l.mapped = false;
             dirty = true;
+            ++contentRevision;
             return true;
         }
 
@@ -414,6 +419,7 @@ namespace
 
                 gpu = std::move(next);
                 dirty = false;
+                ++gpuGeneration;
             }
 
             D3D12_RESOURCE_STATES tracked = D3D12_RESOURCE_STATE_COMMON;
@@ -466,6 +472,7 @@ namespace
             Fail("Allocating backend texture record failed");
             return nullptr;
         }
+        result->identity = nextTextureIdentity.fetch_add(1, std::memory_order_relaxed);
         result->owner = device;
         result->kind = kind;
         result->format = format;
@@ -668,6 +675,39 @@ namespace DX12W3DTextures
         for (std::size_t i = 0; i < src->levels.size(); ++i)
             dst->levels[i].bytes = src->levels[i].bytes;
         dst->dirty = true;
+        ++dst->contentRevision;
+        return true;
+    }
+
+    bool Snapshot(RenderTextureHandle h, ViewSnapshot & view)
+    {
+        lastError.clear();
+        view = ViewSnapshot();
+        if (!h) return Fail("Cannot snapshot null DX12 texture");
+        NativeTexture & t = *Object(h);
+        std::lock_guard<std::mutex> lock(t.mutex);
+        view.resource = t.gpu;
+        view.identity = t.identity;
+        view.contentRevision = t.contentRevision;
+        view.gpuGeneration = t.gpuGeneration;
+        view.dirty = t.dirty;
+        view.descriptor.Format = t.dxgi;
+        view.descriptor.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        switch (t.kind)
+        {
+            case Kind::Texture2D:
+                view.descriptor.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                view.descriptor.Texture2D.MipLevels = t.mipLevels;
+                break;
+            case Kind::Cube:
+                view.descriptor.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                view.descriptor.TextureCube.MipLevels = t.mipLevels;
+                break;
+            case Kind::Volume:
+                view.descriptor.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                view.descriptor.Texture3D.MipLevels = t.mipLevels;
+                break;
+        }
         return true;
     }
 
