@@ -30,11 +30,26 @@ class R01GeometryBuffers(unittest.TestCase):
             ("Bind_Dynamic_Index_Buffer", "BindIndex"),
         ):
             match = re.search(
-                rf"Renderer::{method}\([^{{]*\)\s*\{{(.*?)\}}", code, re.S
+                rf"Renderer::{method}\([^{{]*\)\s*\{{", code, re.S
             )
             self.assertIsNotNone(match, method)
-            self.assertIn(native, match.group(1), method)
-            self.assertNotIn("ReportPending(", match.group(1), method)
+            # Parse the complete C++ method body, including nested guard
+            # blocks: R02 rejects CPU-only sorting bindings explicitly.
+            opening = code.index("{", match.start())
+            depth = 0
+            closing = None
+            for pos in range(opening, len(code)):
+                if code[pos] == "{":
+                    depth += 1
+                elif code[pos] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        closing = pos
+                        break
+            self.assertIsNotNone(closing, method)
+            body = code[opening + 1:closing]
+            self.assertIn(native, body, method)
+            self.assertNotIn("ReportPending(", body, method)
         self.assertNotIn("Direct3DCreate8", code)
         self.assertNotRegex(code, r"(?m)^\s*DX8Wrapper::")
 
