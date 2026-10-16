@@ -144,6 +144,88 @@ int wmain()
                "Real client size reported"))
         return 1;
 
+    // R04: exercise the public Renderer texture APIs on the game-owned
+    // HWND, not only the private DX12W3DTextures WARP test.
+    RenderTexture2DDescription texDesc;
+    texDesc.width = texDesc.height = 4;
+    texDesc.pixelFormat = 2; // W3D A8R8G8B8
+    texDesc.mipLevels = 3;
+    const auto texture = Renderer::Create_Texture_2D(texDesc);
+    const auto copiedTexture = Renderer::Create_Texture_2D(texDesc);
+    if (!Check(texture && copiedTexture,
+               "R04 native 2D texture handles created through Renderer") ||
+        !Check(Renderer::Get_Texture_Mip_Count(
+                   reinterpret_cast<RenderTextureHandle>(texture)) == 3,
+               "Public Renderer reports native texture mip count"))
+        return 1;
+    RenderSurfaceMap textureMap;
+    Renderer::Map_Texture_2D(texture, 0, textureMap);
+    if (!Check(textureMap.data && textureMap.rowPitch == 16,
+               "Renderer maps native DDS/TGA pixel staging rows"))
+        return 1;
+    for (unsigned y = 0; y < 4; ++y)
+        std::memset(static_cast<unsigned char *>(textureMap.data) + y * textureMap.rowPitch,
+                    0x56, 16);
+    Renderer::Unmap_Texture_2D(texture, 0);
+    Renderer::Update_Texture(reinterpret_cast<RenderTextureHandle>(texture),
+                             reinterpret_cast<RenderTextureHandle>(copiedTexture));
+
+    RenderTextureLevelDescription texLevel;
+    Renderer::Describe_Texture_Level_2D(copiedTexture, 2, texLevel);
+    if (!Check(texLevel.width == 1 && texLevel.height == 1,
+               "Texture metadata survives native 2D update") ||
+        !Check(Renderer::Supports_Texture_Format(20),
+               "Native Renderer negotiates BC1/DXT1 compression"))
+        return 1;
+
+    RenderSurfaceDescription surfaceDesc;
+    surfaceDesc.width = surfaceDesc.height = 4;
+    surfaceDesc.pixelFormat = 2;
+    const auto cpuSurface = Renderer::Create_Surface(surfaceDesc);
+    RenderSurfaceMap cpuMap;
+    Renderer::Lock_Surface(cpuSurface, cpuMap);
+    if (!Check(cpuSurface && cpuMap.data && cpuMap.rowPitch == 16,
+               "DX8-independent W3D CPU image surface lock"))
+        return 1;
+    std::memset(cpuMap.data, 0x88, 64);
+    Renderer::Unlock_Surface(cpuSurface);
+    const auto surfaceTexture = Renderer::Create_Texture_From_Surface(cpuSurface, 0);
+    Renderer::Release_Surface(cpuSurface);
+    if (!Check(surfaceTexture, "Renderer generates native texture/mips from surface"))
+        return 1;
+
+    RenderTextureCubeDescription cubeDesc;
+    cubeDesc.edgeLength = 4;
+    cubeDesc.pixelFormat = 2;
+    cubeDesc.mipLevels = 2;
+    const auto cubeTexture = Renderer::Create_Texture_Cube(cubeDesc);
+    Renderer::Map_Texture_Cube(cubeTexture, 5, 1, textureMap);
+    if (!Check(cubeTexture && textureMap.data && textureMap.rowPitch == 8,
+               "Renderer maps final cubemap face and second mip"))
+        return 1;
+    std::memset(textureMap.data, 0x66, 16);
+    Renderer::Unmap_Texture_Cube(cubeTexture, 5, 1);
+
+    RenderTextureVolumeDescription volumeDesc;
+    volumeDesc.width = volumeDesc.height = 4;
+    volumeDesc.depth = 2;
+    volumeDesc.pixelFormat = 2;
+    volumeDesc.mipLevels = 2;
+    const auto volumeTexture = Renderer::Create_Texture_Volume(volumeDesc);
+    RenderVolumeMap volumeMap;
+    Renderer::Map_Texture_Volume(volumeTexture, 0, volumeMap);
+    if (!Check(volumeTexture && volumeMap.data &&
+               volumeMap.rowPitch == 16 && volumeMap.slicePitch == 64,
+               "Public Renderer maps a DX12 volume mip with slice stride"))
+        return 1;
+    std::memset(volumeMap.data, 0x77, 128);
+    Renderer::Unmap_Texture_Volume(volumeTexture, 0);
+
+    // Stage bindings may precede Begin_Scene. The DX12 backend queues GPU
+    // uploads on the first real command list, without invoking DX8Wrapper.
+    Renderer::Bind_Texture(0, reinterpret_cast<RenderTextureHandle>(texture));
+    Renderer::Bind_Texture(1, reinterpret_cast<RenderTextureHandle>(surfaceTexture));
+
     // This call ordering mirrors WW3D::Begin_Render: Clear comes before
     // Begin_Scene. The separate primary-window test validates GPU pixels.
     // R01: these are the *production neutral Renderer methods*, not a
@@ -176,6 +258,13 @@ int wmain()
     Renderer::Release_Vertex_Buffer(gpuVertex); // fence pins in-flight D3D12 buffers
     Renderer::Release_Index_Buffer(gpuIndex);
     Renderer::End_Scene(false); // command list submission without presentation
+    Renderer::Bind_Texture(0, nullptr);
+    Renderer::Bind_Texture(1, nullptr);
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(texture));
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(copiedTexture));
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(surfaceTexture));
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(cubeTexture));
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(volumeTexture));
     Renderer::Clear(true, true, Vector3(0.1f, 0.3f, 0.5f), 1.f);
     Renderer::Begin_Scene();
     Renderer::End_Scene(true);
@@ -203,6 +292,6 @@ int wmain()
         return 1;
     SetEnvironmentVariableA("W3D_DX12_B04_DIAGNOSTIC", nullptr);
     SetEnvironmentVariableA("W3D_DX12_GAME_WARP", nullptr);
-    std::cout << "B04/R01 Renderer frame, native geometry handles and game HWND: PASS\\n";
+    std::cout << "B04/R01/R04 Renderer frame, native geometry/texture handles and game HWND: PASS\\n";
     return 0;
 }
