@@ -438,6 +438,16 @@ namespace DX12W3DGeometryBuffers
         return handle ? handle->state.native.Get() : nullptr;
     }
 
+    unsigned NativeVertexOffset(RenderVertexBufferHandle handle)
+    {
+        return handle ? handle->state.nativeOffset : 0;
+    }
+
+    unsigned NativeIndexOffset(RenderIndexBufferHandle handle)
+    {
+        return handle ? handle->state.nativeOffset : 0;
+    }
+
     unsigned VertexByteSize(RenderVertexBufferHandle handle)
     {
         return handle ? static_cast<unsigned>(handle->state.shadow.size()) : 0;
