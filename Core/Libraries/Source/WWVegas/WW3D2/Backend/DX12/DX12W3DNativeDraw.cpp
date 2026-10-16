@@ -332,8 +332,7 @@ struct DX12W3DNativeDraw::Impl
         target.LogicOp = D3D12_LOGIC_OP_NOOP;
         target.RenderTargetWriteMask =
             blend.colorWriteEnabled ? D3D12_COLOR_WRITE_ENABLE_ALL : 0;
-        desc.DepthStencilState.DepthEnable = depth != DXGI_FORMAT_UNKNOWN &&
-            depthCompare != RENDER_COMPARE_ALWAYS;
+        desc.DepthStencilState.DepthEnable = depth != DXGI_FORMAT_UNKNOWN;
         desc.DepthStencilState.DepthWriteMask = depthWrite ?
             D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
         desc.DepthStencilState.DepthFunc = Compare(depthCompare);

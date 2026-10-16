@@ -12,6 +12,7 @@
 #include "WW3D2/Renderer.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
+#include "WW3D2/Backend/DX12/DX12W3DNativeDraw.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
@@ -43,6 +44,7 @@ namespace
     unsigned syncInterval = 0;
     DX12W3DTextureStages textureStages;
     DX12W3DRenderTargets renderTargets;
+    DX12W3DNativeDraw nativeDraw;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
 
     bool ValidTransform(RenderTransform transform)
@@ -179,6 +181,7 @@ bool Renderer::Init(void * window, bool lite)
         return false;
     }
 
+    nativeDraw.Reset();
     ready = true;
     renderThread = GetCurrentThreadId();
     syncInterval = 0;
@@ -192,6 +195,7 @@ void Renderer::Shutdown()
     // independent of graphics device reset, then drop stage caches.
     textureStages.Clear();
     renderTargets.Reset();
+    nativeDraw.Reset();
     ready = false;
     renderThread = 0;
     syncInterval = 0;
@@ -260,6 +264,7 @@ void Renderer::Begin_Scene()
         }
         return;
     }
+    nativeDraw.BeginFrame();
     if (!renderTargets.BeginFrame(primaryWindow.Presentation()))
     {
         OutputDebugStringA(renderTargets.LastError());
@@ -361,14 +366,52 @@ void Renderer::Preview_DX12_Gameplay_Mesh( const RenderGameplayPreviewVertex * v
     ReportPending("Renderer::Preview_DX12_Gameplay_Mesh");
 }
 
-void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangleCount, unsigned short minVertexIndex, unsigned short vertexCount)
+namespace
 {
-    ReportPending("Renderer::Draw_Triangles");
+    bool SubmitGameTriangles(bool strip, unsigned startIndex, unsigned primitiveCount,
+                             unsigned minVertex, unsigned vertexCount)
+    {
+        if (!ready || renderThread != GetCurrentThreadId() || !primaryWindow.IsSceneOpen())
+            return false;
+        // Row-major W3D matrix convention matches the native SM5.1 shader's
+        // mul(vertex, World*View*Projection) convention.
+        const Matrix4x4 & w = transforms[RENDER_TRANSFORM_WORLD];
+        const Matrix4x4 & v = transforms[RENDER_TRANSFORM_VIEW];
+        const Matrix4x4 & p = transforms[RENDER_TRANSFORM_PROJECTION];
+        float worldView[4][4] = {};
+        float wvp[16] = {};
+        for (unsigned row = 0; row < 4; ++row)
+            for (unsigned column = 0; column < 4; ++column)
+                for (unsigned inner = 0; inner < 4; ++inner)
+                    worldView[row][column] += w[row][inner] * v[inner][column];
+        for (unsigned row = 0; row < 4; ++row)
+            for (unsigned column = 0; column < 4; ++column)
+                for (unsigned inner = 0; inner < 4; ++inner)
+                    wvp[row * 4 + column] += worldView[row][inner] * p[inner][column];
+
+        if (!nativeDraw.Draw(primaryWindow.Presentation(), renderTargets, textureStages,
+                             wvp, strip, startIndex, primitiveCount,
+                             minVertex, vertexCount))
+        {
+            OutputDebugStringA("[DX12 M01] Native gameplay indexed draw rejected: ");
+            OutputDebugStringA(nativeDraw.LastError());
+            OutputDebugStringA("\n");
+            return false;
+        }
+        return true;
+    }
 }
 
-void Renderer::Draw_Triangle_Strip(unsigned short startIndex, unsigned short primitiveCount, unsigned short minVertexIndex, unsigned short vertexCount)
+void Renderer::Draw_Triangles(unsigned short startIndex, unsigned short triangleCount,
+                              unsigned short minVertexIndex, unsigned short vertexCount)
 {
-    ReportPending("Renderer::Draw_Triangle_Strip");
+    SubmitGameTriangles(false, startIndex, triangleCount, minVertexIndex, vertexCount);
+}
+
+void Renderer::Draw_Triangle_Strip(unsigned short startIndex, unsigned short primitiveCount,
+                                   unsigned short minVertexIndex, unsigned short vertexCount)
+{
+    SubmitGameTriangles(true, startIndex, primitiveCount, minVertexIndex, vertexCount);
 }
 
 void Renderer::Capture_Sorting_State(RenderStateStruct & state)
@@ -405,13 +448,12 @@ Vector3 Renderer::Transform_Sorting_Center( const RenderSortingMatrix & world, c
 
 bool Renderer::Is_Triangle_Draw_Enabled()
 {
-    ReportPending("Renderer::Is_Triangle_Draw_Enabled");
-    return {};
+    return nativeDraw.IsDrawEnabled();
 }
 
 void Renderer::Set_Triangle_Draw_Enabled(bool enabled)
 {
-    ReportPending("Renderer::Set_Triangle_Draw_Enabled");
+    nativeDraw.SetDrawEnabled(enabled);
 }
 
 void Renderer::Unbind_Sorting_Geometry()
@@ -757,9 +799,17 @@ void Renderer::Unmap_Index_Buffer(RenderIndexBufferHandle buffer)
 
 void Renderer::Bind_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stream, unsigned stride)
 {
-    if (ready && primaryWindow.IsSceneOpen() &&
-        !DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(), buffer, stream, stride))
+    if (!ready || !primaryWindow.IsSceneOpen())
+        return;
+    if (!DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(), buffer, stream, stride))
+    {
+        if (stream == 0) nativeDraw.BindVertex(nullptr, 0);
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+        return;
+    }
+    if (stream == 0)
+        nativeDraw.BindVertex(buffer ? DX12W3DGeometryBuffers::NativeVertexLayout(buffer) : nullptr,
+                              buffer && stride ? DX12W3DGeometryBuffers::VertexByteSize(buffer) / stride : 0);
 }
 
 void Renderer::Bind_Point_Sprite_Vertex_Buffer(RenderVertexBufferHandle buffer, unsigned stride)
@@ -779,10 +829,18 @@ void Renderer::Set_Point_Sprite_Rendering(bool enabled, float size, float minSiz
 
 void Renderer::Bind_Index_Buffer(RenderIndexBufferHandle buffer, unsigned baseVertexIndex)
 {
-    if (ready && primaryWindow.IsSceneOpen() &&
-        !DX12W3DGeometryBuffers::BindIndex(
-            primaryWindow.Presentation(), buffer, baseVertexIndex))
+    if (!ready || !primaryWindow.IsSceneOpen())
+        return;
+    if (!DX12W3DGeometryBuffers::BindIndex(primaryWindow.Presentation(),
+                                            buffer, baseVertexIndex))
+    {
+        nativeDraw.BindIndex(0);
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+        return;
+    }
+    nativeDraw.BindIndex(buffer ?
+        DX12W3DGeometryBuffers::IndexByteSize(buffer) /
+        DX12W3DGeometryBuffers::NativeIndexElementBytes(buffer) : 0);
 }
 
 void Renderer::Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & binding)
@@ -793,17 +851,28 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const RenderDynamicVertexBinding & bin
     {
         const unsigned long long bytes =
             static_cast<unsigned long long>(binding.stride) * binding.vertexCount;
+        DX12W3DVertexLayout decoded;
         if (!binding.cpuData || !binding.vertexCount || !binding.stride ||
             bytes > UINT_MAX ||
+            !DX12W3DVertexLayouts::DecodeLegacyFVF(binding.legacyVertexFormat, decoded) ||
             !DX12W3DGeometryBuffers::BindTransientVertex(primaryWindow.Presentation(),
                 binding.cpuData, static_cast<unsigned>(bytes), binding.stride,
                 binding.legacyVertexFormat))
+        {
+            nativeDraw.BindVertex(nullptr, 0);
             OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+        }
+        else nativeDraw.BindVertex(&decoded, binding.vertexCount);
         return;
     }
     if (!DX12W3DGeometryBuffers::BindVertex(primaryWindow.Presentation(),
         binding.resource, 0, binding.stride, binding.firstVertex, binding.vertexCount))
+    {
+        nativeDraw.BindVertex(nullptr, 0);
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+    }
+    else nativeDraw.BindVertex(DX12W3DGeometryBuffers::NativeVertexLayout(binding.resource),
+                               binding.vertexCount);
 }
 
 void Renderer::Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & binding, unsigned short baseVertexIndex)
@@ -816,12 +885,20 @@ void Renderer::Bind_Dynamic_Index_Buffer(const RenderDynamicIndexBinding & bindi
         if (!binding.cpuData || !binding.indexCount ||
             !DX12W3DGeometryBuffers::BindTransientIndex(primaryWindow.Presentation(),
                 binding.cpuData, bytes, baseVertexIndex))
+        {
+            nativeDraw.BindIndex(0);
             OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+        }
+        else nativeDraw.BindIndex(binding.indexCount);
         return;
     }
     if (!DX12W3DGeometryBuffers::BindIndex(primaryWindow.Presentation(),
         binding.resource, baseVertexIndex, binding.firstIndex, binding.indexCount))
+    {
+        nativeDraw.BindIndex(0);
         OutputDebugStringA(DX12W3DGeometryBuffers::LastError());
+    }
+    else nativeDraw.BindIndex(binding.indexCount);
 }
 
 void Renderer::Set_Index_Buffer_Index_Offset(unsigned offset)
@@ -1152,12 +1229,12 @@ void Renderer::Set_Texture_Max_Anisotropy(unsigned stage, unsigned level)
 
 void Renderer::Apply_Blend_State(const RenderBlendState & state)
 {
-    ReportPending("Renderer::Apply_Blend_State");
+    nativeDraw.SetBlend(state);
 }
 
 void Renderer::Set_Depth_Compare(RenderCompareFunc compare)
 {
-    ReportPending("Renderer::Set_Depth_Compare");
+    nativeDraw.SetDepthCompare(compare);
 }
 
 void Renderer::Set_Legacy_Depth_Bias(unsigned bias)
@@ -1167,17 +1244,17 @@ void Renderer::Set_Legacy_Depth_Bias(unsigned bias)
 
 void Renderer::Set_Depth_Write(bool enabled)
 {
-    ReportPending("Renderer::Set_Depth_Write");
+    nativeDraw.SetDepthWrite(enabled);
 }
 
 void Renderer::Set_Cull_Mode(RenderCullMode cullMode)
 {
-    ReportPending("Renderer::Set_Cull_Mode");
+    nativeDraw.SetCull(cullMode);
 }
 
 void Renderer::Set_Alpha_Test_Enabled(bool enabled)
 {
-    ReportPending("Renderer::Set_Alpha_Test_Enabled");
+    nativeDraw.SetAlphaTest(enabled);
 }
 
 void Renderer::Set_Vertex_Lighting(bool enabled)

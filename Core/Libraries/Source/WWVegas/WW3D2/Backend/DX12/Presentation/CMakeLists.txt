@@ -11,6 +11,7 @@ add_library(W3DDX12PresentationDevice STATIC
     ../DX12PresentationDevice.cpp
     ../DX12W3DPassGraph.cpp
     ../DX12W3DGeometryBuffers.cpp
+    ../DX12W3DNativeDraw.cpp
     ../DX12W3DVertexLayouts.cpp
     ../DX12W3DTextures.cpp
     ../DX12W3DTextureStages.cpp
