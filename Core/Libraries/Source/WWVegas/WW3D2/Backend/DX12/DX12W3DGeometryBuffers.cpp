@@ -71,6 +71,10 @@ struct DX12W3DBufferState
     ComPtr<ID3D12Resource> native;
     D3D12_RESOURCE_STATES residentState = D3D12_RESOURCE_STATE_COMMON;
     unsigned nativeOffset = 0;
+    // A bound dynamic geometry generation snapshots only the referenced
+    // source range, not the entire multi-megabyte W3D ring shadow.
+    unsigned sourceOffset = 0;
+    unsigned sourceBytes = 0;
     unsigned format = 0;
     DX12W3DVertexLayout vertexLayout;
     unsigned indexElementBytes = 2;
@@ -124,12 +128,16 @@ struct DX12W3DBufferState
         return true;
     }
 
-    bool Prepare(DX12PresentationDevice & device, bool indices)
+    bool Prepare(DX12PresentationDevice & device, bool indices,
+                 unsigned byteOffset, unsigned byteCount)
     {
         if (mapped || !device.ActiveCommandList() || !device.NativeDevice())
             return Fail("Geometry must be unmapped and bound during a native DX12 scene");
         if (device.NativeDevice() != owner.Get())
             return Fail("Geometry belongs to another D3D12 device generation");
+        if (!byteCount || byteOffset >= shadow.size() ||
+            byteCount > shadow.size() - byteOffset)
+            return Fail("Geometry binding requests bytes outside its W3D shadow");
 
         const auto finalState = indices ? D3D12_RESOURCE_STATE_INDEX_BUFFER
                                         : D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
@@ -138,15 +146,16 @@ struct DX12W3DBufferState
         // after the last using fence. Even an unchanged dynamic W3D handle
         // must resnapshot its CPU shadow when rebound in a later recording.
         // Static DEFAULT-heap resources remain persistent between frames.
-        if (!native || dirty || (dynamic && preparedRecording != device.RecordingSerial()))
+        if (!native || dirty ||
+            (dynamic && (preparedRecording != device.RecordingSerial() ||
+                         sourceOffset != byteOffset || sourceBytes != byteCount)))
         {
             ComPtr<ID3D12Resource> newNative;
             if (dynamic)
             {
                 // DISCARD and NO_OVERWRITE each receive an immutable slice.
                 ID3D12Resource * borrowed = nullptr;
-                if (!device.ReserveTransientGeometry(
-                        static_cast<unsigned>(shadow.size()), borrowed, nativeOffset))
+                if (!device.ReserveTransientGeometry(byteCount, borrowed, nativeOffset))
                     return Fail(device.LastError());
                 newNative = borrowed; // retain independently of the pool
                 void * mappedBytes = nullptr;
@@ -154,9 +163,9 @@ struct DX12W3DBufferState
                 if (FAILED(newNative->Map(0, &noRead, &mappedBytes)) || !mappedBytes)
                     return Fail("Mapping transient upload page failed");
                 std::memcpy(static_cast<unsigned char *>(mappedBytes) + nativeOffset,
-                            shadow.data(), shadow.size());
+                            shadow.data() + byteOffset, byteCount);
                 const D3D12_RANGE written = {nativeOffset,
-                                              nativeOffset + shadow.size()};
+                                              nativeOffset + byteCount};
                 newNative->Unmap(0, &written);
                 residentState = D3D12_RESOURCE_STATE_GENERIC_READ;
             }
@@ -221,6 +230,8 @@ struct DX12W3DBufferState
         // allocation failure remains retryable rather than binding stale data.
         dirty = false;
         preparedRecording = device.RecordingSerial();
+        sourceOffset = dynamic ? byteOffset : 0;
+        sourceBytes = dynamic ? byteCount : static_cast<unsigned>(shadow.size());
         return true;
     }
 };
@@ -353,10 +364,11 @@ namespace DX12W3DGeometryBuffers
             : available;
         if (!countBytes)
             return Fail("Vertex buffer slice exceeds mapped W3D allocation");
-        if (!handle->state.Prepare(device, false))
+        if (!handle->state.Prepare(device, false, offset, countBytes))
             return false;
         D3D12_VERTEX_BUFFER_VIEW view = {};
-        view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + handle->state.nativeOffset + offset;
+        view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + handle->state.nativeOffset +
+            (handle->state.dynamic ? 0 : offset);
         view.SizeInBytes = countBytes;
         view.StrideInBytes = stride;
         device.ActiveCommandList()->IASetVertexBuffers(stream, 1, &view);
@@ -388,10 +400,11 @@ namespace DX12W3DGeometryBuffers
             : available;
         if (!countBytes)
             return Fail("Index buffer slice exceeds mapped W3D allocation");
-        if (!handle->state.Prepare(device, true))
+        if (!handle->state.Prepare(device, true, offset, countBytes))
             return false;
         D3D12_INDEX_BUFFER_VIEW view = {};
-        view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + handle->state.nativeOffset + offset;
+        view.BufferLocation = handle->state.native->GetGPUVirtualAddress() + handle->state.nativeOffset +
+            (handle->state.dynamic ? 0 : offset);
         view.SizeInBytes = countBytes;
         view.Format = elementBytes == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
         device.ActiveCommandList()->IASetIndexBuffer(&view);
@@ -427,6 +440,26 @@ namespace DX12W3DGeometryBuffers
     unsigned NativeIndexElementBytes(RenderIndexBufferHandle handle)
     {
         return handle ? handle->state.indexElementBytes : 0;
+    }
+
+    unsigned NativeVertexSliceBytes(RenderVertexBufferHandle handle)
+    {
+        return handle ? handle->state.sourceBytes : 0;
+    }
+
+    unsigned NativeIndexSliceBytes(RenderIndexBufferHandle handle)
+    {
+        return handle ? handle->state.sourceBytes : 0;
+    }
+
+    unsigned NativeVertexSourceOffset(RenderVertexBufferHandle handle)
+    {
+        return handle ? handle->state.sourceOffset : 0;
+    }
+
+    unsigned NativeIndexSourceOffset(RenderIndexBufferHandle handle)
+    {
+        return handle ? handle->state.sourceOffset : 0;
     }
 
     unsigned VertexByteSize(RenderVertexBufferHandle handle)

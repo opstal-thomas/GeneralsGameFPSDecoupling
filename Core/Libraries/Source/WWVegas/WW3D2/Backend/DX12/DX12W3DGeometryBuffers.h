@@ -48,6 +48,11 @@ namespace DX12W3DGeometryBuffers
     // Backend-private byte offsets for validating pooled upload snapshots.
     unsigned NativeVertexOffset(RenderVertexBufferHandle handle);
     unsigned NativeIndexOffset(RenderIndexBufferHandle handle);
+    // CPU-source and GPU snapshot ranges for R02 WARP validation.
+    unsigned NativeVertexSliceBytes(RenderVertexBufferHandle handle);
+    unsigned NativeIndexSliceBytes(RenderIndexBufferHandle handle);
+    unsigned NativeVertexSourceOffset(RenderVertexBufferHandle handle);
+    unsigned NativeIndexSourceOffset(RenderIndexBufferHandle handle);
     const DX12W3DVertexLayout * NativeVertexLayout(RenderVertexBufferHandle handle);
     unsigned NativeIndexElementBytes(RenderIndexBufferHandle handle);
     unsigned VertexByteSize(RenderVertexBufferHandle handle);

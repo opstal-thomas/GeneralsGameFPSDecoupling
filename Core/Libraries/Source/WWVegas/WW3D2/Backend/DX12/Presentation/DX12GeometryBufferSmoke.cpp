@@ -225,25 +225,30 @@ int wmain()
     const unsigned firstVertexOffset = NativeVertexOffset(dynamicVertex);
     const unsigned firstIndexOffset = NativeIndexOffset(dynamicIndex);
     ComPtr<ID3D12Resource> firstVertexReadback, secondVertexReadback, dynamicIndexReadback;
-    if (!Check(firstGpu == NativeIndexResource(dynamicIndex),
+    if (!Check(NativeVertexSliceBytes(dynamicVertex) == 24 &&
+               NativeVertexSourceOffset(dynamicVertex) == 12 &&
+               NativeIndexSliceBytes(dynamicIndex) == 6 &&
+               NativeIndexSourceOffset(dynamicIndex) == 2,
+               "R02 dynamic vertex and index snapshots contain only requested ranges") ||
+        !Check(firstGpu == NativeIndexResource(dynamicIndex),
                "Small vertex and index snapshots share an upload page") ||
         !Check(firstVertexOffset != firstIndexOffset,
                "Dynamic vertex and index offsets cannot alias") ||
-        !Check(MakeReadback(device.NativeDevice(), vertexDesc.byteSize, firstVertexReadback) &&
+        !Check(MakeReadback(device.NativeDevice(), 24, firstVertexReadback) &&
                MakeReadback(device.NativeDevice(), vertexDesc.byteSize, secondVertexReadback) &&
-               MakeReadback(device.NativeDevice(), indexDesc.byteSize, dynamicIndexReadback),
+               MakeReadback(device.NativeDevice(), 6, dynamicIndexReadback),
                "Allocate pooled geometry GPU readbacks"))
         return 1;
     device.ActiveCommandList()->CopyBufferRegion(
-        firstVertexReadback.Get(), 0, firstGpu, firstVertexOffset, vertexDesc.byteSize);
+        firstVertexReadback.Get(), 0, firstGpu, firstVertexOffset, 24);
     device.ActiveCommandList()->CopyBufferRegion(
         dynamicIndexReadback.Get(), 0, NativeIndexResource(dynamicIndex),
-        firstIndexOffset, indexDesc.byteSize);
+        firstIndexOffset, 6);
 
     // Emulate multiple dynamic writes/binds in one frame; the previous GPU
     // generation must remain valid through the command-list fence.
     auto * changed = static_cast<unsigned char *>(
-        MapVertex(dynamicVertex, 4, 8, RENDER_MAP_NO_OVERWRITE));
+        MapVertex(dynamicVertex, 16, 8, RENDER_MAP_NO_OVERWRITE));
     if (!Check(changed != nullptr, "Partial NO_OVERWRITE map"))
         return 1;
     std::memset(changed, 0x5A, 8);
@@ -262,7 +267,7 @@ int wmain()
 
     std::array<unsigned char, 48> changedDynamicVertexBytes = {};
     std::memcpy(changedDynamicVertexBytes.data(), vertexBytes.data(), vertexDesc.byteSize);
-    std::memset(changedDynamicVertexBytes.data() + 4, 0x5A, 8);
+    std::memset(changedDynamicVertexBytes.data() + 16, 0x5A, 8);
 
     // A partial static write after binding must not modify the version
     // referenced by the earlier GPU readback or the first indexed draw.
@@ -319,12 +324,13 @@ int wmain()
         !Check(VerifyBytes(updatedReadback.Get(), updatedVertexBytes.data(),
                            vertexDesc.byteSize),
                "Partial static update matches new GPU allocation without corrupting old version") ||
-        !Check(VerifyBytes(firstVertexReadback.Get(), vertexBytes.data(), vertexDesc.byteSize),
+        !Check(VerifyBytes(firstVertexReadback.Get(),
+                           static_cast<const unsigned char *>(static_cast<const void *>(vertexBytes.data())) + 12, 24),
                "First pooled dynamic snapshot survives NO_OVERWRITE on WARP") ||
         !Check(VerifyBytes(secondVertexReadback.Get(), changedDynamicVertexBytes.data(),
                            vertexDesc.byteSize),
                "Updated pooled dynamic slice contains the new bytes on WARP") ||
-        !Check(VerifyBytes(dynamicIndexReadback.Get(), indices.data(), indexDesc.byteSize),
+        !Check(VerifyBytes(dynamicIndexReadback.Get(), indices.data() + 1, 6),
                "Shared-page index bytes are not corrupted by vertex updates") ||
         !Check(device.InFlightResourceCount() == 0,
                "GPU frame-fence retirement has released staging generations"))

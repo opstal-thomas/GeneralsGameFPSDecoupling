@@ -103,7 +103,8 @@ class R01GeometryBuffers(unittest.TestCase):
             self.assertIn(token, header)
             self.assertIn(token, presentation)
         self.assertNotIn("std::vector<UploadPage> uploadPages;", geometry)
-        for token in ("nativeOffset + offset",
+        for token in ("handle->state.dynamic ? 0 : offset",
+                      "sourceBytes != byteCount", "shadow.data() + byteOffset",
                       "RetainFrameResource(native.Get())",
                       "RENDER_MAP_DISCARD", "RENDER_MAP_NO_OVERWRITE",
                       "ReserveTransientGeometry(", "newNative = borrowed;"):
@@ -112,8 +113,13 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("const D3D12_RANGE written = {nativeOffset,", geometry)
         self.assertIn("newNative->Map(0, &noRead, &mappedBytes)", geometry)
         self.assertIn("std::memcpy(static_cast<unsigned char *>(mappedBytes) + nativeOffset,", geometry)
+        for token in ("NativeVertexSliceBytes(", "NativeIndexSliceBytes(",
+                      "NativeVertexSourceOffset(", "NativeIndexSourceOffset("):
+            self.assertIn(token, geometry)
+            self.assertIn(token, (DX12 / "DX12W3DGeometryBuffers.h").read_text(encoding="utf-8"))
         smoke = (PRESENTATION / "DX12GeometryBufferSmoke.cpp").read_text(encoding="utf-8")
         for token in ("NativeVertexOffset(", "NativeIndexOffset(",
+                      "R02 dynamic vertex and index snapshots contain only requested ranges",
                       "firstVertexReadback", "secondVertexReadback", "dynamicIndexReadback",
                       "First pooled dynamic snapshot survives NO_OVERWRITE on WARP",
                       "Updated pooled dynamic slice contains the new bytes on WARP",
