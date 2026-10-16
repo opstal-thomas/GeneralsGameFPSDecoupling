@@ -1460,7 +1460,7 @@ void DX8SkinFVFCategoryContainer::Render()
 
 		SNAPSHOT_SAY(("Set vb: %x ib: %x",&vb.FVF_Info(),index_buffer));
 
-		Renderer::Bind_Legacy_Vertex_Buffer(vb);
+		Renderer::Bind_Dynamic_Vertex_Buffer(vb);
 		Renderer::Bind_Legacy_Index_Buffer(index_buffer,0);
 
 		//Flush the meshes which fit in the vertex buffer, applying all texture variations
@@ -1922,10 +1922,10 @@ void DX8TextureCategoryClass::Render()
 
 
 //--------------------------------------------------------------------
+		#if !defined(W3D_RENDER_BACKEND_DX12)
 		if (mesh->Get_ObjectScale() != 1.0f)
-			#if !defined(W3D_RENDER_BACKEND_DX12)
 			DX8Wrapper::Set_DX8_Render_State(D3DRS_NORMALIZENORMALS, TRUE);
-			#endif
+		#endif
 //--------------------------------------------------------------------
 		/*
 		** Render mesh using either sorting or immediate pipeline
@@ -1997,10 +1997,10 @@ void DX8TextureCategoryClass::Render()
 				renderer->Render(mesh->Get_Base_Vertex_Offset());
 		}
 //--------------------------------------------------------------------
+		#if !defined(W3D_RENDER_BACKEND_DX12)
 		if (mesh->Get_ObjectScale() != 1.0f)
-			#if !defined(W3D_RENDER_BACKEND_DX12)
 			DX8Wrapper::Set_DX8_Render_State(D3DRS_NORMALIZENORMALS, FALSE);
-			#endif
+		#endif
 //--------------------------------------------------------------------
 
 

@@ -326,6 +326,11 @@ class R01GeometryBuffers(unittest.TestCase):
         backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
         self.assertIn("void Renderer::Flush_Mesh_Batches()", mesh)
         self.assertIn("TheDX8MeshRenderer.Flush();", mesh)
+        self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(vb);", mesh)
+        self.assertNotIn("Renderer::Bind_Legacy_Vertex_Buffer(vb);", mesh)
+        # A guarded DX8-only statement must not leave a bare if with no
+        # executable body in the selected DX12 backend.
+        self.assertNotIn("if (mesh->Get_ObjectScale() != 1.0f)\n\t\t\t#if", mesh)
         for call in ("Renderer::Bind_Legacy_Vertex_Buffer(",
                      "Renderer::Bind_Legacy_Index_Buffer(",
                      "Renderer::Set_Texture(", "Renderer::Set_Material(",
