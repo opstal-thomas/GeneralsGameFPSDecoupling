@@ -200,6 +200,12 @@ int wmain()
             !Check(BindIndex(device, pass ? indices32 : indices16, 0),
                    "bind original R16/R32 index buffer", LastError()))
             return 1;
+        // DX12PrimaryWindow applies the camera viewport in the real game.
+        // This isolated device-level smoke must establish its own RS state.
+        const D3D12_VIEWPORT viewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT scissor = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &scissor);
         draw.BeginFrame();
         draw.BindVertex(NativeVertexLayout(pass ? green : red), 4);
         draw.BindIndex(4);
