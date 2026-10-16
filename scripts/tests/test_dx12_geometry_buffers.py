@@ -305,7 +305,7 @@ class R01GeometryBuffers(unittest.TestCase):
 
     def test_m01_w3d_shader_and_texture_adapters_are_native(self):
         shader = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
-        texture = (WW3D / "texture.cpp").read_text(encoding="utf-8")
+        texture = (WW3D / "dx8renderer.cpp").read_text(encoding="utf-8")
         backend = (DX12 / "DX12Backend.cpp").read_text(encoding="utf-8")
         for content, token in ((shader, "void Renderer::Set_Shader(const ShaderClass & shader)"),
                                (texture, "void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)")):

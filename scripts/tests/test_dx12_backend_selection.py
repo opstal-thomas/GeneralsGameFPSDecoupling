@@ -19,7 +19,6 @@ DX12_DYNAMIC_ADAPTERS = [
     WW3D / "dx8vertexbuffer.cpp",
     WW3D / "dx8indexbuffer.cpp",
     WW3D / "dx8renderer.cpp",
-    WW3D / "texture.cpp",
 ]
 
 # Definitions only (not calls): all Renderer static methods must have exactly

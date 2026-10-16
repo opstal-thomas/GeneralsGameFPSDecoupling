@@ -97,6 +97,13 @@ void Renderer::Set_Shader(const ShaderClass & shader)
     Set_Cull_Mode(shader.Get_Cull_Mode() == ShaderClass::CULL_MODE_ENABLE ?
                   RENDER_CULL_CCW : RENDER_CULL_NONE);
 }
+
+// Typed texture adapter lives beside shader/material mesh batching so that
+// DX12Backend.cpp does not import legacy W3D objects or D3D8 types.
+void Renderer::Set_Texture(unsigned stage, TextureBaseClass * texture)
+{
+    Bind_Texture(stage, texture ? texture->Peek_Render_Texture() : nullptr);
+}
 #endif
 
 bool DX8TextureCategoryClass::m_gForceMultiply = false; // Forces opaque materials to use the multiply blend - pseudo transparent effect.  jba.
