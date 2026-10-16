@@ -493,6 +493,71 @@ int wmain()
     DX12W3DTextures::Release(handle0);
     DX12W3DTextures::Release(handle1);
     ReleaseVertex(textured);
+
+    // B07: a real WARP readback of opaque followed by sorted-style
+    // 50%-alpha geometry. This is not an in-game DX12-only comparison:
+    // it isolates depth, draw ordering and the native PSO blend equation.
+    if (!Check(device.BeginFrame(clear), "begin opaque and transparent frame") ||
+        !Check(targets.BeginFrame(device), "bind opaque/transparent target") ||
+        !Check(BindVertex(device, red, 0, sizeof(Vertex)),
+               "bind opaque red geometry", LastError()) ||
+        !Check(BindIndex(device, indices16, 0),
+               "bind opaque index buffer", LastError()))
+        return 1;
+    const D3D12_VIEWPORT blendViewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+    const D3D12_RECT blendScissor = {0, 0, 160, 120};
+    device.ActiveCommandList()->RSSetViewports(1, &blendViewport);
+    device.ActiveCommandList()->RSSetScissorRects(1, &blendScissor);
+    draw.BeginFrame();
+    draw.BindVertex(NativeVertexLayout(red), 4);
+    draw.BindIndex(4);
+    draw.SetMaterial(RenderVertexMaterialDescription());
+    draw.SetBlend(RenderBlendState());
+    draw.SetDepthWrite(true);
+    if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                         false, 0, 1, 0, 4),
+               "draw opaque base W3D mesh", draw.LastError()) ||
+        !Check(BindVertex(device, green, 0, sizeof(Vertex)),
+               "bind transparent green strip", LastError()))
+        return 1;
+    draw.BindVertex(NativeVertexLayout(green), 4);
+    RenderVertexMaterialDescription halfOpacity;
+    halfOpacity.diffuse.a = 0.5f;
+    draw.SetMaterial(halfOpacity);
+    RenderBlendState transparent;
+    transparent.blendEnabled = true;
+    transparent.source = RENDER_BLEND_SRC_ALPHA;
+    transparent.destination = RENDER_BLEND_INV_SRC_ALPHA;
+    draw.SetBlend(transparent);
+    draw.SetDepthWrite(false);
+    if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                         true, 0, 2, 0, 4),
+               "composite sorted-style transparent native mesh", draw.LastError()))
+        return 1;
+    ComPtr<ID3D12Resource> blendReadback;
+    UINT blendPitch = 0;
+    unsigned char unusedBlend[4] = {};
+    if (!ReadPixel(device, unusedBlend, blendReadback, blendPitch) ||
+        !Check(targets.EndFrame(device), "end transparent blend target") ||
+        !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+               "submit native opaque/transparent blend readback", device.LastError()))
+        return 1;
+    void * blendPixels = nullptr;
+    if (!Check(SUCCEEDED(blendReadback->Map(0, nullptr, &blendPixels)) &&
+               blendPixels != nullptr, "map opaque/transparent WARP pixel"))
+        return 1;
+    const auto * mixed = static_cast<const unsigned char *>(blendPixels) +
+                         60 * blendPitch + 80 * 4;
+    const bool halfBlend = mixed[0] > 110 && mixed[0] < 145 &&
+                           mixed[1] > 110 && mixed[1] < 145 && mixed[2] < 16;
+    if (!halfBlend)
+        std::cerr << "M01 opaque/transparent pixel RGBA=(" <<
+            unsigned(mixed[0]) << "," << unsigned(mixed[1]) << "," <<
+            unsigned(mixed[2]) << "," << unsigned(mixed[3]) << ")\n";
+    blendReadback->Unmap(0, nullptr);
+    if (!Check(halfBlend, "native opaque plus 50% translucent W3D composite"))
+        return 1;
+
     ReleaseVertex(lit);
     ReleaseVertex(red);
     ReleaseVertex(green);
