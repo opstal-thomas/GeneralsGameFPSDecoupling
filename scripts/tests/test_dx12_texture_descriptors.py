@@ -55,7 +55,8 @@ class DX12TextureDescriptorTests(unittest.TestCase):
         for token in (
             "frame.RetainFrameObject(page.heap.Get())",
             "frame.RecordingSerial()", "frame.NativeDevice()",
-            "view.identity", "view.contentRevision", "view.gpuGeneration",
+            "views[stage].identity", "views[stage].contentRevision",
+            "views[stage].gpuGeneration",
             "state.tables.find(key)", "state.tables.emplace(key, table)",
             "DX12W3DTextures::Retain(texture)",
             "DX12W3DTextures::Release(slot)",
