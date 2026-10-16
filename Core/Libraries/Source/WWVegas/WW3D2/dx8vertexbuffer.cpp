@@ -736,6 +736,37 @@ void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)
 }
 #endif
 
+// Keep complete typed W3D classes out of the independent DX12 backend.
+#if defined(W3D_RENDER_BACKEND_DX12)
+void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)
+{
+    if (!buffer)
+    {
+        Bind_Vertex_Buffer(nullptr, 0, 0);
+        return;
+    }
+    if (buffer->Type() == BUFFER_TYPE_DX8)
+    {
+        Bind_Vertex_Buffer(
+            static_cast<const DX8VertexBufferClass *>(buffer)->Get_Render_Vertex_Buffer(),
+            0, buffer->FVF_Info().Get_FVF_Size());
+        return;
+    }
+    if (buffer->Type() == BUFFER_TYPE_SORTING)
+    {
+        RenderDynamicVertexBinding binding;
+        binding.legacyOwner = buffer;
+        binding.bufferType = BUFFER_TYPE_SORTING;
+        binding.vertexCount = buffer->Get_Vertex_Count();
+        binding.stride = buffer->FVF_Info().Get_FVF_Size();
+        binding.legacyVertexFormat = buffer->FVF_Info().Get_FVF();
+        binding.cpuData = static_cast<const SortingVertexBufferClass *>(buffer)->
+            Get_Sorting_Vertex_Array();
+        Bind_Dynamic_Vertex_Buffer(binding);
+    }
+}
+#endif
+
 RenderDynamicVertexBinding DynamicVBAccessClass::Get_Render_Binding() const
 {
     RenderDynamicVertexBinding binding;
@@ -744,8 +775,12 @@ RenderDynamicVertexBinding DynamicVBAccessClass::Get_Render_Binding() const
     binding.firstVertex = VertexBufferOffset;
     binding.vertexCount = VertexCount;
     binding.stride = FVFInfo.Get_FVF_Size();
+    binding.legacyVertexFormat = FVFInfo.Get_FVF();
     if (Type == BUFFER_TYPE_DYNAMIC_DX8)
         binding.resource = static_cast<DX8VertexBufferClass*>(VertexBuffer)->Get_Render_Vertex_Buffer();
+    else if (Type == BUFFER_TYPE_DYNAMIC_SORTING)
+        binding.cpuData = static_cast<SortingVertexBufferClass*>(VertexBuffer)->
+            Get_Sorting_Vertex_Array() + VertexBufferOffset;
     return binding;
 }
 

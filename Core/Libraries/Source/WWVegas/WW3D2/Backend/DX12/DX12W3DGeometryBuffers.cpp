@@ -339,6 +339,90 @@ namespace DX12W3DGeometryBuffers
         return handle ? handle->state.Unmap() : Fail("UnmapIndex received null handle");
     }
 
+    // Record an immutable copy before the CPU sorting owner goes out of scope.
+    // The page is shared between transient vertices and R16 indices and
+    // pinned to the actual command-list fence by the presentation device.
+    bool UploadTransientCPU(DX12PresentationDevice & device, const void * cpuData,
+                            unsigned byteCount, TransientGeometrySnapshot * snapshot,
+                            D3D12_GPU_VIRTUAL_ADDRESS & gpuAddress)
+    {
+        if (!cpuData || !byteCount || !device.ActiveCommandList())
+            return Fail("Transient sorting upload requires CPU bytes and an active frame");
+        ID3D12Resource * resource = nullptr;
+        unsigned offset = 0;
+        if (!device.ReserveTransientGeometry(byteCount, resource, offset))
+            return Fail(device.LastError());
+        void * mapped = nullptr;
+        const D3D12_RANGE noRead = {0, 0};
+        if (FAILED(resource->Map(0, &noRead, &mapped)) || !mapped)
+            return Fail("Mapping transient W3D sorting slice failed");
+        std::memcpy(static_cast<unsigned char *>(mapped) + offset, cpuData, byteCount);
+        const D3D12_RANGE written = {offset, offset + byteCount};
+        resource->Unmap(0, &written);
+        D3D12_RESOURCE_STATES tracked = D3D12_RESOURCE_STATE_COMMON;
+        if (!device.GetFrameResourceState(resource, tracked))
+        {
+            if (!device.RegisterFrameResource(resource, D3D12_RESOURCE_STATE_GENERIC_READ))
+                return Fail(device.LastError());
+        }
+        else if (tracked != D3D12_RESOURCE_STATE_GENERIC_READ)
+            return Fail("Transient sorting page must remain GENERIC_READ");
+        if (!device.RetainFrameResource(resource))
+            return Fail(device.LastError());
+        gpuAddress = resource->GetGPUVirtualAddress() + offset;
+        if (snapshot)
+        {
+            snapshot->resource = resource;
+            snapshot->offset = offset;
+            snapshot->bytes = byteCount;
+        }
+        return true;
+    }
+
+    bool BindTransientVertex(DX12PresentationDevice & device,
+                             const void * cpuData, unsigned bytes,
+                             unsigned stride, unsigned legacyFVF,
+                             TransientGeometrySnapshot * snapshot)
+    {
+        lastError.clear();
+        DX12W3DVertexLayout layout;
+        std::string reason;
+        if (!DX12W3DVertexLayouts::DecodeLegacyFVF(legacyFVF, layout, &reason))
+            return Fail(reason.c_str());
+        if (!cpuData || !stride || stride < layout.stride ||
+            !bytes || (bytes % stride) != 0)
+            return Fail("Malformed CPU sorting vertex stride/range");
+        D3D12_GPU_VIRTUAL_ADDRESS address = 0;
+        if (!UploadTransientCPU(device, cpuData, bytes, snapshot, address))
+            return false;
+        D3D12_VERTEX_BUFFER_VIEW view = {};
+        view.BufferLocation = address;
+        view.SizeInBytes = bytes;
+        view.StrideInBytes = stride;
+        device.ActiveCommandList()->IASetVertexBuffers(0, 1, &view);
+        return true;
+    }
+
+    bool BindTransientIndex(DX12PresentationDevice & device,
+                            const void * cpuData, unsigned bytes,
+                            unsigned baseVertexIndex,
+                            TransientGeometrySnapshot * snapshot)
+    {
+        lastError.clear();
+        if (!cpuData || !bytes || (bytes & 1u))
+            return Fail("Malformed CPU sorting R16 index range");
+        D3D12_GPU_VIRTUAL_ADDRESS address = 0;
+        if (!UploadTransientCPU(device, cpuData, bytes, snapshot, address))
+            return false;
+        D3D12_INDEX_BUFFER_VIEW view = {};
+        view.BufferLocation = address;
+        view.SizeInBytes = bytes;
+        view.Format = DXGI_FORMAT_R16_UINT;
+        device.ActiveCommandList()->IASetIndexBuffer(&view);
+        device.SetBoundBaseVertexIndex(baseVertexIndex);
+        return true;
+    }
+
     bool BindVertex(DX12PresentationDevice & device,
                     RenderVertexBufferHandle handle, unsigned stream, unsigned stride,
                     unsigned firstVertex, unsigned vertexCount)

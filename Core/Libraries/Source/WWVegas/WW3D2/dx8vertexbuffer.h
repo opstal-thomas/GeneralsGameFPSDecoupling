@@ -256,4 +256,5 @@ protected:
 	virtual ~SortingVertexBufferClass() override;
 public:
 	SortingVertexBufferClass(unsigned short VertexCount);
+    const VertexFormatXYZNDUV2 * Get_Sorting_Vertex_Array() const { return VertexBuffer; }
 };

@@ -242,20 +242,25 @@ struct RenderBufferDescription
 struct RenderDynamicVertexBinding
 {
     RenderDynamicVertexBinding() : resource(nullptr), legacyOwner(nullptr),
-        firstVertex(0), vertexCount(0), stride(0), bufferType(0) {}
+        cpuData(nullptr), firstVertex(0), vertexCount(0), stride(0),
+        legacyVertexFormat(0), bufferType(0) {}
     RenderVertexBufferHandle resource;
     const void * legacyOwner;
+    // For CPU-only sorting buffers, a borrowed slice copied at bind time.
+    const void * cpuData;
     unsigned short firstVertex, vertexCount;
     unsigned stride;
+    unsigned legacyVertexFormat; // Original W3D FVF for CPU sorting.
     unsigned bufferType; // Existing W3D dynamic/sorting kind.
 };
 
 struct RenderDynamicIndexBinding
 {
     RenderDynamicIndexBinding() : resource(nullptr), legacyOwner(nullptr),
-        firstIndex(0), indexCount(0), bufferType(0) {}
+        cpuData(nullptr), firstIndex(0), indexCount(0), bufferType(0) {}
     RenderIndexBufferHandle resource;
     const void * legacyOwner;
+    const void * cpuData; // Borrowed R16 sorting index slice, copied on bind.
     unsigned short firstIndex, indexCount;
     unsigned bufferType;
 };

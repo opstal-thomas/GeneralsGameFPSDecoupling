@@ -399,6 +399,35 @@ void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access,
 }
 #endif
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer,
+                                        unsigned short baseVertexIndex)
+{
+    if (!buffer)
+    {
+        Bind_Index_Buffer(nullptr, 0);
+        return;
+    }
+    if (buffer->Type() == BUFFER_TYPE_DX8)
+    {
+        Bind_Index_Buffer(
+            static_cast<const DX8IndexBufferClass *>(buffer)->Get_Render_Index_Buffer(),
+            baseVertexIndex);
+        return;
+    }
+    if (buffer->Type() == BUFFER_TYPE_SORTING)
+    {
+        RenderDynamicIndexBinding binding;
+        binding.legacyOwner = buffer;
+        binding.bufferType = BUFFER_TYPE_SORTING;
+        binding.indexCount = buffer->Get_Index_Count();
+        binding.cpuData = static_cast<const SortingIndexBufferClass *>(buffer)->
+            Get_Sorting_Index_Array();
+        Bind_Dynamic_Index_Buffer(binding, baseVertexIndex);
+    }
+}
+#endif
+
 RenderDynamicIndexBinding DynamicIBAccessClass::Get_Render_Binding() const
 {
     RenderDynamicIndexBinding binding;
@@ -408,6 +437,9 @@ RenderDynamicIndexBinding DynamicIBAccessClass::Get_Render_Binding() const
     binding.indexCount = IndexCount;
     if (Type == BUFFER_TYPE_DYNAMIC_DX8)
         binding.resource = static_cast<DX8IndexBufferClass*>(IndexBuffer)->Get_Render_Index_Buffer();
+    else if (Type == BUFFER_TYPE_DYNAMIC_SORTING)
+        binding.cpuData = static_cast<SortingIndexBufferClass*>(IndexBuffer)->
+            Get_Sorting_Index_Array() + IndexBufferOffset;
     return binding;
 }
 

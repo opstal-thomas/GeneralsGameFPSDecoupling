@@ -199,6 +199,7 @@ class SortingIndexBufferClass : public IndexBufferClass
 public:
 	SortingIndexBufferClass(unsigned short index_count);
 	virtual ~SortingIndexBufferClass() override;
+    const unsigned short * Get_Sorting_Index_Array() const { return index_buffer; }
 
 protected:
 	unsigned short* index_buffer;

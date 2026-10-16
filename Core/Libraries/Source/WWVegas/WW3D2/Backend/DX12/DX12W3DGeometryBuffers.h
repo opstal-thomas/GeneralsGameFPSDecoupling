@@ -41,6 +41,23 @@ namespace DX12W3DGeometryBuffers
                    RenderIndexBufferHandle handle, unsigned baseVertexIndex,
                    unsigned firstIndex = 0, unsigned indexCount = 0);
 
+    // CPU-only W3D sorting geometry is copied immediately into R02's
+    // immutable, fence-retained per-frame upload pages, without a DX8 device.
+    struct TransientGeometrySnapshot
+    {
+        ID3D12Resource * resource = nullptr; // borrowed; frame retains it
+        unsigned offset = 0;
+        unsigned bytes = 0;
+    };
+    bool BindTransientVertex(DX12PresentationDevice & device,
+                             const void * cpuData, unsigned bytes,
+                             unsigned stride, unsigned legacyFVF,
+                             TransientGeometrySnapshot * snapshot = nullptr);
+    bool BindTransientIndex(DX12PresentationDevice & device,
+                            const void * cpuData, unsigned bytes,
+                            unsigned baseVertexIndex,
+                            TransientGeometrySnapshot * snapshot = nullptr);
+
     // For native WARP tests and the later authoritative draw path only:
     // callers do not own these GPU resources, and must not release them.
     ID3D12Resource * NativeVertexResource(RenderVertexBufferHandle handle);

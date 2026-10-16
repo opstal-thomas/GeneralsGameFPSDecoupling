@@ -44,11 +44,13 @@ class DX12BackendSelectionTests(unittest.TestCase):
         expected_adapters = {
             "void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)",
             "void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)",
+            "void Renderer::Bind_Legacy_Vertex_Buffer(const VertexBufferClass * buffer)",
+            "void Renderer::Bind_Legacy_Index_Buffer(const IndexBufferClass * buffer, unsigned short baseVertexIndex)",
         }
         self.assertGreater(len(dx8), 150)
         self.assertEqual(len(dx8), len(set(dx8)), "DX8 defines duplicate signatures")
         self.assertEqual(set(adapters), expected_adapters,
-                         "R02 may split only the two DX12 dynamic-accessor overloads")
+                         "R02 may split only the four typed W3D buffer overloads")
         self.assertEqual(len(adapters), len(set(adapters)))
         self.assertEqual(set(dx8), set(dx12),
                          "Missing, duplicate or extra DX12 Renderer definitions")
