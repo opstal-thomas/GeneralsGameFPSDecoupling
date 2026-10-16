@@ -112,7 +112,7 @@ namespace
         }
         UploadPage page;
         page.owner = device.NativeDevice();
-        page.capacity = std::max(UploadPageBytes, aligned);
+        page.capacity = aligned > UploadPageBytes ? aligned : UploadPageBytes;
         if (!MakeBuffer(page.owner.Get(), page.capacity, D3D12_HEAP_TYPE_UPLOAD,
                         D3D12_RESOURCE_STATE_GENERIC_READ, page.resource))
             return Fail("Creating transient upload page failed");
