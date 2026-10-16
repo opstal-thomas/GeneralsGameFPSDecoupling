@@ -154,8 +154,19 @@ int wmain()
     RenderTexture2DDescription renderTarget = desc;
     renderTarget.renderTarget = true;
     if (!Check(!Create2D(device.NativeDevice(), renderTarget),
-               "Reject offscreen RTV allocation until R07 establishes attachment contract"))
+               "Reject multi-mip RTT until R07 implements subresource barriers"))
         return 1;
+    renderTarget.mipLevels = 1;
+    auto nativeRTT = Create2D(device.NativeDevice(), renderTarget);
+    RenderSurfaceMap rttMap;
+    if (!Check(nativeRTT &&
+               !Map2D(nativeRTT, 0, rttMap) &&
+               NativeResource(T(nativeRTT)) &&
+               (NativeResource(T(nativeRTT))->GetDesc().Flags &
+                D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET),
+               "R07 color target shares R04 GPU handle and rejects CPU mapping"))
+        return 1;
+    Release(T(nativeRTT));
     if (!Check(main && copied, "Create native mipmapped ARGB8 textures") ||
         !Check(MipCount(T(main)) == 3, "Mip level count") ||
         !Check(MemoryUsage(T(main)) == 84, "W3D CPU mip allocation accounting"))
