@@ -20,6 +20,7 @@
 #include "missingtexture.h"
 #include "texture.h"
 #include "dx8wrapper.h"
+#include "Renderer.h"
 #include <d3dx8core.h>
 
 static unsigned missing_image_width=128;
@@ -34,12 +35,41 @@ static IDirect3DTexture8 * _MissingTexture = nullptr;
 IDirect3DTexture8* MissingTexture::_Get_Missing_Texture()
 {
 	WWASSERT(_MissingTexture);
+#if defined(W3D_RENDER_BACKEND_DX12)
+    Renderer::Retain_Texture(reinterpret_cast<RenderTextureHandle>(_MissingTexture));
+#else
 	_MissingTexture->AddRef();
+#endif
 	return _MissingTexture;
 }
 
 IDirect3DSurface8* MissingTexture::_Create_Missing_Surface()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    // R04: a real CPU image surface, not a D3D8 GetSurfaceLevel/CopyRects.
+    RenderSurfaceDescription desc;
+    desc.width = missing_image_width;
+    desc.height = missing_image_height;
+    desc.pixelFormat = WW3D_FORMAT_A8R8G8B8;
+    RenderSurfaceHandle native = Renderer::Create_Surface(desc);
+    if (!native) return nullptr;
+    RenderSurfaceMap mapped;
+    Renderer::Lock_Surface(native, mapped);
+    if (!mapped.data)
+    {
+        Renderer::Release_Surface(native);
+        return nullptr;
+    }
+    for (unsigned y = 0; y < desc.height; ++y)
+    {
+        auto * row = reinterpret_cast<unsigned *>(static_cast<unsigned char *>(mapped.data) +
+                                                   y * mapped.rowPitch);
+        for (unsigned x = 0; x < desc.width; ++x)
+            row[x] = ((x / 16 + y / 16) & 1) ? 0x7FFF00FFu : 0x7F200020u;
+    }
+    Renderer::Unlock_Surface(native);
+    return reinterpret_cast<IDirect3DSurface8 *>(native);
+#else
 	IDirect3DSurface8 *texture_surface = nullptr;
 	DX8_ErrorCode(_MissingTexture->GetSurfaceLevel(0, &texture_surface));
 	D3DSURFACE_DESC texture_surface_desc;
@@ -55,11 +85,47 @@ IDirect3DSurface8* MissingTexture::_Create_Missing_Surface()
 	DX8CALL(CopyRects(texture_surface, nullptr, 0, surface, nullptr));
 	texture_surface->Release();
 	return surface;
+#endif
 }
 
 void MissingTexture::_Init()
 {
 	WWASSERT(!_MissingTexture);
+#if defined(W3D_RENDER_BACKEND_DX12)
+    RenderTexture2DDescription desc;
+    desc.width = missing_image_width;
+    desc.height = missing_image_height;
+    desc.pixelFormat = WW3D_FORMAT_A8R8G8B8;
+    desc.mipLevels = 0; // W3D full mip chain.
+    RenderTexture2DHandle native = Renderer::Create_Texture_2D(desc);
+    if (!native) return;
+    unsigned mipCount = Renderer::Get_Texture_Mip_Count(
+        reinterpret_cast<RenderTextureHandle>(native));
+    unsigned width = desc.width, height = desc.height;
+    bool filled = true;
+    for (unsigned mip = 0; mip < mipCount; ++mip)
+    {
+        RenderSurfaceMap mapped;
+        Renderer::Map_Texture_2D(native, mip, mapped);
+        if (!mapped.data) { filled = false; break; }
+        for (unsigned y = 0; y < height; ++y)
+        {
+            auto * row = reinterpret_cast<unsigned *>(static_cast<unsigned char *>(mapped.data) +
+                                                       y * mapped.rowPitch);
+            for (unsigned x = 0; x < width; ++x)
+                row[x] = ((x / 16 + y / 16) & 1) ? 0x7FFF00FFu : 0x7F200020u;
+        }
+        Renderer::Unmap_Texture_2D(native, mip);
+        width = width > 1 ? width / 2 : 1;
+        height = height > 1 ? height / 2 : 1;
+    }
+    if (!filled)
+    {
+        Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(native));
+        return;
+    }
+    _MissingTexture = reinterpret_cast<IDirect3DTexture8 *>(native);
+#else
 
 	IDirect3DTexture8* tex=DX8Wrapper::_Create_DX8_Texture
 	(
@@ -154,11 +220,16 @@ void MissingTexture::_Init()
 		fclose(fp);
 	}
 */
+#endif
 }
 
 void MissingTexture::_Deinit()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(_MissingTexture));
+#else
 	_MissingTexture->Release();
+#endif
 	_MissingTexture=nullptr;
 }
 
