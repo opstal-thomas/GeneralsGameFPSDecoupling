@@ -50,8 +50,10 @@ checks out-of-range rejection, copies back actual GPU pixels and
 verifies their color. No DX8 texture or draw mirror participates.
 
 [Windows game validation run 38966299293](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38966299293)
-covers the DX8 dependency audit, normal Generals/Zero Hour binaries,
-the preview builds, and both DX12-exclusive bootstrap builds.
+**passed all seven jobs**: the DX8 dependency audit, normal Generals and
+Zero Hour builds/tests, their DX12-preview builds/tests, and both
+DX12-exclusive bootstrap builds/tests. This verifies the source-level
+compatibility and native draw integration, **not** playable DX12-only gameplay.
 
 ## Not yet implemented — keep M01/B07 open
 
