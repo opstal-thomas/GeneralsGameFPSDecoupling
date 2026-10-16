@@ -36,6 +36,20 @@ cbuffer W3DConstants : register(b0)
     uint AlphaTest;
     uint AlphaReference;
     float4 MaterialColor;
+    row_major float4x4 NormalToWorld;
+    float4 MaterialAmbient;
+    float4 MaterialEmissive;
+    float4 SceneAmbient;
+    float4 LightDirection[4];
+    float4 LightDiffuse[4];
+    uint LightingEnabled;
+    uint LightCount;
+    uint AmbientSource;
+    uint DiffuseSource;
+    uint EmissiveSource;
+    uint LightingReserved0;
+    uint LightingReserved1;
+    uint LightingReserved2;
 };
 Texture2D Texture0 : register(t0);
 Texture2D Texture1 : register(t1);
@@ -51,6 +65,12 @@ struct InVertex
 #if W3D_HAS_COLOR
     float4 diffuse : COLOR0;
 #endif
+#if W3D_HAS_SPECULAR
+    float4 specular : COLOR1;
+#endif
+#if W3D_HAS_NORMAL
+    float3 normal : NORMAL;
+#endif
 #if W3D_HAS_UV0
     float2 uv0 : TEXCOORD0;
 #endif
@@ -65,16 +85,58 @@ struct OutVertex
     float2 uv0 : TEXCOORD0;
     float2 uv1 : TEXCOORD1;
 };
+float4 W3DColorSource(uint source, float4 material, float4 color1, float4 color2)
+{
+    return source == 1u ? color1 : (source == 2u ? color2 : material);
+}
 OutVertex W3D_VS(InVertex v)
 {
     OutVertex o;
     o.position = mul(float4(v.position.xyz, 1.0f), WVP);
+    // DX8 D3DCOLOR stores 0xAARRGGBB in little-endian BGRA bytes.
 #if W3D_HAS_COLOR
-    // DX8 D3DCOLOR packs 0xAARRGGBB as little-endian BGRA bytes.
-    o.diffuse = v.diffuse.bgra * float4(1,1,1,MaterialColor.a);
+    float4 color1 = v.diffuse.bgra;
 #else
-    o.diffuse = MaterialColor;
+    float4 color1 = float4(1,1,1,1);
 #endif
+#if W3D_HAS_SPECULAR
+    float4 color2 = v.specular.bgra;
+#else
+    float4 color2 = float4(0,0,0,1);
+#endif
+    if (LightingEnabled != 0u)
+    {
+        const float3 ambientMaterial =
+            W3DColorSource(AmbientSource, MaterialAmbient, color1, color2).rgb;
+        const float3 diffuseMaterial =
+            W3DColorSource(DiffuseSource, MaterialColor, color1, color2).rgb;
+        const float3 emissiveMaterial =
+            W3DColorSource(EmissiveSource, MaterialEmissive, color1, color2).rgb;
+        float3 lit = ambientMaterial * SceneAmbient.rgb + emissiveMaterial;
+#if W3D_HAS_NORMAL
+        // NormalToWorld is inverse-transpose (row-vector convention),
+        // necessary for meshes with non-uniform model scale.
+        float3 normalWorld = normalize(mul(float4(v.normal, 0.f), NormalToWorld).xyz);
+        [unroll]
+        for (uint index = 0u; index < 4u; ++index)
+        {
+            if (index < LightCount)
+            {
+                float lambert = saturate(dot(normalWorld, normalize(LightDirection[index].xyz)));
+                lit += lambert * LightDiffuse[index].rgb * diffuseMaterial;
+            }
+        }
+#endif
+        o.diffuse = float4(saturate(lit), color1.a * MaterialColor.a);
+    }
+    else
+    {
+#if W3D_HAS_COLOR
+        o.diffuse = color1 * float4(1,1,1,MaterialColor.a);
+#else
+        o.diffuse = MaterialColor;
+#endif
+    }
 #if W3D_HAS_UV0
     o.uv0 = v.uv0;
 #else
@@ -187,9 +249,21 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
         unsigned alphaTest;
         unsigned alphaReference;
         float material[4];
+        float normalToWorld[16];
+        float materialAmbient[4];
+        float materialEmissive[4];
+        float sceneAmbient[4];
+        float lightDirection[4][4];
+        float lightDiffuse[4][4];
+        unsigned lightingEnabled;
+        unsigned lightCount;
+        unsigned ambientSource;
+        unsigned diffuseSource;
+        unsigned emissiveSource;
+        unsigned reserved[3];
     };
-    static_assert(sizeof(DrawConstants) == 24 * sizeof(unsigned),
-                  "Native DX12 W3D shader constants mismatch");
+    static_assert(sizeof(DrawConstants) == 92 * sizeof(unsigned),
+                  "Native DX12 W3D constant buffer does not match shader packing");
 
     bool Compile(const char * entry, const char * profile,
                  const D3D_SHADER_MACRO * defines,
@@ -224,6 +298,9 @@ struct DX12W3DNativeDraw::Impl
     RenderBlendOperation equation = RENDER_BLEND_OPERATION_ADD;
     unsigned char writeMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     RenderVertexMaterialDescription material;
+    RenderLightingEnvironmentDescription lighting;
+    RenderMaterialColorSources colorSources;
+    bool vertexLighting = false;
     RenderCompareFunc depthCompare = RENDER_COMPARE_LESS_EQUAL;
     bool depthWrite = true;
     RenderCullMode cull = RENDER_CULL_NONE;
@@ -255,9 +332,11 @@ struct DX12W3DNativeDraw::Impl
 
         D3D12_DESCRIPTOR_RANGE ranges[2] = {};
         D3D12_ROOT_PARAMETER params[3] = {};
-        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        params[0].Constants.ShaderRegister = 0;
-        params[0].Constants.Num32BitValues = sizeof(DrawConstants) / sizeof(unsigned);
+        // Four legacy directional lights plus normal transforms exceed 64
+        // DWORD root constants. A CBV is populated from R02's fence-safe
+        // upload pool per draw so deferred transparent batches cannot alias.
+        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor.ShaderRegister = 0;
         params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         for (unsigned i = 0; i != 2; ++i)
         {
@@ -295,6 +374,10 @@ struct DX12W3DNativeDraw::Impl
         const bool color0 = HasSemantic(layout, "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM);
         const bool uv0 = HasSemantic(layout, "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT);
         const bool uv1 = HasSemantic(layout, "TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT);
+        const bool hasNormals = HasSemantic(layout, "NORMAL", 0,
+                                            DXGI_FORMAT_R32G32B32_FLOAT);
+        const bool hasSpecular = HasSemantic(layout, "COLOR", 1,
+                                             DXGI_FORMAT_R8G8B8A8_UNORM);
         const bool position4 = HasSemantic(layout, "POSITION", 0,
                                             DXGI_FORMAT_R32G32B32A32_FLOAT);
         // M01 supports rigid W3D XYZ/XYZW and 2-float UVs. R03 supports
@@ -324,6 +407,8 @@ struct DX12W3DNativeDraw::Impl
 
         const D3D_SHADER_MACRO macros[] = {
             {"W3D_HAS_COLOR", color0 ? "1" : "0"},
+            {"W3D_HAS_SPECULAR", hasSpecular ? "1" : "0"},
+            {"W3D_HAS_NORMAL", hasNormals ? "1" : "0"},
             {"W3D_HAS_UV0", uv0 ? "1" : "0"},
             {"W3D_HAS_UV1", uv1 ? "1" : "0"},
             {"W3D_POSITION4", position4 ? "1" : "0"},
@@ -424,6 +509,26 @@ void DX12W3DNativeDraw::SetMaterial(const RenderVertexMaterialDescription & stat
 {
     impl_->material = state;
 }
+void DX12W3DNativeDraw::SetLightingEnabled(bool enabled)
+{
+    impl_->vertexLighting = enabled;
+}
+void DX12W3DNativeDraw::SetMaterialColorSources(const RenderMaterialColorSources & sources)
+{
+    impl_->colorSources = sources;
+}
+void DX12W3DNativeDraw::SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights)
+{
+    impl_->lighting = lights;
+    if (impl_->lighting.lightCount > 4)
+        impl_->lighting.lightCount = 4;
+}
+void DX12W3DNativeDraw::SetAmbient(float red, float green, float blue)
+{
+    impl_->lighting.ambient[0] = red;
+    impl_->lighting.ambient[1] = green;
+    impl_->lighting.ambient[2] = blue;
+}
 void DX12W3DNativeDraw::SetDepthCompare(RenderCompareFunc c) { impl_->depthCompare = c; }
 void DX12W3DNativeDraw::SetDepthWrite(bool enabled) { impl_->depthWrite = enabled; }
 void DX12W3DNativeDraw::SetCull(RenderCullMode cull) { impl_->cull = cull; }
@@ -437,6 +542,7 @@ const char * DX12W3DNativeDraw::LastError() const { return impl_->error.c_str();
 bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
                              DX12W3DRenderTargets & targets,
                              DX12W3DTextureStages & stages, const float wvp[16],
+                             const float normalWorld[16],
                              bool strip, unsigned firstIndex, unsigned primitives,
                              unsigned minVertex, unsigned vertexCount)
 {
@@ -444,7 +550,7 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     s.error.clear();
     if (!s.enabled)
         return true;
-    if (!frame.IsRecording() || !frame.ActiveCommandList() || !wvp ||
+    if (!frame.IsRecording() || !frame.ActiveCommandList() || !wvp || !normalWorld ||
         !s.hasVertex || !s.hasIndex || !primitives)
         return s.Fail("W3D draw needs an active frame, vertex and index bindings");
     const unsigned long long usedIndices = strip ?
@@ -484,11 +590,48 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     constants.material[1] = s.material.diffuse.g;
     constants.material[2] = s.material.diffuse.b;
     constants.material[3] = s.material.diffuse.a;
+    const float * materialAmbient = &s.material.ambient.r;
+    const float * materialEmissive = &s.material.emissive.r;
+    std::memcpy(constants.materialAmbient, materialAmbient, sizeof(constants.materialAmbient));
+    std::memcpy(constants.materialEmissive, materialEmissive, sizeof(constants.materialEmissive));
+    std::memcpy(constants.sceneAmbient, s.lighting.ambient, sizeof(constants.sceneAmbient));
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        std::memcpy(constants.lightDirection[i], s.lighting.lights[i].direction, sizeof(constants.lightDirection[i]));
+        std::memcpy(constants.lightDiffuse[i], s.lighting.lights[i].diffuse, sizeof(constants.lightDiffuse[i]));
+    }
+    constants.lightCount = s.lighting.lightCount;
+    constants.lightingEnabled = s.vertexLighting ? 1u : 0u;
+    constants.ambientSource = static_cast<unsigned>(s.colorSources.ambient);
+    constants.diffuseSource = static_cast<unsigned>(s.colorSources.diffuse);
+    constants.emissiveSource = static_cast<unsigned>(s.colorSources.emissive);
+
+    // The native gameplay submission uses row-vectors: W * V * P.
+    // Lighting needs the inverse-transpose of the world 3x3 to avoid
+    // skewed normals on non-uniformly scaled W3D meshes.
+    // The caller supplies the normal transform alongside its WVP.
+    std::memcpy(constants.normalToWorld, normalWorld, sizeof(constants.normalToWorld));
+
+    ID3D12Resource * upload = nullptr;
+    unsigned uploadOffset = 0;
+    if (!frame.ReserveTransientGeometry(static_cast<unsigned>(sizeof(constants)) + 255u,
+                                        upload, uploadOffset) || !upload)
+        return s.Fail(frame.LastError());
+    const unsigned alignedOffset = (uploadOffset + 255u) & ~255u;
+    void * mapped = nullptr;
+    const D3D12_RANGE noRead = {0, 0};
+    if (FAILED(upload->Map(0, &noRead, &mapped)) || !mapped)
+        return s.Fail("Mapping native W3D per-draw lighting CBV failed");
+    std::memcpy(static_cast<unsigned char *>(mapped) + alignedOffset, &constants, sizeof(constants));
+    const D3D12_RANGE written = {alignedOffset, alignedOffset + sizeof(constants)};
+    upload->Unmap(0, &written);
+    if (!frame.RetainFrameResource(upload))
+        return s.Fail(frame.LastError());
 
     auto * cmd = frame.ActiveCommandList();
     cmd->SetGraphicsRootSignature(s.root.Get());
     cmd->SetPipelineState(pipeline);
-    cmd->SetGraphicsRoot32BitConstants(0, sizeof(constants) / sizeof(unsigned), &constants, 0);
+    cmd->SetGraphicsRootConstantBufferView(0, upload->GetGPUVirtualAddress() + alignedOffset);
     if (!stages.BindForDraw(frame, 1))
         return s.Fail(stages.LastError());
     if (!frame.RetainFrameObject(pipeline) || !frame.RetainFrameObject(s.root.Get()))

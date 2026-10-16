@@ -359,6 +359,18 @@ void Renderer::Set_Material(const VertexMaterialClass * material)
         description.power = material->Get_Shininess();
     }
     Set_Vertex_Material(description);
+    // VertexMaterialClass stores the three original D3DMCS semantic values.
+    // Translate using the W3D enum; no DX8 rendering API is used here.
+    RenderMaterialColorSources sources;
+    if (material)
+    {
+        auto * readable = const_cast<VertexMaterialClass *>(material);
+        sources.ambient = static_cast<RenderMaterialColorSource>(readable->Get_Ambient_Color_Source());
+        sources.diffuse = static_cast<RenderMaterialColorSource>(readable->Get_Diffuse_Color_Source());
+        sources.emissive = static_cast<RenderMaterialColorSource>(readable->Get_Emissive_Color_Source());
+    }
+    Set_Vertex_Color_Sources(sources);
+    Set_Vertex_Lighting(material && material->Get_Lighting());
 }
 #endif
 

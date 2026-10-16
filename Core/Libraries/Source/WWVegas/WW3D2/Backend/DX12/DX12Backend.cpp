@@ -10,6 +10,7 @@
 // must stay fail-closed unless the native-frame diagnostic is explicitly
 // enabled. This is not a DX12-only playable-game launch (B10).
 #include "WW3D2/Renderer.h"
+#include "WW3D2/lightenvironment.h"
 #include "WW3D2/Backend/DX12/DX12PrimaryWindow.h"
 #include "WW3D2/Backend/DX12/DX12W3DGeometryBuffers.h"
 #include "WW3D2/Backend/DX12/DX12W3DNativeDraw.h"
@@ -32,6 +33,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 
 #if !defined(W3D_RENDER_BACKEND_DX12) || defined(W3D_RENDER_BACKEND_DX8)
 #error "DX12Backend.cpp must be compiled exclusively for W3D_RENDER_BACKEND=DX12"
@@ -47,6 +49,7 @@ namespace
     DX12W3DRenderTargets renderTargets;
     DX12W3DNativeDraw nativeDraw;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
+    Vector3 globalAmbient(0.f, 0.f, 0.f);
 
     bool ValidTransform(RenderTransform transform)
     {
@@ -390,8 +393,29 @@ namespace
                 for (unsigned inner = 0; inner < 4; ++inner)
                     wvp[row * 4 + column] += worldView[row][inner] * p[inner][column];
 
+        float normalWorld[16] = {};
+        normalWorld[15] = 1.f;
+        // adjugate-transpose / det of world.upper3x3, for n(row) * N
+        const float a = w[0][0], b = w[0][1], c = w[0][2];
+        const float d = w[1][0], e = w[1][1], f = w[1][2];
+        const float g = w[2][0], h = w[2][1], i = w[2][2];
+        const float cof[9] = {
+            e*i-f*h, f*g-d*i, d*h-e*g,
+            c*h-b*i, a*i-c*g, b*g-a*h,
+            b*f-c*e, c*d-a*f, a*e-b*d
+        };
+        const float determinant = a*cof[0] + b*cof[1] + c*cof[2];
+        if (std::isfinite(determinant) && std::fabs(determinant) > 1.e-8f)
+        {
+            for (unsigned row = 0; row < 3; ++row)
+                for (unsigned column = 0; column < 3; ++column)
+                    normalWorld[row * 4 + column] = cof[row * 3 + column] / determinant;
+        }
+        else
+            normalWorld[0] = normalWorld[5] = normalWorld[10] = 1.f;
+
         if (!nativeDraw.Draw(primaryWindow.Presentation(), renderTargets, textureStages,
-                             wvp, strip, startIndex, primitiveCount,
+                             wvp, normalWorld, strip, startIndex, primitiveCount,
                              minVertex, vertexCount))
         {
             OutputDebugStringA("[DX12 M01] Native gameplay indexed draw rejected: ");
@@ -550,12 +574,34 @@ void Renderer::Set_World_Identity()
 
 void Renderer::Set_Ambient(const Vector3 & color)
 {
-    ReportPending("Renderer::Set_Ambient");
+    globalAmbient = color;
+    nativeDraw.SetAmbient(color.X, color.Y, color.Z);
 }
 
 void Renderer::Set_Light_Environment(LightEnvironmentClass * light_env)
 {
-    ReportPending("Renderer::Set_Light_Environment");
+    RenderLightingEnvironmentDescription lighting;
+    const Vector3 ambient = light_env ? light_env->Get_Equivalent_Ambient() : globalAmbient;
+    lighting.ambient[0] = ambient.X;
+    lighting.ambient[1] = ambient.Y;
+    lighting.ambient[2] = ambient.Z;
+    if (light_env)
+    {
+        const int count = light_env->Get_Light_Count();
+        lighting.lightCount = static_cast<unsigned>(count < 0 ? 0 : (count > 4 ? 4 : count));
+        for (unsigned j = 0; j < lighting.lightCount; ++j)
+        {
+            const Vector3 & direction = light_env->Get_Light_Direction(j);
+            const Vector3 & diffuse = light_env->Get_Light_Diffuse(j);
+            lighting.lights[j].direction[0] = direction.X;
+            lighting.lights[j].direction[1] = direction.Y;
+            lighting.lights[j].direction[2] = direction.Z;
+            lighting.lights[j].diffuse[0] = diffuse.X;
+            lighting.lights[j].diffuse[1] = diffuse.Y;
+            lighting.lights[j].diffuse[2] = diffuse.Z;
+        }
+    }
+    nativeDraw.SetLightingEnvironment(lighting);
 }
 
 bool Renderer::Set_Render_Device(const char * name, int width, int height, int bits, int windowed, bool resize_window)
@@ -1227,12 +1273,12 @@ void Renderer::Set_Alpha_Test_Enabled(bool enabled)
 
 void Renderer::Set_Vertex_Lighting(bool enabled)
 {
-    ReportPending("Renderer::Set_Vertex_Lighting");
+    nativeDraw.SetLightingEnabled(enabled);
 }
 
 void Renderer::Set_Vertex_Color_Sources(const RenderMaterialColorSources & sources)
 {
-    ReportPending("Renderer::Set_Vertex_Color_Sources");
+    nativeDraw.SetMaterialColorSources(sources);
 }
 
 void Renderer::Set_Texture_UV_Passthrough(unsigned stage, unsigned uvIndex)

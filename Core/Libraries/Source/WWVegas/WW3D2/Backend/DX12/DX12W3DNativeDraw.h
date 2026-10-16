@@ -35,6 +35,10 @@ public:
     void SetBlendingEnabled(bool enabled);
     void SetColorWriteMask(bool rgbEnabled, bool alphaEnabled);
     void SetMaterial(const RenderVertexMaterialDescription & material);
+    void SetLightingEnabled(bool enabled);
+    void SetMaterialColorSources(const RenderMaterialColorSources & sources);
+    void SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights);
+    void SetAmbient(float red, float green, float blue);
     void SetDepthCompare(RenderCompareFunc compare);
     void SetDepthWrite(bool enabled);
     void SetCull(RenderCullMode cull);
@@ -47,6 +51,7 @@ public:
 
     bool Draw(DX12PresentationDevice & frame, DX12W3DRenderTargets & targets,
               DX12W3DTextureStages & stages, const float wvp[16],
+              const float normalWorld[16],
               bool strip, unsigned firstIndex, unsigned primitiveCount,
               unsigned minVertex, unsigned vertexCount);
 private:
