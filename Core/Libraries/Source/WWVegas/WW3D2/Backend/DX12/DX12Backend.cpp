@@ -834,6 +834,11 @@ RenderTexture2DHandle Renderer::Create_Texture_From_Surface( RenderSurfaceHandle
 {
     if (!Has_Active_Device() || renderThread != GetCurrentThreadId())
         return nullptr;
+    if (renderTargets.Owns(surface))
+    {
+        ReportPending("Renderer::Create_Texture_From_Surface: GPU copy is R08");
+        return nullptr;
+    }
     return DX12W3DSurfaces::ToTexture(
         primaryWindow.Presentation().NativeDevice(), surface, mipLevels);
 }
@@ -1055,40 +1060,68 @@ RenderSurfaceHandle Renderer::Load_Surface(const char * filename)
 
 void Renderer::Describe_Surface(RenderSurfaceHandle surface, RenderSurfaceDescription & description)
 {
+    if (renderTargets.Owns(surface))
+    {
+        renderTargets.Describe(surface, description);
+        return;
+    }
     if (!DX12W3DSurfaces::Describe(surface, description))
         OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Retain_Surface(RenderSurfaceHandle surface)
 {
-    DX12W3DSurfaces::Retain(surface);
+    if (renderTargets.Owns(surface)) renderTargets.Retain(surface);
+    else DX12W3DSurfaces::Retain(surface);
 }
 
 void Renderer::Release_Surface(RenderSurfaceHandle surface)
 {
-    DX12W3DSurfaces::Release(surface);
+    if (renderTargets.Owns(surface)) renderTargets.Release(surface);
+    else DX12W3DSurfaces::Release(surface);
 }
 
 void Renderer::Lock_Surface(RenderSurfaceHandle surface, RenderSurfaceMap & map, const RenderSurfaceRect * region, bool readOnly)
 {
+    if (renderTargets.Owns(surface))
+    {
+        map = RenderSurfaceMap();
+        ReportPending("Renderer::Lock_Surface: R08 GPU readback");
+        return;
+    }
     if (!DX12W3DSurfaces::Lock(surface, map, region, readOnly))
         OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Unlock_Surface(RenderSurfaceHandle surface)
 {
+    if (renderTargets.Owns(surface))
+    {
+        ReportPending("Renderer::Unlock_Surface: R08 GPU readback");
+        return;
+    }
     if (!DX12W3DSurfaces::Unlock(surface))
         OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect * sourceRect, RenderSurfaceHandle destination, const RenderSurfacePoint * destinationPoint)
 {
+    if (renderTargets.Owns(source) || renderTargets.Owns(destination))
+    {
+        ReportPending("Renderer::Copy_Surface: R08 GPU copy");
+        return;
+    }
     if (!DX12W3DSurfaces::Copy(source, sourceRect, destination, destinationPoint))
         OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
 
 void Renderer::Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect & sourceRect, RenderSurfaceHandle destination, const RenderSurfaceRect & destinationRect, RenderSurfaceBlitFilter filter)
 {
+    if (renderTargets.Owns(source) || renderTargets.Owns(destination))
+    {
+        ReportPending("Renderer::Blit_Surface: R08 GPU blit");
+        return;
+    }
     if (!DX12W3DSurfaces::Blit(source, sourceRect, destination, destinationRect, filter))
         OutputDebugStringA(DX12W3DSurfaces::LastError());
 }
