@@ -51,3 +51,8 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+// Exclusive DX12 Renderer stage cache, shared with future native W3D draws.
+// DX8/preview builds do not link this symbol. The active pass must have set
+// its matching root signature before calling BindForDraw.
+DX12W3DTextureStages & DX12W3DRendererTextureStages();
