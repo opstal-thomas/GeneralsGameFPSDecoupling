@@ -13,6 +13,12 @@ WW3D = ROOT / "Core/Libraries/Source/WWVegas/WW3D2"
 CMAKE = WW3D / "CMakeLists.txt"
 DX8 = WW3D / "Backend/DX8Backend.cpp"
 DX12 = WW3D / "Backend/DX12/DX12Backend.cpp"
+# R02's two typed W3D-accessor overloads are intentionally implemented next
+# to their complete legacy types, to keep D3D8 headers out of DX12Backend.cpp.
+DX12_DYNAMIC_ADAPTERS = [
+    WW3D / "dx8vertexbuffer.cpp",
+    WW3D / "dx8indexbuffer.cpp",
+]
 
 # Definitions only (not calls): all Renderer static methods must have exactly
 # one implementation in each backend before they can be switched at link time.
@@ -31,12 +37,26 @@ def signatures(source: Path) -> list[str]:
 class DX12BackendSelectionTests(unittest.TestCase):
     def test_renderer_contract_is_complete_and_exclusive(self):
         dx8 = signatures(DX8)
-        dx12 = signatures(DX12)
+        native = signatures(DX12)
+        adapters = [signature for path in DX12_DYNAMIC_ADAPTERS
+                    for signature in signatures(path)]
+        dx12 = native + adapters
+        expected_adapters = {
+            "void Renderer::Bind_Dynamic_Vertex_Buffer(const DynamicVBAccessClass & access)",
+            "void Renderer::Bind_Dynamic_Index_Buffer(const DynamicIBAccessClass & access, unsigned short baseVertexIndex)",
+        }
         self.assertGreater(len(dx8), 150)
         self.assertEqual(len(dx8), len(set(dx8)), "DX8 defines duplicate signatures")
+        self.assertEqual(set(adapters), expected_adapters,
+                         "R02 may split only the two DX12 dynamic-accessor overloads")
+        self.assertEqual(len(adapters), len(set(adapters)))
         self.assertEqual(set(dx8), set(dx12),
                          "Missing, duplicate or extra DX12 Renderer definitions")
         self.assertEqual(len(dx12), len(set(dx12)))
+        for path in DX12_DYNAMIC_ADAPTERS:
+            code = path.read_text(encoding="utf-8")
+            self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", code,
+                          "Legacy accessor bridge must compile only for DX12")
 
     def test_dx12_backend_does_not_delegate_to_dx8(self):
         code = DX12.read_text(encoding="utf-8")
