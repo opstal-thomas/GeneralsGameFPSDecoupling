@@ -195,6 +195,9 @@ float4 W3DStage(uint colorChannel, uint alphaChannel, float4 current,
     return float4(color.rgb, alpha.a);
 }
 
+#ifndef W3D_COMBINER_KEY
+#define W3D_COMBINER_KEY 0u
+#endif
 float4 W3D_PS(OutVertex v) : SV_TARGET
 {
     // Compile-time specialization: interpreting a dynamic combiner key

@@ -1318,13 +1318,13 @@ void Renderer::Set_Texture_Transform_2D(unsigned stage, bool enabled)
     ReportPending("Renderer::Set_Texture_Transform_2D");
 }
 
-void Renderer::Apply_Texture_Stage_Color(unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+void Renderer::Apply_Texture_Stage_Color( unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
 {
     (void)uncached;
     nativeDraw.SetTextureChannel(stage, false, channel);
 }
 
-void Renderer::Apply_Texture_Stage_Alpha(unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
+void Renderer::Apply_Texture_Stage_Alpha( unsigned stage, const RenderTextureStageChannel & channel, bool uncached)
 {
     (void)uncached;
     nativeDraw.SetTextureChannel(stage, true, channel);
