@@ -1238,12 +1238,12 @@ void Renderer::Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect 
 
 void Renderer::Apply_Texture_Sampler(unsigned stage, const RenderSamplerDescription & sampler)
 {
-    ReportPending("Renderer::Apply_Texture_Sampler");
+    textureStages.ApplySampler(stage, sampler);
 }
 
 void Renderer::Set_Texture_Max_Anisotropy(unsigned stage, unsigned level)
 {
-    ReportPending("Renderer::Set_Texture_Max_Anisotropy");
+    textureStages.SetMaxAnisotropy(stage, level);
 }
 
 void Renderer::Apply_Blend_State(const RenderBlendState & state)
@@ -1332,17 +1332,17 @@ void Renderer::Apply_Texture_Stage_Alpha(unsigned stage, const RenderTextureStag
 
 void Renderer::Set_Texture_Filter(unsigned stage, RenderSamplerFilterField field, RenderSamplerFilter filter)
 {
-    ReportPending("Renderer::Set_Texture_Filter");
+    textureStages.SetFilter(stage, field, filter);
 }
 
 void Renderer::Set_Texture_Address(unsigned stage, RenderSamplerAxis axis, RenderSamplerAddress address)
 {
-    ReportPending("Renderer::Set_Texture_Address");
+    textureStages.SetAddress(stage, axis, address);
 }
 
 void Renderer::Set_Texture_Border_Color(unsigned stage, unsigned packedARGB)
 {
-    ReportPending("Renderer::Set_Texture_Border_Color");
+    textureStages.SetBorderColor(stage, packedARGB);
 }
 
 void Renderer::Set_Source_Blend(RenderBlendFactor factor)

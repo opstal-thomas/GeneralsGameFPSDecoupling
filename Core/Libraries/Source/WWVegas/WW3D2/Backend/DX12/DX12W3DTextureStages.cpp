@@ -11,6 +11,8 @@
 #include <wrl/client.h>
 #include <array>
 #include <cstdint>
+#include <algorithm>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -25,6 +27,75 @@ namespace
     // Pages are immutable once published and retained by the GPU fence.
     constexpr unsigned DescriptorsPerPage = 512;
     constexpr unsigned DescriptorsPerDraw = 2;
+
+
+    struct SamplerState
+    {
+        RenderSamplerDescription description;
+        RenderSamplerAddress addressW = RENDER_SAMPLER_REPEAT;
+        unsigned maxAnisotropy = 1;
+        unsigned borderARGB = 0;
+    };
+
+    D3D12_TEXTURE_ADDRESS_MODE Address(RenderSamplerAddress address)
+    {
+        if (address == RENDER_SAMPLER_CLAMP) return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        if (address == RENDER_SAMPLER_BORDER) return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    }
+
+    D3D12_SAMPLER_DESC Sampler(const SamplerState & state)
+    {
+        const RenderSamplerDescription & s = state.description;
+        const bool anisotropic = s.minFilter == RENDER_SAMPLER_ANISOTROPIC ||
+            s.magFilter == RENDER_SAMPLER_ANISOTROPIC;
+        const bool minLinear = s.minFilter == RENDER_SAMPLER_LINEAR;
+        const bool magLinear = s.magFilter == RENDER_SAMPLER_LINEAR;
+        const bool mipLinear = s.mipFilter == RENDER_SAMPLER_LINEAR ||
+                               s.mipFilter == RENDER_SAMPLER_ANISOTROPIC;
+        D3D12_SAMPLER_DESC d = {};
+        // D3D12 basic filter encoding: min bit 0x10, mag bit 0x04,
+        // mip bit 0x01. No mip filter clamps MaxLOD to base level.
+        d.Filter = anisotropic ? D3D12_FILTER_ANISOTROPIC :
+            static_cast<D3D12_FILTER>((minLinear ? 0x10u : 0u) |
+                                      (magLinear ? 0x04u : 0u) |
+                                      (mipLinear ? 0x01u : 0u));
+        d.AddressU = Address(s.addressU);
+        d.AddressV = Address(s.addressV);
+        d.AddressW = Address(state.addressW);
+        d.MipLODBias = 0.0f;
+        d.MaxAnisotropy = anisotropic ?
+            std::max(1u, std::min(16u, state.maxAnisotropy)) : 1u;
+        d.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        d.BorderColor[0] = ((state.borderARGB >> 16) & 255u) / 255.f;
+        d.BorderColor[1] = ((state.borderARGB >> 8) & 255u) / 255.f;
+        d.BorderColor[2] = (state.borderARGB & 255u) / 255.f;
+        d.BorderColor[3] = ((state.borderARGB >> 24) & 255u) / 255.f;
+        d.MinLOD = 0.f;
+        d.MaxLOD = s.mipFilter == RENDER_SAMPLER_NONE ? 0.f : D3D12_FLOAT32_MAX;
+        return d;
+    }
+
+    // Two samplers form one contiguous s0/s1 root descriptor table. The
+    // key contains semantic state, not padding from D3D12_SAMPLER_DESC.
+    using SamplerKey = std::array<unsigned, 16>;
+    SamplerKey MakeSamplerKey(const std::array<SamplerState, 2> & states)
+    {
+        SamplerKey key = {};
+        for (unsigned i = 0; i < 2; ++i)
+        {
+            const SamplerState & s = states[i];
+            key[8*i] = static_cast<unsigned>(s.description.minFilter);
+            key[8*i+1] = static_cast<unsigned>(s.description.magFilter);
+            key[8*i+2] = static_cast<unsigned>(s.description.mipFilter);
+            key[8*i+3] = static_cast<unsigned>(s.description.addressU);
+            key[8*i+4] = static_cast<unsigned>(s.description.addressV);
+            key[8*i+5] = static_cast<unsigned>(s.addressW);
+            key[8*i+6] = s.maxAnisotropy;
+            key[8*i+7] = s.borderARGB;
+        }
+        return key;
+    }
 
     struct TableKey
     {
@@ -70,13 +141,17 @@ namespace
 struct DX12W3DTextureStages::Impl
 {
     std::array<RenderTextureHandle, DX12W3DTextureStages::StageCount> stages = {};
+    std::array<SamplerState, 2> samplers = {};
     const DX12PresentationDevice * recordingOwner = nullptr;
     ID3D12Device * recordingDevice = nullptr;
     unsigned long long recordingSerial = 0;
     unsigned descriptorStride = 0;
+    unsigned samplerStride = 0;
     unsigned snapshotCount = 0;
     std::vector<HeapPage> pages;
     std::unordered_map<TableKey, Table, TableHasher> tables;
+    std::vector<HeapPage> samplerPages;
+    std::map<SamplerKey, Table> samplerTables;
     // A content revision prepared on this recording is already pinned by
     // RetainFrameResource. Do not repeat AddRef for every draw using it.
     std::unordered_map<std::uint64_t, std::uint64_t> preparedRevisions;
@@ -96,9 +171,12 @@ struct DX12W3DTextureStages::Impl
         recordingDevice = nullptr;
         recordingSerial = 0;
         descriptorStride = 0;
+        samplerStride = 0;
         snapshotCount = 0;
         pages.clear();
         tables.clear();
+        samplerPages.clear();
+        samplerTables.clear();
         preparedRevisions.clear();
     }
 
@@ -116,7 +194,10 @@ struct DX12W3DTextureStages::Impl
         recordingSerial = frame.RecordingSerial();
         descriptorStride = recordingDevice->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        return descriptorStride ? true : Fail("Cannot determine DX12 SRV descriptor stride");
+        samplerStride = recordingDevice->GetDescriptorHandleIncrementSize(
+            D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        return descriptorStride && samplerStride ? true :
+            Fail("Cannot determine DX12 W3D descriptor strides");
     }
 
     bool Prepare(DX12PresentationDevice & frame, RenderTextureHandle h,
@@ -171,6 +252,22 @@ struct DX12W3DTextureStages::Impl
         pages.push_back(std::move(page));
         return true;
     }
+
+    bool AddSamplerPage(DX12PresentationDevice & frame)
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC d = {};
+        d.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+        d.NumDescriptors = DescriptorsPerPage;
+        d.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        HeapPage page;
+        if (FAILED(recordingDevice->CreateDescriptorHeap(
+                &d, IID_PPV_ARGS(&page.heap))))
+            return Fail("Creating DX12 W3D sampler heap failed");
+        if (!frame.RetainFrameObject(page.heap.Get()))
+            return Fail(frame.LastError());
+        samplerPages.push_back(std::move(page));
+        return true;
+    }
 };
 
 DX12W3DTextureStages::DX12W3DTextureStages() : impl_(new Impl) {}
@@ -197,6 +294,53 @@ RenderTextureHandle DX12W3DTextureStages::Bound(unsigned stage) const
     return stage < StageCount ? impl_->stages[stage] : nullptr;
 }
 
+bool DX12W3DTextureStages::ApplySampler(
+    unsigned stage, const RenderSamplerDescription & sampler)
+{
+    if (stage >= impl_->samplers.size())
+        return impl_->Fail("Native DX12 W3D sampler stage exceeds supported capacity");
+    impl_->samplers[stage].description = sampler;
+    return true;
+}
+bool DX12W3DTextureStages::SetFilter(
+    unsigned stage, RenderSamplerFilterField field, RenderSamplerFilter value)
+{
+    if (stage >= impl_->samplers.size())
+        return impl_->Fail("Native DX12 W3D filter stage exceeds supported capacity");
+    auto & s = impl_->samplers[stage].description;
+    if (field == RENDER_SAMPLER_MIN_FILTER) s.minFilter = value;
+    else if (field == RENDER_SAMPLER_MAG_FILTER) s.magFilter = value;
+    else if (field == RENDER_SAMPLER_MIP_FILTER) s.mipFilter = value;
+    else return impl_->Fail("Invalid W3D sampler filter field");
+    return true;
+}
+bool DX12W3DTextureStages::SetAddress(
+    unsigned stage, RenderSamplerAxis axis, RenderSamplerAddress value)
+{
+    if (stage >= impl_->samplers.size())
+        return impl_->Fail("Native DX12 W3D address stage exceeds supported capacity");
+    auto & s = impl_->samplers[stage];
+    if (axis == RENDER_SAMPLER_AXIS_U) s.description.addressU = value;
+    else if (axis == RENDER_SAMPLER_AXIS_V) s.description.addressV = value;
+    else if (axis == RENDER_SAMPLER_AXIS_W) s.addressW = value;
+    else return impl_->Fail("Invalid W3D sampler address axis");
+    return true;
+}
+bool DX12W3DTextureStages::SetMaxAnisotropy(unsigned stage, unsigned value)
+{
+    if (stage >= impl_->samplers.size())
+        return impl_->Fail("Native DX12 W3D anisotropy stage exceeds supported capacity");
+    impl_->samplers[stage].maxAnisotropy = std::max(1u, std::min(16u, value));
+    return true;
+}
+bool DX12W3DTextureStages::SetBorderColor(unsigned stage, unsigned packedARGB)
+{
+    if (stage >= impl_->samplers.size())
+        return impl_->Fail("Native DX12 W3D border stage exceeds supported capacity");
+    impl_->samplers[stage].borderARGB = packedARGB;
+    return true;
+}
+
 void DX12W3DTextureStages::Clear()
 {
     Impl & state = *impl_;
@@ -206,6 +350,7 @@ void DX12W3DTextureStages::Clear()
         texture = nullptr;
     }
     state.ClearFrame();
+    state.samplers = {};
     state.error.clear();
 }
 
@@ -228,7 +373,7 @@ bool DX12W3DTextureStages::PrepareBound(DX12PresentationDevice & frame)
 }
 
 bool DX12W3DTextureStages::BindForDraw(DX12PresentationDevice & frame,
-                                        unsigned firstRoot)
+                                        unsigned firstRoot, unsigned samplerRoot)
 {
     Impl & state = *impl_;
     state.error.clear();
@@ -277,15 +422,55 @@ bool DX12W3DTextureStages::BindForDraw(DX12PresentationDevice & frame,
         ++state.snapshotCount;
     }
 
-    ID3D12DescriptorHeap * const heap = state.pages[table.page].heap.Get();
+    ID3D12DescriptorHeap * heaps[2] = {state.pages[table.page].heap.Get(), nullptr};
+    Table samplerTable;
+    if (samplerRoot != ~0u)
+    {
+        if (samplerRoot > 63u)
+            return state.Fail("W3D sampler root table index exceeds D3D12 limits");
+        const SamplerKey samplerKey = MakeSamplerKey(state.samplers);
+        const auto found = state.samplerTables.find(samplerKey);
+        if (found != state.samplerTables.end())
+            samplerTable = found->second;
+        else
+        {
+            if (state.samplerPages.empty() ||
+                state.samplerPages.back().used + DescriptorsPerDraw > DescriptorsPerPage)
+            {
+                if (!state.AddSamplerPage(frame))
+                    return false;
+            }
+            HeapPage & page = state.samplerPages.back();
+            samplerTable.page = state.samplerPages.size() - 1;
+            samplerTable.offset = page.used;
+            D3D12_CPU_DESCRIPTOR_HANDLE slot = page.heap->GetCPUDescriptorHandleForHeapStart();
+            slot.ptr += static_cast<SIZE_T>(page.used) * state.samplerStride;
+            for (unsigned stage = 0; stage < DescriptorsPerDraw; ++stage)
+            {
+                const D3D12_SAMPLER_DESC descriptor = Sampler(state.samplers[stage]);
+                state.recordingDevice->CreateSampler(&descriptor, slot);
+                slot.ptr += state.samplerStride;
+            }
+            page.used += DescriptorsPerDraw;
+            state.samplerTables.emplace(samplerKey, samplerTable);
+        }
+        heaps[1] = state.samplerPages[samplerTable.page].heap.Get();
+    }
     auto * const cmd = frame.ActiveCommandList();
-    cmd->SetDescriptorHeaps(1, &heap);
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptor = heap->GetGPUDescriptorHandleForHeapStart();
+    cmd->SetDescriptorHeaps(heaps[1] ? 2u : 1u, heaps);
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptor = heaps[0]->GetGPUDescriptorHandleForHeapStart();
     descriptor.ptr += static_cast<UINT64>(table.offset) * state.descriptorStride;
     for (unsigned stage = 0; stage < DescriptorsPerDraw; ++stage)
     {
         cmd->SetGraphicsRootDescriptorTable(firstRoot + stage, descriptor);
         descriptor.ptr += state.descriptorStride;
+    }
+    if (heaps[1])
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE samplerDescriptor =
+            heaps[1]->GetGPUDescriptorHandleForHeapStart();
+        samplerDescriptor.ptr += static_cast<UINT64>(samplerTable.offset) * state.samplerStride;
+        cmd->SetGraphicsRootDescriptorTable(samplerRoot, samplerDescriptor);
     }
     return true;
 }

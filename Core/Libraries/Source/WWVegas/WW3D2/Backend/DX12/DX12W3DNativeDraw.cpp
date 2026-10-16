@@ -411,8 +411,8 @@ struct DX12W3DNativeDraw::Impl
         if (!device)
             return Fail("Cannot initialize game draw without a DX12 device");
 
-        D3D12_DESCRIPTOR_RANGE ranges[2] = {};
-        D3D12_ROOT_PARAMETER params[3] = {};
+        D3D12_DESCRIPTOR_RANGE ranges[3] = {};
+        D3D12_ROOT_PARAMETER params[4] = {};
         // Four legacy directional lights plus normal transforms exceed 64
         // DWORD root constants. A CBV is populated from R02's fence-safe
         // upload pool per draw so deferred transparent batches cannot alias.
@@ -429,12 +429,16 @@ struct DX12W3DNativeDraw::Impl
             params[i + 1].DescriptorTable.pDescriptorRanges = &ranges[i];
             params[i + 1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         }
-        const D3D12_STATIC_SAMPLER_DESC samplers[2] = {Sampler(0), Sampler(1)};
+        ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+        ranges[2].NumDescriptors = 2;
+        ranges[2].BaseShaderRegister = 0;
+        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[3].DescriptorTable.NumDescriptorRanges = 1;
+        params[3].DescriptorTable.pDescriptorRanges = &ranges[2];
+        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_ROOT_SIGNATURE_DESC desc = {};
-        desc.NumParameters = 3;
+        desc.NumParameters = 4;
         desc.pParameters = params;
-        desc.NumStaticSamplers = 2;
-        desc.pStaticSamplers = samplers;
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         ComPtr<ID3DBlob> serialized, diagnostics;
         if (FAILED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -743,7 +747,7 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     cmd->SetGraphicsRootSignature(s.root.Get());
     cmd->SetPipelineState(pipeline);
     cmd->SetGraphicsRootConstantBufferView(0, upload->GetGPUVirtualAddress() + alignedOffset);
-    if (!stages.BindForDraw(frame, 1))
+    if (!stages.BindForDraw(frame, 1, 3))
         return s.Fail(stages.LastError());
     if (!frame.RetainFrameObject(pipeline) || !frame.RetainFrameObject(s.root.Get()))
         return s.Fail(frame.LastError());

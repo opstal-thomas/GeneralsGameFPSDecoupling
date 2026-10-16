@@ -34,6 +34,15 @@ public:
     void Clear();
     RenderTextureHandle Bound(unsigned stage) const;
 
+    // Per-stage samplers are immutable snapshots for recorded DX12 draws.
+    // Native W3D uses the optional sampler descriptor table; the R05
+    // preview remains compatible with its existing static samplers.
+    bool ApplySampler(unsigned stage, const RenderSamplerDescription & sampler);
+    bool SetFilter(unsigned stage, RenderSamplerFilterField field, RenderSamplerFilter value);
+    bool SetAddress(unsigned stage, RenderSamplerAxis axis, RenderSamplerAddress value);
+    bool SetMaxAnisotropy(unsigned stage, unsigned value);
+    bool SetBorderColor(unsigned stage, unsigned packedARGB);
+
     // Called once after BeginFrame and on mid-frame Bind_Texture updates.
     // Loads pending CPU mip revisions into native GPU generations.
     bool PrepareBound(DX12PresentationDevice & frame);
@@ -41,7 +50,8 @@ public:
     // Immutable per-draw snapshot, not a mutable descriptor overwritten in
     // place. The command list retains each heap until its GPU fence completes
     // even after Bind(null), Clear() or the last W3D handle release.
-    bool BindForDraw(DX12PresentationDevice & frame, unsigned firstRoot = 1);
+    bool BindForDraw(DX12PresentationDevice & frame, unsigned firstRoot = 1,
+                     unsigned samplerRoot = ~0u);
 
     unsigned SnapshotCount() const;
     unsigned PageCount() const;
