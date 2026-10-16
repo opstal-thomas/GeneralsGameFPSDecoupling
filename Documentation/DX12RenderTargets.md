@@ -104,8 +104,12 @@ switching, clears, depth-only output, DSV-as-SRV rejection and primary
 viewport restoration. `scripts/tests/test_dx12_render_targets.py`
 guards these contracts; its checks and all WARP programs run in
 [DX12 W3D Shader Validation](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/workflows/dx12-shader-validation.yml).
-The full Generals and Zero Hour Windows validation matrix remains the
-separate game build/dependency audit.
+**Verified 2026-10-16:** [The final DX12 shader/source-contract and
+Win32/x64 WARP run](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38876104531)
+passed all **10 standalone tests on each architecture**, including both
+native RTT and real Renderer-HWND path. [All seven Generals and Zero Hour
+Windows build, CTest and DX8 dependency-audit jobs](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38876104586)
+passed on the same code revision.
 
 ## Remaining work
 
