@@ -98,6 +98,9 @@ public:
     ID3D12GraphicsCommandList * ActiveCommandList() const;
     ID3D12Resource * CurrentBackBuffer() const;
     ID3D12Resource * CurrentDepthTarget() const;
+    // The current primary descriptors are valid only during this recording.
+    D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferRTV() const;
+    D3D12_CPU_DESCRIPTOR_HANDLE CurrentDepthDSV() const;
 
 private:
     struct Impl;
