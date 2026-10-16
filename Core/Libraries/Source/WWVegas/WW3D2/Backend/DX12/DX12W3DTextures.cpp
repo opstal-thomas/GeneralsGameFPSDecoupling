@@ -538,6 +538,23 @@ namespace DX12W3DTextures
                    desc.pixelFormat, desc.mipLevels));
     }
 
+    bool ConvertRowToBGRA8(unsigned format, const std::uint8_t * source,
+                           unsigned pixels, std::uint8_t * destination)
+    {
+        lastError.clear();
+        DXGI_FORMAT native = DXGI_FORMAT_UNKNOWN;
+        unsigned cpuBytes = 0, blockBytes = 0;
+        bool compressed = false;
+        if (!source || !destination ||
+            !FormatInfo(format, native, cpuBytes, blockBytes, compressed) ||
+            compressed || !cpuBytes)
+            return Fail("CPU row conversion requires uncompressed W3D pixels");
+        for (unsigned x = 0; x < pixels; ++x)
+            ConvertPixel(format, source + static_cast<std::size_t>(x) * cpuBytes,
+                         destination + static_cast<std::size_t>(x) * 4u);
+        return true;
+    }
+
     bool SupportsFormat(unsigned format)
     {
         DXGI_FORMAT native = DXGI_FORMAT_UNKNOWN;
