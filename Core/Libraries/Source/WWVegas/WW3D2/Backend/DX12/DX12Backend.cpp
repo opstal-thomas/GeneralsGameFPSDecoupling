@@ -609,9 +609,23 @@ bool Renderer::Get_Adapter_Identification(RenderAdapterIdentification & identifi
 
 RenderCapabilities Renderer::Get_Capabilities()
 {
-    // Hardware capabilities are not W3D feature support. Do not advertise
-    // textures, shaders or geometry until the native resource path exists.
-    return RenderCapabilities();
+    RenderCapabilities caps;
+    if (Has_Active_Device())
+    {
+        // W3D's existing texture loader uses these values to round/clamp
+        // input dimensions. Zeros would collapse valid maps to 0x0.
+        caps.maxTextureWidth = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+        caps.maxTextureHeight = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+        caps.maxVolumeExtent = D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+        caps.maxTextureAspectRatio = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+        caps.cubeTextures = true;
+        caps.textureCompression = true;
+        caps.maxTexturesPerPass = 2; // W3D legacy two-stage material combiner.
+        caps.maxSimultaneousTextures = 2;
+        // Do not advertise unported legacy fixed-function stage/sampler
+        // capabilities merely because D3D12 hardware can support them.
+    }
+    return caps;
 }
 
 void Renderer::Set_Mesh_Camera(CameraClass * camera)
