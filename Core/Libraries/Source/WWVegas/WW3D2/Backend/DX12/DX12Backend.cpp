@@ -928,7 +928,9 @@ bool Renderer::Set_Render_Target_Surfaces(RenderSurfaceHandle color, RenderSurfa
         if (bound && (bound == colorTexture || bound == depthTexture))
             return false;
     }
-    return renderTargets.Bind(primaryWindow.Presentation(), color, depth);
+    if (!renderTargets.Bind(primaryWindow.Presentation(), color, depth))
+        return false;
+    return !renderTargets.IsPrimary() || primaryWindow.RestorePrimaryViewport();
 }
 
 RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level( RenderTexture2DHandle texture, unsigned mipLevel)
