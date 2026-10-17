@@ -221,12 +221,16 @@ jobs:
           )
           foreach ($source in $sources) {
             $matches = @($compiles | Where-Object { ([string]$_.file).Replace('\', '/').EndsWith("/$source") })
-            if ($matches.Count -ne 1) { throw "Expected one compile for $source, found $($matches.Count)" }
-            $command = [string]$matches[0].command + " " + ($matches[0].arguments -join " ")
-            $actualDX12 = $command.Contains("W3D_RENDER_BACKEND_DX12=1")
+            if ($matches.Count -lt 1) { throw "No compiler command found for $source" }
             $selectedDX12 = "${{ inputs.renderer_backend }}" -eq "DX12"
-            Write-Host "$source : selectedDX12=$selectedDX12 compiledDX12=$actualDX12"
-            if ($actualDX12 -ne $selectedDX12) { throw "$source has the wrong Renderer backend flag" }
+            foreach ($entry in $matches) {
+              $command = [string]$entry.command + " " + ($entry.arguments -join " ")
+              $actualDX12 = $command.Contains("W3D_RENDER_BACKEND_DX12=1")
+              Write-Host "$source : selectedDX12=$selectedDX12 compiledDX12=$actualDX12"
+              if ($actualDX12 -ne $selectedDX12) {
+                throw "$source compiled with wrong Renderer backend flag in one CMake configuration"
+              }
+            }
           }
       - name: Build ${{ inputs.game }} with CMake Using ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Preset
         shell: pwsh
