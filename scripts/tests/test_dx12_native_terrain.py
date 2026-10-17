@@ -60,6 +60,8 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("m_nativeDynamicVertices.data() +", HEIGHT)
         self.assertIn("doTheDynamicLight(vb, vbMirror", HEIGHT)
         self.assertIn("m_nativeDynamicVertices.empty() ?", HEIGHT)
+        self.assertIn("if (m_nativeDynamicVertices.empty())", HEIGHT)
+        self.assertIn("On_Frame_Update();", HEIGHT.split("void HeightMapRenderObjClass::Render(", 1)[1])
         self.assertIn("m_nativeDynamicVertices.clear();", HEIGHT.split("void HeightMapRenderObjClass::freeIndexVertexBuffers()", 1)[1])
         self.assertNotIn("T01 uses original baked terrain lighting", HEIGHT)
 

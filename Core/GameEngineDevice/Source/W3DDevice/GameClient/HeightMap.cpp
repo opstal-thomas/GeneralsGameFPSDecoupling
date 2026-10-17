@@ -1953,6 +1953,11 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// not read a D3D8 buffer or invoke the secondary gameplay preview.
 	if (Is_Hidden() || !m_vertexBufferBackup || m_x <= 1 || m_y <= 1)
 		return;
+	// Scrolling or seismic edits may rebuild source vertices after the scene
+	// frame update. Refresh dynamic lighting from the current heightmap before
+	// submitting, instead of flashing back to static light while panning.
+	if (m_nativeDynamicVertices.empty())
+		On_Frame_Update();
 	// Keep the legacy scene-pass handoff used for tree/opaque ordering.
 	// This merely marks the pass; it does not call the DX8 tree renderer.
 	if (m_treeBuffer)
