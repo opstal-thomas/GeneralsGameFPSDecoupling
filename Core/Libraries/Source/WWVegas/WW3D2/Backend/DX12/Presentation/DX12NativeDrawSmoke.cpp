@@ -715,6 +715,36 @@ int wmain()
                    rgba[0] > 230 && rgba[1] < 12,
                    "R08 GPU surface unlock submits edited pixel", transfers.LastError()))
             return 1;
+        // CPU-to-GPU scaled TRIANGLE blit exercises bilinear sampling,
+        // upload footprints and preserved pixels outside its destination.
+        RenderSurfaceDescription tileDesc;
+        tileDesc.width = tileDesc.height = 2;
+        tileDesc.pixelFormat = 2;
+        const auto tile = DX12W3DSurfaces::Create(tileDesc);
+        RenderSurfaceMap tileMap;
+        if (!Check(tile && DX12W3DSurfaces::Lock(tile, tileMap),
+                   "map R08 bilinear source tile")) return 1;
+        const unsigned char checker[16] = {
+            0,0,255,255, 0,255,0,255,
+            255,0,0,255, 255,255,255,255
+        };
+        for (unsigned y = 0; y < 2; ++y)
+            std::memcpy(static_cast<unsigned char *>(tileMap.data) +
+                        y * tileMap.rowPitch, checker + y * 8, 8);
+        DX12W3DSurfaces::Unlock(tile);
+        const RenderSurfaceRect srcTile = {0,0,2,2};
+        const RenderSurfaceRect stretch = {70,50,90,70};
+        if (!Check(transfers.Blit(device, targets, tile, srcTile, bSurface, stretch,
+                                  RENDER_SURFACE_BLIT_TRIANGLE),
+                   "R08 bilinear CPU surface to GPU blit", transfers.LastError()))
+            return 1;
+        if (!Check(transfers.ReadRegion(device, targets, bSurface, rgba, 4, center) == 4 &&
+                   rgba[0] > 75 && rgba[0] < 185 &&
+                   rgba[1] > 75 && rgba[1] < 185 &&
+                   rgba[2] > 75 && rgba[2] < 185,
+                   "R08 half-pixel bilinear native output", transfers.LastError()))
+            return 1;
+        DX12W3DSurfaces::Release(tile);
         if (!Check(targets.Bind(device, nullptr, nullptr) &&
                    targets.EndFrame(device) && device.EndFrame(0, false) &&
                    device.WaitForIdle(), "fence R08 surface copy tests", targets.LastError()))
