@@ -753,6 +753,11 @@ public:
                       const Vector3 & color,
                       float dest_alpha = 0.0f, float z = 1.0f, unsigned int stencil = 0);
     static void Set_Viewport(const RenderViewport & viewport);
+    // U01: scoped physical-pixel scissor, independent of viewport.
+    static void Get_Viewport(RenderViewport & viewport);
+    static void Set_2D_Scissor(int left, int top, int right, int bottom);
+    static void Clear_2D_Scissor();
+    static void Set_2D_Grayscale(bool enabled);
     static void Set_Polygon_Mode(PolygonMode mode);
     static void Invalidate_Cached_Render_States();
 

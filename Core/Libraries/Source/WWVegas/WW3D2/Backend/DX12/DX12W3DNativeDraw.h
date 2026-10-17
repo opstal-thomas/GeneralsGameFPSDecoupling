@@ -41,6 +41,7 @@ public:
     void SetTextureFactor(unsigned packedARGB);
     void SetLightingEnabled(bool enabled);
     void SetSpecularEnabled(bool enabled);
+    void SetGrayscaleEnabled(bool enabled);
     void SetMaterialColorSources(const RenderMaterialColorSources & sources);
     void SetLightingEnvironment(const RenderLightingEnvironmentDescription & lights);
     RenderLightingEnvironmentDescription GetLightingEnvironment() const;

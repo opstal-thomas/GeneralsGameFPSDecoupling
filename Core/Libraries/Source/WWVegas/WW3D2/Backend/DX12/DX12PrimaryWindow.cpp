@@ -171,6 +171,18 @@ bool DX12PrimaryWindow::ApplyViewport()
     viewport.MaxDepth = maxDepth_;
     D3D12_RECT scissor = {static_cast<LONG>(x), static_cast<LONG>(y),
                           static_cast<LONG>(x + width), static_cast<LONG>(y + height)};
+    if (scissorClipEnabled_)
+    {
+        // Half-open clip rect intersected with the currently active viewport.
+        scissor.left = (std::min)((std::max)(
+            static_cast<LONG>(clipLeft_), scissor.left), scissor.right);
+        scissor.top = (std::min)((std::max)(
+            static_cast<LONG>(clipTop_), scissor.top), scissor.bottom);
+        scissor.right = (std::max)(scissor.left,
+            (std::min)(scissor.right, static_cast<LONG>(clipRight_)));
+        scissor.bottom = (std::max)(scissor.top,
+            (std::min)(scissor.bottom, static_cast<LONG>(clipBottom_)));
+    }
     ID3D12GraphicsCommandList * list = device_.ActiveCommandList();
     if (!list)
     {
@@ -196,6 +208,28 @@ bool DX12PrimaryWindow::SetViewport(unsigned x, unsigned y, unsigned width,
     viewportHeight_ = height;
     minDepth_ = minDepth;
     maxDepth_ = maxDepth;
+    return ApplyViewport();
+}
+
+void DX12PrimaryWindow::GetViewport(unsigned & x, unsigned & y,
+                                      unsigned & width, unsigned & height,
+                                      float & minDepth, float & maxDepth) const
+{
+    x = viewportX_; y = viewportY_;
+    width = viewportWidth_; height = viewportHeight_;
+    minDepth = minDepth_; maxDepth = maxDepth_;
+}
+bool DX12PrimaryWindow::SetScissorClip(bool enabled, int left, int top,
+                                       int right, int bottom)
+{
+    if (enabled && (right < left || bottom < top))
+    {
+        error_ = "Invalid DX12 UI clip rectangle";
+        return false;
+    }
+    scissorClipEnabled_ = enabled;
+    clipLeft_ = left; clipTop_ = top;
+    clipRight_ = right; clipBottom_ = bottom;
     return ApplyViewport();
 }
 
@@ -271,6 +305,8 @@ void DX12PrimaryWindow::Shutdown()
     rgba_[0] = rgba_[1] = rgba_[2] = 0.f;
     rgba_[3] = clearZ_ = 1.f;
     viewportX_ = viewportY_ = viewportWidth_ = viewportHeight_ = 0;
+    scissorClipEnabled_ = false;
+    clipLeft_ = clipTop_ = clipRight_ = clipBottom_ = 0;
     minDepth_ = 0.f;
     maxDepth_ = 1.f;
     window_ = nullptr;

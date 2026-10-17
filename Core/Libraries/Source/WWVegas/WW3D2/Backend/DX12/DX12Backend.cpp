@@ -331,6 +331,27 @@ void Renderer::Set_Viewport(const RenderViewport & viewport)
         ReportFailure("Renderer::Set_Viewport");
 }
 
+void Renderer::Get_Viewport(RenderViewport & viewport)
+{
+    primaryWindow.GetViewport(viewport.x, viewport.y,
+                              viewport.width, viewport.height,
+                              viewport.min_z, viewport.max_z);
+}
+void Renderer::Set_2D_Scissor(int left, int top, int right, int bottom)
+{
+    if (ready && !primaryWindow.SetScissorClip(true, left, top, right, bottom))
+        ReportFailure("Renderer::Set_2D_Scissor");
+}
+void Renderer::Clear_2D_Scissor()
+{
+    if (ready && !primaryWindow.SetScissorClip(false, 0, 0, 0, 0))
+        ReportFailure("Renderer::Clear_2D_Scissor");
+}
+void Renderer::Set_2D_Grayscale(bool enabled)
+{
+    nativeDraw.SetGrayscaleEnabled(enabled);
+}
+
 void Renderer::Invalidate_Cached_Render_States()
 {
     // The B04 viewport is reapplied by BeginScene. PSO and resource caches

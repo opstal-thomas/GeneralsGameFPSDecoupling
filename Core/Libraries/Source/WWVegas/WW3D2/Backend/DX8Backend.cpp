@@ -184,6 +184,26 @@ void Renderer::Set_Viewport(const RenderViewport & viewport)
     DX8Wrapper::Set_Viewport(&vp);
 }
 
+void Renderer::Get_Viewport(RenderViewport & viewport)
+{
+    viewport = {};
+    viewport.min_z = 0.f;
+    viewport.max_z = 1.f;
+    IDirect3DDevice8 * device = DX8Wrapper::_Get_D3D_Device8();
+    D3DVIEWPORT8 native = {};
+    if (device && SUCCEEDED(device->GetViewport(&native)))
+    {
+        viewport.x = native.X; viewport.y = native.Y;
+        viewport.width = native.Width; viewport.height = native.Height;
+        viewport.min_z = native.MinZ; viewport.max_z = native.MaxZ;
+    }
+}
+// DX8 rendering retains the original glyph/geometry clipping semantics.
+// DX12-only UI callers use the native hardware scissor implementation.
+void Renderer::Set_2D_Scissor(int, int, int, int) {}
+void Renderer::Clear_2D_Scissor() {}
+void Renderer::Set_2D_Grayscale(bool) {}
+
 void Renderer::Invalidate_Cached_Render_States()
 {
     DX8Wrapper::Invalidate_Cached_Render_States();

@@ -277,6 +277,11 @@ float4 W3D_PS(OutVertex v) : SV_TARGET
     }
     // D3D8 sums specular after the texture-stage cascade.
     result.rgb = saturate(result.rgb + v.specular.rgb);
+    if (SpecularProperties.z > 0.5f)
+    {
+        float luma = dot(saturate(result.rgb), float3(0.299f, 0.587f, 0.114f));
+        result.rgb = luma.xxx;
+    }
     if (AlphaTest != 0u)
     {
         float alpha = saturate(result.a);
@@ -445,6 +450,7 @@ struct DX12W3DNativeDraw::Impl
     RenderMaterialColorSources colorSources;
     bool vertexLighting = false;
     bool specularEnabled = false;
+    bool grayscaleEnabled = false;
     RenderCompareFunc depthCompare = RENDER_COMPARE_LESS_EQUAL;
     bool depthWrite = true;
     RenderCullMode cull = RENDER_CULL_NONE;
@@ -692,6 +698,10 @@ void DX12W3DNativeDraw::SetSpecularEnabled(bool enabled)
 {
     impl_->specularEnabled = enabled;
 }
+void DX12W3DNativeDraw::SetGrayscaleEnabled(bool enabled)
+{
+    impl_->grayscaleEnabled = enabled;
+}
 void DX12W3DNativeDraw::SetMaterialColorSources(const RenderMaterialColorSources & sources)
 {
     impl_->colorSources = sources;
@@ -786,6 +796,7 @@ bool DX12W3DNativeDraw::Draw(DX12PresentationDevice & frame,
     std::memcpy(constants.materialSpecular, materialSpecular, sizeof(constants.materialSpecular));
     constants.specularProperties[0] = s.material.power;
     constants.specularProperties[1] = s.specularEnabled ? 1.f : 0.f;
+    constants.specularProperties[2] = s.grayscaleEnabled ? 1.f : 0.f;
     const float identity[16] = {
         1.f, 0.f, 0.f, 0.f,
         0.f, 1.f, 0.f, 0.f,

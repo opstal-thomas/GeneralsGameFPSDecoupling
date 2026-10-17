@@ -36,6 +36,10 @@ public:
     bool Clear(bool color, bool depth, const float rgba[4], float z);
     bool SetViewport(unsigned x, unsigned y, unsigned width, unsigned height,
                      float minDepth, float maxDepth);
+    void GetViewport(unsigned & x, unsigned & y, unsigned & width, unsigned & height,
+                     float & minDepth, float & maxDepth) const;
+    // Keep raster clipping separate from the current camera viewport.
+    bool SetScissorClip(bool enabled, int left, int top, int right, int bottom);
     bool BeginScene();
     // R07 returns from offscreen viewport dimensions to the game's saved
     // primary camera viewport/scissor, rather than always using full screen.
@@ -69,5 +73,7 @@ private:
     unsigned viewportX_ = 0, viewportY_ = 0;
     unsigned viewportWidth_ = 0, viewportHeight_ = 0;
     float minDepth_ = 0.f, maxDepth_ = 1.f;
+    bool scissorClipEnabled_ = false;
+    int clipLeft_ = 0, clipTop_ = 0, clipRight_ = 0, clipBottom_ = 0;
     std::string error_;
 };
