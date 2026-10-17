@@ -649,6 +649,75 @@ ID3D12Resource * DX12W3DRenderTargets::BoundDepthResource(DX12PresentationDevice
     if (impl_->activeDepth) return impl_->Resource(impl_->activeDepth, frame);
     return impl_->activeColor ? nullptr : frame.CurrentDepthTarget();
 }
+
+bool DX12W3DRenderTargets::TransferResource(
+    DX12PresentationDevice & frame, RenderSurfaceHandle handle,
+    bool destination, ID3D12Resource * & resource)
+{
+    resource = nullptr;
+    impl_->error.clear();
+    auto * surface = impl_->Lookup(handle);
+    if (!frame.IsRecording() || !surface ||
+        !impl_->ValidSurface(surface, frame) || !surface->IsColor() ||
+        (destination && surface->kind == Impl::Kind::MSAAColor))
+        return impl_->Fail("R08 requires live single-sample GPU color surface");
+    if (surface->kind == Impl::Kind::MSAAColor)
+    {
+        // Active multisample target must be resolved before copy. A previous
+        // R07 Bind/EndFrame already resolved inactive targets.
+        if (surface == impl_->activeColor && !impl_->FinishBound(frame))
+            return false;
+        if (!DX12W3DTextures::EnsureAttachment(frame.NativeDevice(), surface->texture))
+            return impl_->Fail(DX12W3DTextures::LastError());
+        resource = DX12W3DTextures::NativeResource(surface->texture);
+    }
+    else
+    {
+        if (!impl_->PrepareView(*surface, frame))
+            return false;
+        resource = impl_->Resource(surface, frame);
+    }
+    if (!resource || resource->GetDesc().SampleDesc.Count != 1 ||
+        (resource->GetDesc().Format != DXGI_FORMAT_B8G8R8A8_UNORM &&
+         resource->GetDesc().Format != DXGI_FORMAT_R8G8B8A8_UNORM))
+        return impl_->Fail("R08 transfer requires one-sample 32-bit color image");
+    return true;
+}
+bool DX12W3DRenderTargets::TransitionTransfer(
+    DX12PresentationDevice & frame, RenderSurfaceHandle handle,
+    D3D12_RESOURCE_STATES desired)
+{
+    auto * s = impl_->Lookup(handle);
+    if (!frame.IsRecording() || !s || !impl_->ValidSurface(s, frame) ||
+        !s->IsColor())
+        return impl_->Fail("Invalid R08 transfer transition target");
+    if (s->kind == Impl::Kind::MSAAColor)
+        return DX12W3DTextures::TransitionAttachment(frame, s->texture, desired)
+            || impl_->Fail(DX12W3DTextures::LastError());
+    return impl_->Transition(*s, frame, desired);
+}
+bool DX12W3DRenderTargets::RebindAfterFlush(DX12PresentationDevice & frame)
+{
+    if (!impl_->ValidFrame(frame))
+        return impl_->Fail("R08 command-list resume requires valid R07 frame");
+    auto * c = impl_->activeColor;
+    auto * d = impl_->activeDepth;
+    if ((c && !impl_->PrepareView(*c, frame)) ||
+        (d && !impl_->PrepareView(*d, frame)))
+        return false;
+    const bool color = c || !d;
+    const bool depth = d || !c;
+    const auto rtv = color ? impl_->View(c, frame, false) :
+                       D3D12_CPU_DESCRIPTOR_HANDLE{};
+    const auto dsv = depth ? impl_->View(d, frame, true) :
+                       D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if ((color && !rtv.ptr) || (depth && !dsv.ptr))
+        return impl_->Fail("R08 cannot restore native W3D output descriptors");
+    frame.ActiveCommandList()->OMSetRenderTargets(
+        color ? 1u : 0u, color ? &rtv : nullptr, FALSE,
+        depth ? &dsv : nullptr);
+    return true;
+}
 unsigned DX12W3DRenderTargets::BoundSampleCount() const
 {
     return impl_->activeColor ? impl_->activeColor->samples :

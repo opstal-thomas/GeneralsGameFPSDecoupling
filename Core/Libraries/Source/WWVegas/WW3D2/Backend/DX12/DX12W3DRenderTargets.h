@@ -64,6 +64,17 @@ public:
     ID3D12Resource * BoundColorResource(DX12PresentationDevice & frame) const;
     ID3D12Resource * BoundDepthResource(DX12PresentationDevice & frame) const;
     unsigned BoundSampleCount() const;
+
+    // R08: borrowed native color image for GPU copies/readback. MSAA reads
+    // resolve to their R07 single-sample attachment, never map multisample
+    // memory directly. Depth transfer is rejected until stencil layout parity.
+    bool TransferResource(DX12PresentationDevice & frame, RenderSurfaceHandle surface,
+                          bool destination, ID3D12Resource * & resource);
+    bool TransitionTransfer(DX12PresentationDevice & frame, RenderSurfaceHandle surface,
+                            D3D12_RESOURCE_STATES desired);
+    // FlushAndContinue clears OM binding. Rebind the *current* R07 color/depth
+    // descriptors, preserving the active offscreen surface identities.
+    bool RebindAfterFlush(DX12PresentationDevice & frame);
     const char * LastError() const;
 
 private:
