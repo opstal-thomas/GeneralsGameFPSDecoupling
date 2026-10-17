@@ -532,6 +532,99 @@ void Render2DClass::Render()
 		return;
 	}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+    // U01: Render2DClass already converts sprite/glyph coordinates into
+    // normalized W3D screen space. Route their *actual* indexed quads to
+    // the selected primary DX12 renderer, not a preview window or D3D8.
+    // R02's CPU sorting buffer avoids allocating legacy D3D8 resources.
+    if (Vertices.Count() != Colors.Count() ||
+        Vertices.Count() != UVCoordinates.Count() ||
+        Vertices.Count() > 0xffff || Indices.Count() > 0xffff ||
+        (Indices.Count() % 3) != 0)
+        return;
+
+    int width = 0, height = 0, bits = 0;
+    bool windowed = true;
+    Renderer::Get_Render_Target_Resolution(width, height, bits, windowed);
+    if (width <= 0 || height <= 0)
+        return;
+
+    Matrix4x4 savedWorld, savedView, savedProjection;
+    Matrix4x4 identity(true);
+    Renderer::Get_Transform(RENDER_TRANSFORM_WORLD, savedWorld);
+    Renderer::Get_Transform(RENDER_TRANSFORM_VIEW, savedView);
+    Renderer::Get_Transform(RENDER_TRANSFORM_PROJECTION, savedProjection);
+    RenderViewport viewport;
+    viewport.x = viewport.y = 0;
+    viewport.width = static_cast<unsigned>(width);
+    viewport.height = static_cast<unsigned>(height);
+    viewport.min_z = 0.f;
+    viewport.max_z = 1.f;
+    Renderer::Set_Viewport(viewport);
+    Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, identity);
+    Renderer::Set_Transform(RENDER_TRANSFORM_VIEW, identity);
+    Renderer::Set_Transform(RENDER_TRANSFORM_PROJECTION, identity);
+
+    // TextureClass::Apply includes lazy initialization and per-material
+    // filtering. A second stage left over from 3D would corrupt glyphs.
+    Renderer::Set_Texture(0, Texture);
+    Renderer::Set_Texture(1, nullptr);
+    VertexMaterialClass * material =
+        VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+    Renderer::Set_Material(material);
+    REF_PTR_RELEASE(material);
+
+    DynamicVBAccessClass vb(BUFFER_TYPE_DYNAMIC_SORTING,
+                            dynamic_fvf_type, static_cast<unsigned short>(Vertices.Count()));
+    {
+        DynamicVBAccessClass::WriteLockClass lock(&vb);
+        const FVFInfoClass & info = vb.FVF_Info();
+        unsigned char * out =
+            static_cast<unsigned char *>(lock.Get_Formatted_Vertex_Array());
+        for (int i = 0; i < Vertices.Count(); ++i)
+        {
+            *reinterpret_cast<Vector3 *>(out + info.Get_Location_Offset()) =
+                Vector3(Vertices[i].X, Vertices[i].Y, ZValue);
+            *reinterpret_cast<unsigned int *>(out + info.Get_Diffuse_Offset()) = Colors[i];
+            *reinterpret_cast<Vector2 *>(out + info.Get_Tex_Offset(0)) = UVCoordinates[i];
+            out += info.Get_FVF_Size();
+        }
+    }
+    DynamicIBAccessClass ib(BUFFER_TYPE_DYNAMIC_SORTING,
+                            static_cast<unsigned short>(Indices.Count()));
+    {
+        DynamicIBAccessClass::WriteLockClass lock(&ib);
+        unsigned short * out = lock.Get_Index_Array();
+        for (int i = 0; i < Indices.Count(); ++i)
+            out[i] = Indices[i];
+    }
+    Renderer::Bind_Dynamic_Vertex_Buffer(vb);
+    Renderer::Bind_Dynamic_Index_Buffer(ib, 0);
+    ShaderClass spriteShader = IsGrayScale ? ShaderClass::_PresetOpaqueShader : Shader;
+    spriteShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+    Renderer::Set_Shader(spriteShader);
+    Renderer::Set_Vertex_Lighting(false); // UI vertex colors are prelit.
+    if (IsGrayScale)
+    {
+        // Match the historical no-DOT3 fallback until the specialized
+        // grayscale pixel shader is migrated (U01/M03).
+        Renderer::Set_Texture_Factor(0x60606060u);
+        Renderer::Apply_Texture_Stage_Color(0, RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE,
+            RENDER_TEXARG_TEXTURE_FACTOR));
+        Renderer::Apply_Texture_Stage_Alpha(0, RenderTextureStageChannel(
+            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE));
+    }
+    Renderer::Draw_Triangles(0, static_cast<unsigned short>(Indices.Count() / 3),
+                             0, static_cast<unsigned short>(Vertices.Count()));
+    Renderer::Unbind_Sorting_Geometry();
+    Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, savedWorld);
+    Renderer::Set_Transform(RENDER_TRANSFORM_VIEW, savedView);
+    Renderer::Set_Transform(RENDER_TRANSFORM_PROJECTION, savedProjection);
+    if (IsGrayScale)
+        ShaderClass::Invalidate();
+#else
+
 	// save the view and projection matrices since we're nuking them
 	Matrix4x4 view,proj;
 	Matrix4x4 identity(true);
@@ -632,6 +725,7 @@ void Render2DClass::Render()
 	if (IsGrayScale)
 		ShaderClass::Invalidate();	//force both stages to be reset.
 
+#endif
 }
 
 
