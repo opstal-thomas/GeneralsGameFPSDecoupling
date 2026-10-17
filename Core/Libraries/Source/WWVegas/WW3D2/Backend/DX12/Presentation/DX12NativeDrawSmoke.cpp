@@ -512,7 +512,7 @@ int wmain()
                terrainIndices[14] == 131,
                "clipped terrain tile must preserve original 32-cell row pitch") ||
         !Check(!DX12TerrainTileGeometry::BuildIndices(32, 33, 1, terrainIndices) &&
-               !DX12TerrainTileGeometry::BuildIndices(128, 1, 1, terrainIndices),
+               !DX12TerrainTileGeometry::BuildIndices(129, 1, 1, terrainIndices),
                "invalid cell coverage and R16 overflow are rejected") ||
         !Check(DX12TerrainTileGeometry::BuildIndices(32, 2, 1, terrainIndices) &&
                terrainIndices.size() == 12 &&
