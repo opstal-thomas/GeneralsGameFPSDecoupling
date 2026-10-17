@@ -117,16 +117,16 @@ class DX12BackendSelectionTests(unittest.TestCase):
         for relpath, target in scoped.items():
             with self.subTest(target=target):
                 contents = (ROOT / relpath).read_text(encoding="utf-8")
-                self.assertRegex(
-                    contents,
-                    r'(?s)if\\(W3D_RENDER_BACKEND STREQUAL "DX12"\\)\\s*'
-                    r'target_compile_definitions\\(' + target +
-                    r' (?:INTERFACE|PRIVATE)\\s+W3D_RENDER_BACKEND_DX12=1\\s*\\)\\s*endif\\(\\)'
-                )
-                self.assertNotRegex(
-                    contents,
-                    r'(?m)^\\s*add_compile_definitions\\(W3D_RENDER_BACKEND_DX12'
-                )
+                # Scope must be an explicit selected-backend gate: a
+                # DX8 or secondary preview build must never inherit it.
+                gate = ('if(W3D_RENDER_BACKEND STREQUAL "DX12")' + chr(10) +
+                        f'    target_compile_definitions({target} ')
+                self.assertIn(gate, contents)
+                body = contents.split(gate, 1)[1].split("endif()", 1)[0]
+                self.assertIn("W3D_RENDER_BACKEND_DX12=1", body)
+                self.assertIn(")", body)
+                self.assertNotIn("add_compile_definitions(W3D_RENDER_BACKEND_DX12",
+                                 contents)
         # DX12-only isolation has to extend beyond WW3D2 to the original
         # client, display and both actual game-window entry points.
         for relpath in (
