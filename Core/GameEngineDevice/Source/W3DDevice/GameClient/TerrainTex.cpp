@@ -62,6 +62,21 @@
 
 namespace
 {
+    struct TerrainMappedSurfaceDescription
+    {
+        unsigned Width = 0;
+        unsigned Height = 0;
+        unsigned Format = 0;
+    };
+    struct TerrainMappedRect
+    {
+        void * pBits = nullptr;
+        int Pitch = 0;
+    };
+}
+
+namespace
+{
     // Box-filter mip generation for the original terrain atlas pixel formats.
     // R04 owns each native texture's staging memory and fence-safe GPU upload.
     void BuildNativeTerrainMips(TextureClass * owner, unsigned bytesPerPixel)
@@ -188,14 +203,14 @@ int TerrainTextureClass::update(WorldHeightMap *htMap)
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_2D(texture, 0, desc);
 	if (!desc.Is_Valid() || desc.pixelFormat != WW3D_FORMAT_A1R5G5B5) return 0;
-	D3DSURFACE_DESC surface_desc = {};
+	TerrainMappedSurfaceDescription surface_desc = {};
 	surface_desc.Width = desc.width;
 	surface_desc.Height = desc.height;
-	surface_desc.Format = D3DFMT_A1R5G5B5;
+	surface_desc.Format = 0; // Validated original A1R5G5B5 W3D format above
 	RenderSurfaceMap mapped;
 	Renderer::Map_Texture_2D(texture, 0, mapped);
 	if (!mapped.data) return 0;
-	D3DLOCKED_RECT locked_rect = {};
+	TerrainMappedRect locked_rect = {};
 	locked_rect.pBits = mapped.data;
 	locked_rect.Pitch = mapped.rowPitch;
 #else
@@ -225,7 +240,11 @@ int TerrainTextureClass::update(WorldHeightMap *htMap)
 	//DEBUG_ASSERTCRASH(tilesPerRow*numRows >= htMap->m_numBitmapTiles, ("Too many tiles."));
 	DEBUG_ASSERTCRASH((Int)surface_desc.Width >= tilePixelExtent*tilesPerRow, ("Bitmap too small."));
 #endif
+	#if defined(W3D_RENDER_BACKEND_DX12)
+	if (true) {
+#else
 	if (surface_desc.Format == D3DFMT_A1R5G5B5) {
+#endif
 #if 0
 		UnsignedInt cellX, cellY;
 		for (cellX = 0; cellX < surface_desc.Width; cellX++) {
@@ -350,7 +369,11 @@ int TerrainTextureClass::update(WorldHeightMap *htMap)
 	assert(tilesPerRow*numRows >= htMap->m_numBitmapTiles);
 	assert((Int)surface_desc.Width >= tilePixelExtent*tilesPerRow);
 #endif
+	#if defined(W3D_RENDER_BACKEND_DX12)
+	if (true) {
+#else
 	if (surface_desc.Format == D3DFMT_A1R5G5B5) {
+#endif
 		Int cellX, cellY;
 #if 0
 		for (cellX = 0; cellX < surface_desc.Width; cellX++) {
@@ -502,14 +525,14 @@ Bool TerrainTextureClass::updateFlat(WorldHeightMap *htMap, Int xCell, Int yCell
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_2D(texture, 0, desc);
 	if (!desc.Is_Valid() || desc.pixelFormat != WW3D_FORMAT_A1R5G5B5) return 0;
-	D3DSURFACE_DESC surface_desc = {};
+	TerrainMappedSurfaceDescription surface_desc = {};
 	surface_desc.Width = desc.width;
 	surface_desc.Height = desc.height;
-	surface_desc.Format = D3DFMT_A1R5G5B5;
+	surface_desc.Format = 0; // Validated original A1R5G5B5 W3D format above
 	RenderSurfaceMap mapped;
 	Renderer::Map_Texture_2D(texture, 0, mapped);
 	if (!mapped.data) return 0;
-	D3DLOCKED_RECT locked_rect = {};
+	TerrainMappedRect locked_rect = {};
 	locked_rect.pBits = mapped.data;
 	locked_rect.Pitch = mapped.rowPitch;
 #else
@@ -534,7 +557,11 @@ Bool TerrainTextureClass::updateFlat(WorldHeightMap *htMap, Int xCell, Int yCell
 #endif
 
 
+	#if defined(W3D_RENDER_BACKEND_DX12)
+	if (true) {
+#else
 	if (surface_desc.Format == D3DFMT_A1R5G5B5) {
+#endif
 
 		Int pixelBytes = 2;
 		Int cellX, cellY;
@@ -924,14 +951,14 @@ int AlphaEdgeTextureClass::update(WorldHeightMap *htMap)
 	RenderTextureLevelDescription desc;
 	Renderer::Describe_Texture_Level_2D(texture, 0, desc);
 	if (!desc.Is_Valid() || desc.pixelFormat != WW3D_FORMAT_A8R8G8B8) return 0;
-	D3DSURFACE_DESC surface_desc = {};
+	TerrainMappedSurfaceDescription surface_desc = {};
 	surface_desc.Width = desc.width;
 	surface_desc.Height = desc.height;
-	surface_desc.Format = D3DFMT_A8R8G8B8;
+	surface_desc.Format = 0; // Validated original A8R8G8B8 W3D format above
 	RenderSurfaceMap mapped;
 	Renderer::Map_Texture_2D(texture, 0, mapped);
 	if (!mapped.data) return 0;
-	D3DLOCKED_RECT locked_rect = {};
+	TerrainMappedRect locked_rect = {};
 	locked_rect.pBits = mapped.data;
 	locked_rect.Pitch = mapped.rowPitch;
 #else
@@ -948,7 +975,11 @@ int AlphaEdgeTextureClass::update(WorldHeightMap *htMap)
 
 //	Int numRows = surface_desc.Height/(tilePixelExtent+8);
 
+	#if defined(W3D_RENDER_BACKEND_DX12)
+	if (true) {
+#else
 	if (surface_desc.Format == D3DFMT_A8R8G8B8) {
+#endif
 #if 1
 #if 1
 		Int cellX, cellY;

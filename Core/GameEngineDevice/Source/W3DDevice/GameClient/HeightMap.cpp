@@ -1958,7 +1958,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			vertex.cpuData = getVertexBufferBackup(tileX, tileY);
 			vertex.vertexCount = HEIGHTMAP_VERTEX_NUM;
 			vertex.stride = sizeof(VERTEX_FORMAT);
-			vertex.legacyVertexFormat = DX8_VERTEX_FORMAT;
+			vertex.legacyVertexFormat = 0x0242u; // W3D XYZ|DIFFUSE|TEX2
 			Renderer::Bind_Dynamic_Vertex_Buffer(vertex);
 
 			RenderDynamicIndexBinding index;
