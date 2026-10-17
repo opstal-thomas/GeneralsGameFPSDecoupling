@@ -19,6 +19,7 @@
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaceTransfers.h"
 #include "WW3D2/Backend/DX12/DX12W3DRenderTargets.h"
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
 
@@ -79,15 +80,19 @@ namespace
             "[DX12 backend] %s is unsupported until the native W3D resource/draw migration.\\n",
             operation);
         OutputDebugStringA(message);
+        // Unsupported draws can occur many times per frame. Do not persist
+        // these to disk: only startup failures and first-frame milestones
+        // belong in the bounded startup diagnostic stream.
     }
 
     void ReportFailure(const char * operation)
     {
-        OutputDebugStringA("[DX12 backend] ");
-        OutputDebugStringA(operation);
-        OutputDebugStringA(": ");
-        OutputDebugStringA(primaryWindow.LastError());
-        OutputDebugStringA("\\n");
+        char message[448] = {};
+        std::snprintf(message, sizeof(message),
+            "[DX12 backend] %s: %s",
+            operation ? operation : "native startup",
+            primaryWindow.LastError());
+        DX12StartupTrace::Write(message);
     }
 
     bool TerrainGameplayProbeOptIn()
@@ -141,7 +146,7 @@ namespace
         std::snprintf(message, sizeof(message),
             "[DX12 startup] Set_Render_Device rejected: %s (requested %dx%d, %d-bit, windowed=%d).\n",
             reason, width, height, bits, windowed);
-        OutputDebugStringA(message);
+        DX12StartupTrace::Write(message);
         return false;
     }
 
@@ -219,6 +224,7 @@ DX12W3DTextureStages & DX12W3DRendererTextureStages()
 
 bool Renderer::Init(void * window, bool lite)
 {
+    DX12StartupTrace::Write("Renderer::Init: attaching actual game HWND");
     Shutdown();
     if (lite)
     {
@@ -234,8 +240,10 @@ bool Renderer::Init(void * window, bool lite)
         primaryWindow.Shutdown();
         return false;
     }
+    DX12StartupTrace::Write("Renderer::Init: game HWND attached; native presentation initialized or suspended");
     if (!DiagnosticOptIn())
     {
+        DX12StartupTrace::Write("Renderer::Init: T01 developer opt-in missing; game startup intentionally refused");
         // No game startup by default. An explicit T01 probe is the only
         // developer path into WW3D game scenes; it must stay opt-in.
         ReportPending("Renderer::Init: require W3D_DX12_T01_GAMEPLAY=1 for experimental W3D scene; or W3D_DX12_B04_DIAGNOSTIC=1 for B04 frame diagnostic");
@@ -247,11 +255,15 @@ bool Renderer::Init(void * window, bool lite)
     terrainGameplayProbe = TerrainGameplayProbeOptIn();
     probePresentedFrames = 0;
     if (terrainGameplayProbe)
-        OutputDebugStringA("[DX12-T01] EXCLUSIVE DX12 gameplay scene probe enabled: incomplete W3D effects/UI; no DX8 renderer fallback.\n");
+    {
+        OutputDebugStringA("[DX12-T01] EXCLUSIVE DX12 gameplay scene probe enabled; no DX8 renderer fallback.\n");
+        DX12StartupTrace::Write("Renderer::Init: T01 original W3D scene probe enabled; no DX8 fallback");
+    }
     ready = true;
     renderThread = GetCurrentThreadId();
     syncInterval = 0;
     for (auto & matrix : transforms) matrix.Make_Identity();
+    DX12StartupTrace::Write("Renderer::Init: native DX12 backend ready");
     return true;
 }
 
@@ -336,6 +348,7 @@ void Renderer::Begin_Scene()
     nativeDraw.BeginFrame();
     if (!renderTargets.BeginFrame(primaryWindow.Presentation()))
     {
+        DX12StartupTrace::Write("Renderer::Begin_Scene: render target preparation failed");
         OutputDebugStringA(renderTargets.LastError());
         return;
     }
@@ -359,6 +372,8 @@ void Renderer::End_Scene(bool flip_frame)
     }
     else if (terrainGameplayProbe && flip_frame)
     {
+        if (probePresentedFrames == 0)
+            DX12StartupTrace::Write("Renderer::End_Scene: first actual native game HWND present succeeded");
         // Signal that the actual selected game-HWND command list presented.
         // HeightMapRenderObjClass separately reports native terrain tiles;
         // a present alone never counts as terrain acceptance.

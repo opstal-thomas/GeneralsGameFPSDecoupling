@@ -40,6 +40,9 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "WinMain.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 #include "Common/CommandLine.h"
 #include "Common/CriticalSection.h"
 #include "Common/GlobalData.h"
@@ -745,6 +748,15 @@ static Bool initializeAppWindows( HINSTANCE hInstance, Int nCmdShow, Bool runWin
 														nullptr );
 
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	if (!hWnd)
+	{
+		DX12StartupTrace::WriteWin32Failure("CreateWindow failed for main game HWND");
+		gInitializing = false;
+		return false;
+	}
+	DX12StartupTrace::Write("Main game HWND created; showing initial splash");
+#endif
 	if (!runWindowed)
 	{	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0,SWP_NOSIZE |SWP_NOMOVE);
 	}
@@ -759,6 +771,9 @@ static Bool initializeAppWindows( HINSTANCE hInstance, Int nCmdShow, Bool runWin
 
 	// save our application window handle for future use
 	ApplicationHWnd = hWnd;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("Main game HWND shown and stored; game startup can begin");
+#endif
 	gInitializing = false;
 	if (!runWindowed) {
 		gDoPaint = false;
@@ -914,8 +929,14 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		DEBUG_LOG(("CRC message is %d", GameMessage::MSG_LOGIC_CRC));
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("WinMain entering GameMain");
+#endif
 		// run the game main loop
 		exitcode = GameMain();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameMain returned; game startup or play loop ended");
+#endif
 
 		delete TheVersion;
 		TheVersion = nullptr;

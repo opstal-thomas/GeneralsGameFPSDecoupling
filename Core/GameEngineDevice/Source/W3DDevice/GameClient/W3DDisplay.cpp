@@ -112,6 +112,9 @@ static void drawFramerateBar();
 #endif
 
 #include "WinMain.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 
 
 // DEFINE AND ENUMS ///////////////////////////////////////////////////////////
@@ -773,6 +776,9 @@ void W3DDisplay::init2DScene()
 //=============================================================================
 void W3DDisplay::init()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DDisplay::init entered");
+#endif
 
 	//
 	// call our base class init, this method should be able to handle re-entry
@@ -872,6 +878,9 @@ void W3DDisplay::init()
 			throw ERROR_DX12_PROBE_NOT_ENABLED;
 		}
 #endif
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DDisplay: WW3D::Init native Renderer begins");
+#endif
 		if (WW3D::Init( ApplicationHWnd ) != WW3D_ERROR_OK)
 		{
 #if defined(W3D_RENDER_BACKEND_DX12)
@@ -882,6 +891,9 @@ void W3DDisplay::init()
 #endif
 		}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DDisplay: WW3D::Init succeeded");
+#endif
 		WW3D::Set_Prelit_Mode( WW3D::PRELIT_MODE_LIGHTMAP_MULTI_PASS );
 		WW3D::Set_Collision_Box_Display_Mask(0x00);	///<set to 0xff to make collision boxes visible
 		WW3D::Enable_Static_Sort_Lists(true);
@@ -956,6 +968,9 @@ void W3DDisplay::init()
 			// TheSuperHackers @feature Mauller 13/03/2026 Add native MSAA support, must be set before creating render device
 			WW3D::Set_MSAA_Mode((WW3D::MultiSampleModeEnum)TheWritableGlobalData->m_antiAliasLevel);
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+			DX12StartupTrace::Write("W3DDisplay: Set_Render_Device native DX12 resolution attempt");
+#endif
 			renderDeviceError = WW3D::Set_Render_Device(
 				0,
 				getWidth(),
@@ -964,6 +979,11 @@ void W3DDisplay::init()
 				getWindowed(),
 				true );
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+			DX12StartupTrace::Write(renderDeviceError == WW3D_ERROR_OK ?
+				"W3DDisplay: Set_Render_Device succeeded" :
+				"W3DDisplay: Set_Render_Device failed; trying fallback");
+#endif
 			// TheSuperHackers @info Update the MSAA mode that was set as some GPU's may not support certain levels
 			// Texture filtering must also be updated after render device initialization
 			if (renderDeviceError == WW3D_ERROR_OK) {
@@ -989,6 +1009,9 @@ void W3DDisplay::init()
 			throw ERROR_INVALID_D3D;	// Original DX8 reference error.
 #endif
 		}
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DDisplay: renderer resolution configured");
+#endif
 		WW3D::Set_Texture_Bitdepth(getBitDepth());
 
 		//Check if level was never set and default to setting most suitable for system.
@@ -1007,15 +1030,32 @@ void W3DDisplay::init()
 			setGamma(TheGlobalData->m_displayGamma,0.0f,1.0f,FALSE);
 	}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DDisplay: initialize W3D assets");
+#endif
 	initAssets();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DDisplay: W3D assets initialized");
+#endif
 
 	if (!TheGlobalData->m_headless)
 	{
 		init2DScene();
 		init3DScene();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// The T01 base heightmap and R04/R05 materials submit through native
+		// Renderer stages. This *legacy* shader registry configures unported
+		// DX8 terrain transitions, screen filters, and RTT effects (T02/U06).
+		// Do not initialize it when attempting the original DX12-only game.
+		DX12StartupTrace::Write("W3DDisplay: skipping unsupported DX8 shader manager initialization (T02/U06)");
+#else
 		W3DShaderManager::init();
+#endif
 
 		// Create and initialize the debug display
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DDisplay: constructing debug font display");
+#endif
 		m_nativeDebugDisplay = NEW W3DDebugDisplay();
 		m_debugDisplay = m_nativeDebugDisplay;
 		if ( m_nativeDebugDisplay )
@@ -1045,6 +1085,9 @@ void W3DDisplay::init()
 #endif
 	}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DDisplay: scene and debug display initialized; game client can proceed");
+#endif
 	// we're now online
 	m_initialized = true;
 	if( TheGlobalData->m_displayDebug )

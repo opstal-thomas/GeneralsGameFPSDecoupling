@@ -30,6 +30,9 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "GameClient/GameClient.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "Common/ActionManager.h"
@@ -239,6 +242,9 @@ GameClient::~GameClient()
 //-------------------------------------------------------------------------------------------------
 void GameClient::init()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient::init entered");
+#endif
 
 	setFrameRate(MSEC_PER_LOGICFRAME_REAL);		// from GameCommon.h... tell W3D what our expected framerate is
 
@@ -271,7 +277,13 @@ void GameClient::init()
 
 	// allocate and load image collection for the GUI and just load the 256x256 ones for now
 	TheMappedImageCollection = MSGNEW("GameClientSubsystem") ImageCollection;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: load mapped UI images");
+#endif
 	TheMappedImageCollection->load( 512 );
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: mapped UI images loaded");
+#endif
 
 	// now that we have all the images loaded ... load any animation definitions from those images
 	TheAnim2DCollection = MSGNEW("GameClientSubsystem") Anim2DCollection;
@@ -312,19 +324,37 @@ void GameClient::init()
 
 	// create the font library
 	TheFontLibrary = createFontLibrary();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: initialize font library");
+#endif
 	if( TheFontLibrary )
 		TheFontLibrary->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: font library initialized");
+#endif
 
 	// create the mouse
 	TheMouse = TheGlobalData->m_headless ? NEW MouseDummy : createMouse();
 	TheMouse->parseIni();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: initialize mouse cursor resources");
+#endif
 	TheMouse->initCursorResources();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: mouse cursor resources initialized");
+#endif
  	TheMouse->setName("TheMouse");
 
 	// instantiate the display
 	TheDisplay = createGameDisplay();
 	if( TheDisplay ) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: enter W3DDisplay::init");
+#endif
 		TheDisplay->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: W3DDisplay::init completed");
+#endif
  		TheDisplay->setName("TheDisplay");
 	}
 
@@ -338,7 +368,13 @@ void GameClient::init()
 	if( TheWindowManager )
 	{
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize window manager");
+#endif
 		TheWindowManager->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: window manager initialized");
+#endif
  		TheWindowManager->setName("TheWindowManager");
 //		TheWindowManager->initTestGUI();
 
@@ -355,7 +391,13 @@ void GameClient::init()
 	// create the shell
 	TheShell = MSGNEW("GameClientSubsystem") Shell;
 	if( TheShell ) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize shell UI");
+#endif
 		TheShell->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: shell UI initialized");
+#endif
  		TheShell->setName("TheShell");
 	}
 
@@ -375,7 +417,13 @@ void GameClient::init()
 	// instantiate the terrain visual display
 	TheTerrainVisual = createTerrainVisual();
 	if( TheTerrainVisual ) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize original terrain visual");
+#endif
 		TheTerrainVisual->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: terrain visual initialized");
+#endif
  		TheTerrainVisual->setName("TheTerrainVisual");
 	}
 
@@ -422,6 +470,9 @@ void GameClient::init()
 
 	TheDisplayStringManager->postProcessLoad();
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameClient: create Intro and complete init");
+#endif
 	m_intro = NEW Intro;
 
 #ifdef PERF_TIMERS

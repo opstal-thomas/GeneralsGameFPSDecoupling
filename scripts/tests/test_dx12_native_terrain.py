@@ -16,6 +16,11 @@ DISPLAY = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.
 TERRAIN_VISUAL = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainVisual.cpp").read_text()
 SHADOW_GENERALS = (ROOT / "Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
 SHADOW_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
+DX12_TRACE = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12StartupTrace.h").read_text()
+MAIN_GENERALS = (ROOT / "Generals/Code/Main/WinMain.cpp").read_text()
+MAIN_ZERO_HOUR = (ROOT / "GeneralsMD/Code/Main/WinMain.cpp").read_text()
+CLIENT_GENERALS = (ROOT / "Generals/Code/GameEngine/Source/GameClient/GameClient.cpp").read_text()
+CLIENT_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngine/Source/GameClient/GameClient.cpp").read_text()
 STARTUP_ERRORS = (ROOT / "Core/GameEngine/Include/Common/Errors.h").read_text()
 GAME_ENGINE_GENERAL = (ROOT / "Generals/Code/GameEngine/Source/Common/GameEngine.cpp").read_text()
 GAME_ENGINE_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngine/Source/Common/GameEngine.cpp").read_text()
@@ -161,6 +166,41 @@ class NativeTerrainContract(unittest.TestCase):
                        "native swap-chain synchronization failed"):
             self.assertIn(reason, DX12)
         self.assertIn("ReportFailure(\"Renderer::Set_Device_Resolution\")", DX12)
+
+    def test_dx12_startup_trace_reaches_the_real_window_and_game_client(self):
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12) && defined(_WIN32)", DX12_TRACE)
+        self.assertIn('GetTempPathA(MAX_PATH, temp)', DX12_TRACE)
+        self.assertIn('GeneralsDX12Startup.log', DX12_TRACE)
+        self.assertIn('CreateFileA(file, FILE_APPEND_DATA', DX12_TRACE)
+        self.assertIn('OutputDebugStringA(line)', DX12_TRACE)
+        for main in (MAIN_GENERALS, MAIN_ZERO_HOUR):
+            self.assertIn('Main game HWND created; showing initial splash', main)
+            self.assertIn('Main game HWND shown and stored; game startup can begin', main)
+            self.assertIn('WinMain entering GameMain', main)
+            self.assertIn('if (!hWnd)', main)
+        for client in (CLIENT_GENERALS, CLIENT_ZERO_HOUR):
+            for stage in ('GameClient::init entered', 'load mapped UI images',
+                          'font library initialized', 'mouse cursor resources initialized',
+                          'enter W3DDisplay::init', 'W3DDisplay::init completed',
+                          'window manager initialized', 'shell UI initialized',
+                          'terrain visual initialized'):
+                self.assertIn(stage, client)
+        for game_engine in (GAME_ENGINE_GENERAL, GAME_ENGINE_ZERO_HOUR):
+            self.assertIn('GameEngine::init entered', game_engine)
+            self.assertIn('GameEngine: TheGameClient initialized', game_engine)
+            self.assertIn('GameEngine::init caught ErrorCode', game_engine)
+            self.assertIn('GameEngine::init caught unexpected exception', game_engine)
+        self.assertIn('Renderer::Init: native DX12 backend ready', DX12)
+        self.assertIn('Renderer::End_Scene: first actual native game HWND present succeeded', DX12)
+
+    def test_dx12_t01_scene_does_not_initialize_the_legacy_shader_registry(self):
+        native = DISPLAY.split('void W3DDisplay::init()', 1)[1]
+        self.assertIn('W3DShaderManager::init();', native)
+        start = native.index('DX8 terrain transitions, screen filters')
+        self.assertIn('#else', native[start:start+390])
+        self.assertIn('skipping unsupported DX8 shader manager initialization', native)
+        self.assertIn('W3DDisplay: W3D assets initialized', native)
+        self.assertIn('W3DDisplay: scene and debug display initialized', native)
 
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)

@@ -82,6 +82,56 @@ than treating every error as missing DirectX 8.
 This is a diagnostics/startup error-handling fix, not proof that the
 experimental DX12-only skirmish now runs. T01 visual acceptance stays open.
 
+## T01 splash-screen stall diagnostics (new)
+
+The `Install_Final.bmp` splash is painted by the **same main application
+HWND** that DX12 later presents into. It is not a separate launcher window.
+A splash that remains visible, or disappears before a working game scene
+appears, means the original game is not known to have reached its first
+native Present. Do not diagnose this as a failed CreateWindow just from
+its appearance.
+
+The exclusive DX12 game now writes a persistent startup-stage trace to:
+
+`%TEMP%\\GeneralsDX12Startup.log`
+
+The trace records only static subsystem stage labels, process IDs, relative
+Win32 ticks, and native renderer errors. It does not record personal paths,
+game profiles or command-line data. Both the W3D display and the earlier
+`GameClient` initialization (image loading, font library, cursor resources,
+window manager, shell UI and terrain visual) are instrumented. The old
+W3DShaderManager registry that initializes DX8-only terrain transitions,
+screen filters and legacy render targets is **excluded** in the selected
+T01 DX12 game-scene probe. The original DX8 build is unchanged.
+
+For the next Windows retest, close the game and use **the new artifact**
+from the latest successful `win32-dx12-bootstrap` GitHub workflow.
+Run the actual Zero Hour executable from the installation directory, with
+its normal game data available, from the same terminal:
+
+~~~powershell
+Remove-Item "$env:TEMP\\GeneralsDX12Startup.log" -ErrorAction SilentlyContinue
+$env:W3D_DX12_T01_GAMEPLAY = "1"
+Remove-Item Env:W3D_DX12_GAME_WARP -ErrorAction SilentlyContinue
+& ".\\generalszh.exe"      # Use the exact filename packaged by the DX12 artifact.
+Get-Content "$env:TEMP\\GeneralsDX12Startup.log" -Tail 100
+~~~
+
+Use WARP only as a second attempt with
+`$env:W3D_DX12_GAME_WARP = "1"`, because it can be much slower.
+If the application window closes or remains on the splash, send the
+**last 50–100 lines** of `GeneralsDX12Startup.log`. The final stage
+distinguishes incomplete INI/client initialization, an early font/image
+failure, DX12 adapter/swap-chain attachment, resolution rejection,
+unsupported shader/UI initialization, a scene-rendering failure, or a
+successful first native HWND Present. A successful Present without
+authoritative heightmap tiles is not T01 acceptance.
+
+This is an instrumented developer startup probe, not a claim that Zero Hour
+now launches a playable DX12 skirmish. Only actual gameplay screenshots
+and renderer diagnostics can validate T01. Preserve V03, T02 and the
+remaining UI/effects milestones independently.
+
 ## Evidence of real terrain
 
 Capture the game's OutputDebugString messages (Sysinternals DebugView or

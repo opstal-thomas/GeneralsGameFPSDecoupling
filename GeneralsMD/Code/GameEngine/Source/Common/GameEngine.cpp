@@ -39,6 +39,9 @@
 #include "Common/PlayerList.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 #include "Common/INI.h"
 #include "Common/INIException.h"
 #include "Common/MessageStream.h"
@@ -350,6 +353,9 @@ Bool GameEngine::isGameHalted()
  */
 void GameEngine::init()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameEngine::init entered");
+#endif
 	try {
 		//create an INI object to use for loading stuff
 		INI ini;
@@ -476,7 +482,13 @@ void GameEngine::init()
 
 		// doesn't require resets so just create a single instance here.
 		TheGameLODManager = MSGNEW("GameEngineSubsystem") GameLODManager;
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine: initialize LOD manager");
+#endif
 		TheGameLODManager->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine: LOD manager initialized");
+#endif
 
 		// after parsing the command line, we may want to perform dds stuff. Do that here.
 		if (TheGlobalData->m_shouldUpdateTGAToDDS) {
@@ -597,7 +609,13 @@ void GameEngine::init()
 #endif
 
 		initSubsystem(TheUpgradeCenter,"TheUpgradeCenter", MSGNEW("GameEngineSubsystem") UpgradeCenter, &xferCRC, "Data\\INI\\Default\\Upgrade", "Data\\INI\\Upgrade");
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine: initializing TheGameClient");
+#endif
 		initSubsystem(TheGameClient,"TheGameClient", createGameClient(), nullptr);
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine: TheGameClient initialized");
+#endif
 
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
@@ -754,6 +772,13 @@ void GameEngine::init()
 	}
 	catch (ErrorCode ec)
 	{
+#if defined(W3D_RENDER_BACKEND_DX12)
+		char errorCode[96] = {};
+		std::snprintf(errorCode, sizeof(errorCode),
+			"GameEngine::init caught ErrorCode 0x%08X",
+			static_cast<unsigned>(ec));
+		DX12StartupTrace::Write(errorCode);
+#endif
 		if (ec == ERROR_INVALID_D3D)
 		{
 			RELEASE_CRASHLOCALIZED("ERROR:D3DFailurePrompt", "ERROR:D3DFailureMessage");
@@ -769,6 +794,9 @@ void GameEngine::init()
 	}
 	catch (INIException e)
 	{
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine::init caught INIException");
+#endif
 		if (e.mFailureMessage)
 			RELEASE_CRASH((e.mFailureMessage));
 		else
@@ -777,9 +805,15 @@ void GameEngine::init()
 	}
 	catch (...)
 	{
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameEngine::init caught unexpected exception");
+#endif
 		RELEASE_CRASH(("Uncaught Exception during initialization."));
 	}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameEngine::init complete; resetting subsystems");
+#endif
 	resetSubsystems();
 
 	HideControlBar();
