@@ -332,6 +332,28 @@ int wmain()
     if (!Check(capturedRTT != nullptr, "R08 GPU surface to native texture conversion"))
         return 1;
     Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(capturedRTT));
+    const auto copiedRTT = Renderer::Create_Offscreen_Texture(rttInfo);
+    if (!Check(copiedRTT != nullptr, "allocate R08 texture-copy destination"))
+        return 1;
+    Renderer::Update_Texture(
+        reinterpret_cast<RenderTextureHandle>(rtt),
+        reinterpret_cast<RenderTextureHandle>(copiedRTT));
+    const auto copiedSurface = Renderer::Acquire_Texture_Surface_Level(copiedRTT, 0);
+    if (!Check(copiedSurface != nullptr, "R08 copy GPU RTT to another RTT"))
+        return 1;
+    RenderSurfaceMap copiedMap;
+    Renderer::Lock_Surface(copiedSurface, copiedMap, nullptr, true);
+    if (!Check(copiedMap.data && copiedMap.rowPitch == 64 * 4,
+               "R08 gpu-to-gpu Update_Texture preserves copied pixels"))
+        return 1;
+    const auto * copiedPixel = static_cast<const unsigned char *>(copiedMap.data);
+    if (!Check(copiedPixel[0] > 174 && copiedPixel[1] > 110 &&
+               copiedPixel[2] > 52,
+               "R08 Update_Texture reads correct BGRA after GPU copy"))
+        return 1;
+    Renderer::Unlock_Surface(copiedSurface);
+    Renderer::Release_Surface(copiedSurface);
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(copiedRTT));
     if (!Check(Renderer::Set_Render_Target_Surfaces(nullptr, dsvSurface),
                "R07 Renderer supports a depth-only shadow-map pass"))
         return 1;
