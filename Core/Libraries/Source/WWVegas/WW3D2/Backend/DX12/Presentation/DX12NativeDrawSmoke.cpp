@@ -522,27 +522,42 @@ int wmain()
                "T01 cell triangle winding matches the DX8 heightmap"))
         return 1;
 
-    std::vector<TexturedVertex> terrainVertices(32u * 32u * 4u);
-    // Four independent vertices per cell. UVs point to separate texels in
-    // the original 16-bit terrain atlas; no preview texture is involved.
-    for (unsigned cell = 0; cell < 2; ++cell)
+    // Submit TWO independently allocated 32x32-cell heightmap tiles in
+    // source row-major order, not a two-quad preview. Include a sharp
+    // elevation step; the shared tile boundary must remain watertight.
+    std::array<std::vector<TexturedVertex>, 2> terrainTiles;
+    for (unsigned tile=0; tile<terrainTiles.size(); ++tile)
     {
-        const float x0 = cell == 0 ? -0.8f : 0.f;
-        const float x1 = cell == 0 ? 0.f : 0.8f;
-        const float corners[4][3] = {
-            {x0,-0.8f,0.8f}, {x1,-0.8f,0.8f},
-            {x1,0.8f,0.8f}, {x0,0.8f,0.8f}
-        };
-        for (unsigned corner=0; corner<4; ++corner)
-        {
-            TexturedVertex & v = terrainVertices[cell*4+corner];
-            std::memcpy(v.xyz, corners[corner], sizeof(v.xyz));
-            v.diffuse = 0xffffffff;
-            v.uv0[0] = cell == 0 ? 0.25f : 0.75f;
-            v.uv0[1] = 0.5f;
-            v.uv1[0] = v.uv1[1] = 0.f;
-        }
+        terrainTiles[tile].resize(32u*32u*4u);
+        for (unsigned y=0; y<32; ++y)
+            for (unsigned x=0; x<32; ++x)
+            {
+                const float x0 = -0.8f + (tile*32u+x) * (1.6f/64.f);
+                const float x1 = x0 + 1.6f/64.f;
+                const float y0 = -0.8f + y * (1.6f/32.f);
+                const float y1 = y0 + 1.6f/32.f;
+                const float bottom = y < 16 ? 0.8f : 0.65f;
+                const float top = y + 1 < 16 ? 0.8f : 0.65f;
+                const float positions[4][3] = {
+                    {x0,y0,bottom}, {x1,y0,bottom},
+                    {x1,y1,top}, {x0,y1,top}
+                };
+                const unsigned vertexBase = (y*32u+x)*4u;
+                for (unsigned corner=0; corner<4; ++corner)
+                {
+                    TexturedVertex & v = terrainTiles[tile][vertexBase+corner];
+                    std::memcpy(v.xyz, positions[corner], sizeof(v.xyz));
+                    v.diffuse = 0xffffffffu;
+                    v.uv0[0] = tile == 0 ? 0.25f : 0.75f;
+                    v.uv0[1] = 0.5f;
+                    v.uv1[0] = v.uv1[1] = 0.f;
+                }
+            }
     }
+    if (!Check(DX12TerrainTileGeometry::BuildIndices(32, 32, 32, terrainIndices) &&
+               terrainIndices.size() == 6144,
+               "assemble full tile topology for BOTH native GPU draws"))
+        return 1;
     RenderTexture2DDescription terrainAtlasDesc;
     terrainAtlasDesc.width = 2;
     terrainAtlasDesc.height = 1;
@@ -597,30 +612,39 @@ int wmain()
                        "draw depth occluder before terrain", draw.LastError()))
                 return 1;
         }
-        if (!Check(BindTransientVertex(device, terrainVertices.data(),
-                         static_cast<unsigned>(terrainVertices.size()*sizeof(TexturedVertex)),
-                         sizeof(TexturedVertex), 0x0242u) &&
-                   BindTransientIndex(device, terrainIndices.data(),
-                         static_cast<unsigned>(terrainIndices.size()*sizeof(std::uint16_t)), 0u),
-                   "snapshot authoritative terrain through fence-owned R02 pages",
-                   LastError()))
-            return 1;
-        draw.BindVertex(&terrainLayout, static_cast<unsigned>(terrainVertices.size()));
-        draw.BindIndex(static_cast<unsigned>(terrainIndices.size()));
+
         if (!Check(textureStages.Bind(0, reinterpret_cast<RenderTextureHandle>(terrainAtlas)) &&
                    textureStages.SetAddress(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP) &&
                    textureStages.SetAddress(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP),
-                   "bind authoritative 16-bit terrain atlas and clamp sampler"))
+                   "bind full-resolution native terrain atlas and clamp sampler"))
             return 1;
         draw.SetTextureChannel(0, false, terrainColor);
         draw.SetTextureChannel(0, true, RenderTextureStageChannel(
             RENDER_TEXOP_SELECT_ARG1, RENDER_TEXARG_DIFFUSE));
         draw.SetTextureChannel(1, false, RenderTextureStageChannel());
         draw.SetTextureChannel(1, true, RenderTextureStageChannel());
-        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
-                             false, 0, 4, 0, 4096),
-                   "draw both native heightmap cells", draw.LastError()))
-            return 1;
+
+        for (unsigned tile=0; tile<terrainTiles.size(); ++tile)
+        {
+            // One immutable R02 page snapshot per logical terrain tile.
+            // No reused CPU source pointer can alias a previous GPU draw.
+            const auto & src = terrainTiles[tile];
+            if (!Check(BindTransientVertex(device, src.data(),
+                             static_cast<unsigned>(src.size()*sizeof(TexturedVertex)),
+                             sizeof(TexturedVertex), 0x0242u) &&
+                       BindTransientIndex(device, terrainIndices.data(),
+                             static_cast<unsigned>(terrainIndices.size()*sizeof(std::uint16_t)), 0u),
+                       "snapshot complete native terrain tile through R02 fences",
+                       LastError()))
+                return 1;
+            draw.BindVertex(&terrainLayout, static_cast<unsigned>(src.size()));
+            draw.BindIndex(static_cast<unsigned>(terrainIndices.size()));
+            if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                                 false, 0, static_cast<unsigned>(terrainIndices.size()/3),
+                                 0, static_cast<unsigned>(src.size())),
+                       "submit authoritative 32x32-heightmap tile", draw.LastError()))
+                return 1;
+        }
         ComPtr<ID3D12Resource> terrainReadback;
         UINT terrainPitch = 0;
         unsigned char unusedTerrain[4] = {};
@@ -636,18 +660,21 @@ int wmain()
         const unsigned char * pixels = static_cast<const unsigned char *>(terrainPixels);
         const unsigned char * left = pixels + 60*terrainPitch + 40*4;
         const unsigned char * right = pixels + 60*terrainPitch + 120*4;
-        const unsigned char * front = pixels + 60*terrainPitch + 80*4;
+        const unsigned char * front = pixels + 60*terrainPitch + 90*4;
+        const unsigned char * outside = pixels + 60*terrainPitch + 4*4;
         const bool colors = left[0] > 170 && left[1] < 80 &&
                             right[1] > 170 && right[0] < 80;
         const bool depth = terrainPass == 0 ||
             (front[0] > 170 && front[1] < 80 && front[2] < 80);
-        if (!colors || !depth)
+        const bool clip = outside[0] < 40 && outside[1] < 40 && outside[2] < 40;
+        if (!colors || !depth || !clip)
             std::cerr << "T01 terrain readback: left=(" << unsigned(left[0]) << ","
                       << unsigned(left[1]) << ") right=(" << unsigned(right[0])
                       << "," << unsigned(right[1]) << ") center=(" <<
                       unsigned(front[0]) << "," << unsigned(front[1]) << ")\n";
         terrainReadback->Unmap(0, nullptr);
-        if (!Check(colors && depth, "terrain UV/coverage and depth WARP pixels"))
+        if (!Check(colors && depth && clip,
+                   "two full 32x32 terrain tiles: GPU UV, elevation, clip, and depth pixels"))
             return 1;
     }
     textureStages.Bind(0, nullptr);

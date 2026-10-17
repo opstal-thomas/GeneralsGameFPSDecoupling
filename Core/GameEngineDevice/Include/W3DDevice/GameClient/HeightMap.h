@@ -36,6 +36,10 @@
 #include "Common/GameType.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include <cstddef>
+#include <vector>
+#endif
 
 
 // Adjust the triangles to make cliff sides most attractive.  jba.
@@ -92,6 +96,12 @@ protected:
 	Int m_extraBlendTilePositionsSize; //<total size of array including unused memory.
 	DX8VertexBufferClass **m_vertexBufferTiles; ///<collection of smaller vertex buffers that make up 1 heightmap
 	VERTEX_FORMAT *m_vertexBufferBackup; ///< In memory copy of the vertex buffer data for quick update of dynamic lighting.
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Original heightmap vertices are an immutable lighting baseline until a
+	// map/camera update. Moving W3D lights illuminate a separate CPU stream;
+	// no D3D8 geometry handles or GPU readbacks are used by native terrain.
+	std::vector<VERTEX_FORMAT> m_nativeDynamicVertices;
+#endif
 	Int m_originX; ///<  Origin point in the grid.  Slides around.
 	Int m_originY; ///< Origin point in the grid.  Slides around.
 	Int m_desiredDrawWidth; // Regular draw width requested by the view system.

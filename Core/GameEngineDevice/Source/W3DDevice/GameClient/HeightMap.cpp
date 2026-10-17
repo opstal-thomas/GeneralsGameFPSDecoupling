@@ -141,6 +141,9 @@ void HeightMapRenderObjClass::freeIndexVertexBuffers()
 
 	delete[] m_vertexBufferBackup;
 	m_vertexBufferBackup = nullptr;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	m_nativeDynamicVertices.clear();
+#endif
 
 	m_numVertexBufferTiles = 0;
 }
@@ -334,6 +337,11 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 #if !defined(W3D_RENDER_BACKEND_DX12)
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
 		VERTEX_FORMAT *vbHardware = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
+#endif
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// Terrain updates invalidate the frame's dynamic-light snapshot. A
+		// subsequent On_Frame_Update rebuilds it from these original vertices.
+		m_nativeDynamicVertices.clear();
 #endif
 		VERTEX_FORMAT *vBase = data;
 		// Note that we are building the vertex buffer data in the memory buffer, data.
@@ -574,8 +582,18 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, VERTEX_
 		assert(x0 >= originX && y0 >= originY && x1>x0 && y1>y0 && x1<=originX+VERTEX_BUFFER_TILE_LENGTH && y1<=originY+VERTEX_BUFFER_TILE_LENGTH);
 #endif
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// The copy retains original baked diffuse in 'data' as the lighting
+		// baseline. Calculate into an independent transient CPU draw stream.
+		if (m_nativeDynamicVertices.size() !=
+			static_cast<std::size_t>(m_numVertexBufferTiles) * HEIGHTMAP_VERTEX_NUM)
+			return -1;
+		VERTEX_FORMAT *vBase = m_nativeDynamicVertices.data() +
+			(static_cast<std::size_t>(data - m_vertexBufferBackup));
+#else
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
 		VERTEX_FORMAT *vBase = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
+#endif
 		VERTEX_FORMAT *vb;
 
 		for (j=y0; j<y1; j++)
@@ -714,8 +732,18 @@ Int HeightMapRenderObjClass::updateVBForLightOptimized(DX8VertexBufferClass	*pVB
 		assert(x0 >= originX && y0 >= originY && x1>x0 && y1>y0 && x1<=originX+VERTEX_BUFFER_TILE_LENGTH && y1<=originY+VERTEX_BUFFER_TILE_LENGTH);
 #endif
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// The copy retains original baked diffuse in 'data' as the lighting
+		// baseline. Calculate into an independent transient CPU draw stream.
+		if (m_nativeDynamicVertices.size() !=
+			static_cast<std::size_t>(m_numVertexBufferTiles) * HEIGHTMAP_VERTEX_NUM)
+			return -1;
+		VERTEX_FORMAT *vBase = m_nativeDynamicVertices.data() +
+			(static_cast<std::size_t>(data - m_vertexBufferBackup));
+#else
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
 		VERTEX_FORMAT *vBase = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
+#endif
 		VERTEX_FORMAT *vb;
 
 		//
@@ -1379,13 +1407,14 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 //=============================================================================
 void HeightMapRenderObjClass::On_Frame_Update()
 {
-#if defined(W3D_RENDER_BACKEND_DX12)
-	// T01 uses original baked terrain lighting. The legacy dynamic-light
-	// updater writes into D3D8 hardware buffers; M03 must migrate its
-	// per-vertex dynamic lighting before this can be enabled on DX12.
-	return;
-#endif
 	BaseHeightMapRenderObjClass::On_Frame_Update();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Rebuild the per-frame lighting stream from authoritative *static* map
+	// geometry, so disabled/moved lights never leave old colors behind.
+	// This is distinct from GPU-side M03 lighting on meshes: heightmap
+	// vertices have their own prelit W3D diffuse/alpha construction.
+	m_nativeDynamicVertices.clear();
+#endif
 	Int i,j,k;
 	Int originX,originY;
 	if (Scene==nullptr) return;
@@ -1396,6 +1425,14 @@ void HeightMapRenderObjClass::On_Frame_Update()
 	if (m_map == nullptr) {
 		return;
 	}
+#if defined(W3D_RENDER_BACKEND_DX12)
+	if (!m_vertexBufferBackup || !m_vertexBufferTiles || m_numVertexBufferTiles <= 0)
+		return;
+	// The DX8 function updates mutable hardware vertices; DX12 performs
+	// precisely the same doTheDynamicLight() calculation on this snapshot.
+	const std::size_t count = static_cast<std::size_t>(m_numVertexBufferTiles) * HEIGHTMAP_VERTEX_NUM;
+	m_nativeDynamicVertices.assign(m_vertexBufferBackup, m_vertexBufferBackup + count);
+#endif
 
 #ifdef DO_UNIT_TIMINGS
 #pragma MESSAGE("*** WARNING *** DOING DO_UNIT_TIMINGS!!!!")
@@ -1955,7 +1992,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 				VERTEX_BUFFER_TILE_LENGTH, cols, rows, indices))
 				continue;
 			RenderDynamicVertexBinding vertex;
-			vertex.cpuData = getVertexBufferBackup(tileX, tileY);
+			const std::size_t tileOffset =
+				(static_cast<std::size_t>(tileY) * m_numVBTilesX + tileX) * HEIGHTMAP_VERTEX_NUM;
+			vertex.cpuData = m_nativeDynamicVertices.empty() ?
+				getVertexBufferBackup(tileX, tileY) : m_nativeDynamicVertices.data() + tileOffset;
 			vertex.vertexCount = HEIGHTMAP_VERTEX_NUM;
 			vertex.stride = sizeof(VERTEX_FORMAT);
 			vertex.legacyVertexFormat = 0x0242u; // W3D XYZ|DIFFUSE|TEX2

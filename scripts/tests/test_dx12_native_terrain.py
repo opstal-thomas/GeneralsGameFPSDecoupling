@@ -7,6 +7,8 @@ HEIGHT = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cp
 ATLAS = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/TerrainTex.cpp").read_text()
 GEOM = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12TerrainTileGeometry.h").read_text()
 GPU = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/Presentation/DX12NativeDrawSmoke.cpp").read_text()
+HEADER = (ROOT / "Core/GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h").read_text()
+BASE = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/BaseHeightMap.cpp").read_text()
 
 
 class NativeTerrainContract(unittest.TestCase):
@@ -42,11 +44,28 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("BuildNativeTerrainMips(this, 4)", ATLAS)
 
     def test_gpu_pixels_cover_native_atlas_and_depth(self):
-        self.assertIn("BindTransientVertex(device, terrainVertices.data()", GPU)
+        self.assertIn("BindTransientVertex(device, src.data()", GPU)
         self.assertIn("BindTransientIndex(device, terrainIndices.data()", GPU)
         self.assertIn("readback->Map", GPU)
         self.assertIn("terrain UV/coverage and depth WARP pixels", GPU)
         self.assertIn("terrainPass == 1", GPU)
+        self.assertIn("two full 32x32 terrain tiles: GPU UV, elevation, clip, and depth pixels", GPU)
+        self.assertIn("for (unsigned tile=0; tile<terrainTiles.size(); ++tile)", GPU)
+
+
+    def test_native_dynamic_lighting_preserves_original_baked_vertices(self):
+        self.assertIn("std::vector<VERTEX_FORMAT> m_nativeDynamicVertices", HEADER)
+        self.assertIn("m_nativeDynamicVertices.assign(m_vertexBufferBackup", HEIGHT)
+        self.assertIn("m_nativeDynamicVertices.clear();", HEIGHT)
+        self.assertIn("m_nativeDynamicVertices.data() +", HEIGHT)
+        self.assertIn("doTheDynamicLight(vb, vbMirror", HEIGHT)
+        self.assertIn("m_nativeDynamicVertices.empty() ?", HEIGHT)
+        self.assertIn("m_nativeDynamicVertices.clear();", HEIGHT.split("void HeightMapRenderObjClass::freeIndexVertexBuffers()", 1)[1])
+        self.assertNotIn("T01 uses original baked terrain lighting", HEIGHT)
+
+    def test_dx12_terrain_does_not_register_dx8_cleanup(self):
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)\\n\\t// The DX12 heightmap", BASE)
+        self.assertIn("DX8Wrapper::SetCleanupHook(this);", BASE)
 
 
 if __name__ == "__main__":

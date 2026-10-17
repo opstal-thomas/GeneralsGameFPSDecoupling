@@ -307,7 +307,10 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass()
 #else
 	m_shroud = NEW W3DShroud;
 #endif
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// The DX12 heightmap never registers with the D3D8 reset/cleanup device.
 	DX8Wrapper::SetCleanupHook(this);
+#endif
 }
 
 void BaseHeightMapRenderObjClass::scheduleFullUpdate()
