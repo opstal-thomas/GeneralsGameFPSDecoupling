@@ -55,6 +55,7 @@
 #endif
 #if defined(W3D_RENDER_BACKEND_DX12)
 #include "WW3D2/Backend/DX12/DX12TerrainTileGeometry.h"
+#include <cstdio>
 #endif
 #include <WW3D2/assetmgr.h>
 #include <WW3D2/texture.h>
@@ -1982,6 +1983,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	Renderer::Apply_Texture_Stage_Color(1, RenderTextureStageChannel());
 	Renderer::Apply_Texture_Stage_Alpha(1, RenderTextureStageChannel());
 
+	unsigned nativeTerrainTiles = 0;
+	unsigned nativeTerrainTriangles = 0;
 	for (Int tileY = 0; tileY < m_numVBTilesY; ++tileY)
 		for (Int tileX = 0; tileX < m_numVBTilesX; ++tileX)
 		{
@@ -2016,7 +2019,30 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			Renderer::Bind_Dynamic_Index_Buffer(index, 0);
 			Renderer::Draw_Triangles(0, static_cast<unsigned short>(indices.size() / 3),
 				0, HEIGHTMAP_VERTEX_NUM);
+			++nativeTerrainTiles;
+			nativeTerrainTriangles += static_cast<unsigned>(indices.size() / 3);
 		}
+	// These counters describe submissions from the ORIGINAL gameplay
+	// HeightMapRenderObjClass, not the DX12 preview or a synthetic renderer.
+	// Diagnostic OutputDebugString can be captured with DebugView while
+	// comparing the actual Generals/Zero Hour scene against the DX8 build.
+	static bool t01LogEnabled = [] {
+		char option[8] = {};
+		return GetEnvironmentVariableA("W3D_DX12_T01_GAMEPLAY", option,
+			sizeof(option)) == 1 && option[0] == '1';
+	}();
+	static unsigned t01TerrainFrames = 0;
+	if (t01LogEnabled && (++t01TerrainFrames % 120u) == 1u)
+	{
+		char report[256] = {};
+		const bool nativeAtlasBound = !m_disableTextures && m_stageZeroTexture &&
+			m_stageZeroTexture->Peek_Render_Texture() != nullptr;
+		std::snprintf(report, sizeof(report),
+			"[DX12-T01] Original heightmap frame=%u tiles=%u triangles=%u atlas=%s grid=%dx%d\n",
+			t01TerrainFrames, nativeTerrainTiles, nativeTerrainTriangles,
+			nativeAtlasBound ? "native" : "missing/disabled", m_x, m_y);
+		OutputDebugStringA(report);
+	}
 	Renderer::Set_Texture(0, nullptr);
 	Renderer::Set_Texture(1, nullptr);
 	return; // T02/T03/T06/T07 overlay paths are separately tracked.

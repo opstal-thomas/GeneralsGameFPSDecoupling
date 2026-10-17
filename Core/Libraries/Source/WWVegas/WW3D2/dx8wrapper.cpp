@@ -251,6 +251,12 @@ void MoveRectIntoOtherRect(const RECT& inner, const RECT& outer, int* x, int* y)
 
 bool DX8Wrapper::Init(void * hwnd, bool lite)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T01 gameplay scene probe is allowed to enter the original W3D scene,
+	// never to initialize a D3D8 device as an undocumented fallback.
+	OutputDebugStringA("[DX12-T01] BLOCKED legacy DX8Wrapper::Init in selected DX12 backend.\n");
+	return false;
+#endif
 	WWASSERT(!IsInitted);
 
 	// zero memory
@@ -936,6 +942,10 @@ void DX8Wrapper::Resize_And_Position_Window()
 bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int windowed,
 								   bool resize_window,bool reset_device, bool restore_assets)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	OutputDebugStringA("[DX12-T01] BLOCKED legacy DX8Wrapper::Set_Render_Device in selected DX12 backend.\n");
+	return false;
+#endif
 	WWASSERT(IsInitted);
 	WWASSERT(dev >= -1);
 	WWASSERT(dev < _RenderDeviceNameTable.Count());

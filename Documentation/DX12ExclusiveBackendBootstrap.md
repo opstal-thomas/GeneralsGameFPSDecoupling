@@ -91,3 +91,7 @@ HWND and presents frames using the real DX12 Renderer implementation, without
 loading or importing D3D8. This does **not** enable normal game startup:
 the B01 inventory still must be driven down and validated by V07, and
 gameplay asset/draw paths remain open under R01/R04/M01/B07.
+
+## T01 real-game developer opt-in (not V03)
+
+The exclusive DX12 game now recognizes W3D_DX12_T01_GAMEPLAY=1 for an explicit attempt to initialize the ORIGINAL WW3D gameplay scene. This is not enabled for ordinary DX12 launches, is not the B10 standalone checkpoint, and does not enable DX8 fallback. The remaining unsupported UI/world passes can still prevent boot or rendering. [Instructions and real in-game acceptance evidence](DX12T01GameplayProbe.md) are required before claiming T01 or V03. Normal builds and DX8 builds retain their prior behavior.

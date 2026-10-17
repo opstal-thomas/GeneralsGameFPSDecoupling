@@ -44,6 +44,10 @@ namespace
 {
     DX12PrimaryWindow primaryWindow;
     bool ready = false;
+    // Opt-in developer probe is separate from the standalone B10 launcher.
+    // The renderer remains fail-closed in ordinary DX12 game configurations.
+    bool terrainGameplayProbe = false;
+    unsigned probePresentedFrames = 0;
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
     DX12W3DTextureStages textureStages;
@@ -86,6 +90,19 @@ namespace
         OutputDebugStringA("\\n");
     }
 
+    bool TerrainGameplayProbeOptIn()
+    {
+#if defined(W3D_DX12_DEVELOPER_CHECKPOINT)
+        // The B10 standalone program is intentionally NOT a gameplay probe.
+        return false;
+#else
+        char option[8] = {};
+        return GetEnvironmentVariableA(
+            "W3D_DX12_T01_GAMEPLAY", option, sizeof(option)) == 1 &&
+            option[0] == '1';
+#endif
+    }
+
     bool DiagnosticOptIn()
     {
 #if defined(W3D_DX12_DEVELOPER_CHECKPOINT)
@@ -95,9 +112,12 @@ namespace
         return true;
 #else
         char option[4] = {};
-        return GetEnvironmentVariableA(
+        const bool b04Diagnostic = GetEnvironmentVariableA(
             "W3D_DX12_B04_DIAGNOSTIC", option, sizeof(option)) == 1 &&
             option[0] == '1';
+        // An explicit attempt to reach the REAL W3D scene for T01 visual
+        // comparison. This is not an implicit fallback or a release switch.
+        return b04Diagnostic || TerrainGameplayProbeOptIn();
 #endif
     }
 
@@ -189,14 +209,18 @@ bool Renderer::Init(void * window, bool lite)
     }
     if (!DiagnosticOptIn())
     {
-        // B04 is a native frame/state checkpoint. B10 will establish the
-        // game-launch checkpoint after the unported W3D callers are gated.
-        ReportPending("Renderer::Init: set W3D_DX12_B04_DIAGNOSTIC=1 for frame diagnostic");
+        // No game startup by default. An explicit T01 probe is the only
+        // developer path into WW3D game scenes; it must stay opt-in.
+        ReportPending("Renderer::Init: require W3D_DX12_T01_GAMEPLAY=1 for experimental W3D scene; or W3D_DX12_B04_DIAGNOSTIC=1 for B04 frame diagnostic");
         primaryWindow.Shutdown();
         return false;
     }
 
     nativeDraw.Reset();
+    terrainGameplayProbe = TerrainGameplayProbeOptIn();
+    probePresentedFrames = 0;
+    if (terrainGameplayProbe)
+        OutputDebugStringA("[DX12-T01] EXCLUSIVE DX12 gameplay scene probe enabled: incomplete W3D effects/UI; no DX8 renderer fallback.\n");
     ready = true;
     renderThread = GetCurrentThreadId();
     syncInterval = 0;
@@ -213,6 +237,8 @@ void Renderer::Shutdown()
     renderTargets.Reset();
     nativeDraw.Reset();
     ready = false;
+    terrainGameplayProbe = false;
+    probePresentedFrames = 0;
     renderThread = 0;
     syncInterval = 0;
     primaryWindow.Shutdown();
@@ -303,6 +329,20 @@ void Renderer::End_Scene(bool flip_frame)
     {
         ReportFailure("Renderer::End_Scene");
         ready = false;
+    }
+    else if (terrainGameplayProbe && flip_frame)
+    {
+        // Signal that the actual selected game-HWND command list presented.
+        // HeightMapRenderObjClass separately reports native terrain tiles;
+        // a present alone never counts as terrain acceptance.
+        if ((probePresentedFrames++ % 120u) == 0u)
+        {
+            char report[128] = {};
+            std::snprintf(report, sizeof(report),
+                "[DX12-T01] Native game HWND Present count=%u (terrain must be verified independently)\n",
+                probePresentedFrames);
+            OutputDebugStringA(report);
+        }
     }
 }
 
@@ -1562,7 +1602,9 @@ bool Renderer::Supports_Texture_Format(unsigned w3dPixelFormat)
 
 unsigned Renderer::Get_Back_Buffer_Format()
 {
-    ReportPending("Renderer::Get_Back_Buffer_Format");
-    return {};
+    // DX12 R07 primary back buffer is BGRA8_UNORM. Return the exact WW3D
+    // A8R8G8B8 enum value consumed by the original W3D terrain/alpha setup.
+    // An unknown format here silently disables its expected color-write path.
+    return Has_Active_Device() ? 2u : 0u;
 }
 

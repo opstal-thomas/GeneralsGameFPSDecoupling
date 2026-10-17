@@ -2024,18 +2024,39 @@ void WW3D::Update_Pixel_Center()
 #endif //WW3D_DX8
 }
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+namespace
+{
+    // B06 will own the native MSAA configuration. T01 uses the real R07
+    // single-sample back buffer, never the DX8Wrapper presentation globals.
+    int NativeTerrainTextureBitdepth = 32;
+}
+#endif
+
 void WW3D::Set_Texture_Bitdepth(int bitdepth)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    NativeTerrainTextureBitdepth = bitdepth == 16 ? 16 : 32;
+#else
 	DX8Wrapper::Set_Texture_Bitdepth(bitdepth);
+#endif
 }
 
 int WW3D::Get_Texture_Bitdepth()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    return NativeTerrainTextureBitdepth;
+#else
 	return DX8Wrapper::Get_Texture_Bitdepth();
+#endif
 }
 
 void WW3D::Set_MSAA_Mode(MultiSampleModeEnum mode)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    // Do not advertise unsupported DX12 MSAA or touch D3D8 device state.
+    (void)mode;
+#else
 	switch (mode) {
 
 	default:
@@ -2056,10 +2077,14 @@ void WW3D::Set_MSAA_Mode(MultiSampleModeEnum mode)
 		break;
 
 	}
+#endif
 }
 
 WW3D::MultiSampleModeEnum WW3D::Get_MSAA_Mode()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+    return MULTISAMPLE_MODE_NONE;
+#else
 	D3DMULTISAMPLE_TYPE type = DX8Wrapper::Get_MSAA_Mode();
 
 	switch (type) {
@@ -2078,6 +2103,7 @@ WW3D::MultiSampleModeEnum WW3D::Get_MSAA_Mode()
 		return MULTISAMPLE_MODE_8X;
 
 	}
+#endif
 }
 
 void WW3D::Add_To_Static_Sort_List(RenderObjClass *robj, unsigned int sort_level)

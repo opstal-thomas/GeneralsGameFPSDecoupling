@@ -1,6 +1,6 @@
 # DX12-T01 — Native heightmap base-pass integration
 
-Status: **Implemented in code; Windows build/WARP and DX12-only gameplay not yet validated**. This work does not claim complete T01 or parity with DX8.
+Status: **Native terrain implementation verified by Windows builds/WARP; real DX12-only gameplay and visual parity not yet validated**. This work does not claim complete T01 or parity with DX8.
 
 ## Authoritative terrain source and geometry
 
@@ -43,3 +43,7 @@ The native base-pass renderer preserves `m_treeBuffer->setIsTerrain()`, the orig
 ## LOD backend isolation
 
 `BaseHeightMapRenderObjClass::adjustTerrainLOD` forces `TERRAIN_LOD_MAX` only in exclusive DX12 configurations. The existing low-detail fallback switches to `FlatHeightMapRenderObjClass`, which still performs legacy DX8 terrain rendering and is therefore forbidden when T01 is selected. Normal DX8 builds retain the original automatic/manual quality selection. Full-resolution native geometry remains active after terrain quality changes.
+
+## Selected-backend real-game scene probe
+
+An opt-in launch attempt is now available via W3D_DX12_T01_GAMEPLAY=1 on actual Generals and Zero Hour DX12-exclusive executables. It enters the original game HWND and WW3D scene (not B10 or the mirrored preview), prints native Present and authoritative heightmap tile/triangle/atlas evidence, and refuses DX8Wrapper device creation. Normal DX12 game startup remains fail-closed. See [DX12-T01 game-scene acceptance guide](DX12T01GameplayProbe.md). These source changes have not established that an interactive skirmish boots, renders, or matches DX8; only user-run installed-game comparison can close this acceptance gate.

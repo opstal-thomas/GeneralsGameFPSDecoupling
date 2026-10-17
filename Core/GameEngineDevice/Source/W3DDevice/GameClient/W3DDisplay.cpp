@@ -475,8 +475,10 @@ W3DDisplay::~W3DDisplay()
 	if (!TheGlobalData->m_headless)
 		WW3D::Shutdown();
 	WWMath::Shutdown();
+#if !defined(W3D_RENDER_BACKEND_DX12)
 	if (!TheGlobalData->m_headless)
 		DX8WebBrowser::Shutdown();
+#endif
 	delete TheW3DFileSystem;
 	TheW3DFileSystem = nullptr;
 
@@ -493,6 +495,11 @@ inline Bool isResolutionSupported(const ResolutionDescClass &res)
 /*Return number of screen modes supported by the current device*/
 Int W3DDisplay::getDisplayModeCount()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// No DX8 adapter/RenderDeviceDescClass exists in an exclusive DX12
+	// process. Offer one genuine OS desktop mode as the safe fallback.
+	return 1;
+#else
 	const RenderDeviceDescClass &devDesc=WW3D::Get_Render_Device_Desc(0);
 	const DynamicVectorClass <ResolutionDescClass> &resolutions=devDesc.Enumerate_Resolutions();
 
@@ -520,10 +527,31 @@ Int W3DDisplay::getDisplayModeCount()
 	}
 
 	return numResolutions;
+#endif
 }
 
 void W3DDisplay::getDisplayModeDescription(Int modeIndex, Int *xres, Int *yres, Int *bitDepth)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	if (modeIndex != 0 || !xres || !yres || !bitDepth)
+		return;
+	DEVMODEW mode = {};
+	mode.dmSize = sizeof(mode);
+	if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) &&
+		mode.dmPelsWidth >= DEFAULT_DISPLAY_WIDTH &&
+		mode.dmPelsHeight >= DEFAULT_DISPLAY_HEIGHT)
+	{
+		*xres = static_cast<Int>(mode.dmPelsWidth);
+		*yres = static_cast<Int>(mode.dmPelsHeight);
+	}
+	else
+	{
+		*xres = DEFAULT_DISPLAY_WIDTH;
+		*yres = DEFAULT_DISPLAY_HEIGHT;
+	}
+	*bitDepth = DEFAULT_DISPLAY_BIT_DEPTH;
+	return;
+#else
 	Int numResolutions=0;
 	const RenderDeviceDescClass &devDesc=WW3D::Get_Render_Device_Desc(0);
 	const DynamicVectorClass <ResolutionDescClass> &resolutions=devDesc.Enumerate_Resolutions();
@@ -544,6 +572,7 @@ void W3DDisplay::getDisplayModeDescription(Int modeIndex, Int *xres, Int *yres, 
 			numResolutions++;
 		}
 	}
+#endif
 }
 
 void W3DDisplay::setGamma(Real gamma, Real bright, Real contrast, Bool calibrate)
@@ -836,7 +865,15 @@ void W3DDisplay::init()
 		WW3D::Set_Thumbnail_Enabled(false);
 		WW3D::Set_Screen_UV_Bias( TRUE );  ///< this makes text look good :)
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// Match the actual already-owned game HWND style. B06 still owns
+		// fullscreen/style transitions; the DX12 probe must not request a
+		// swap-chain mode that disagrees with the primary window.
+		const LONG_PTR style = GetWindowLongPtrW(ApplicationHWnd, GWL_STYLE);
+		setWindowed((style & WS_POPUP) == 0);
+#else
 		setWindowed( TheGlobalData->m_windowed );
+#endif
 
 		// create a 2D renderer helper
 		m_2DRender = NEW Render2DClass;
@@ -971,7 +1008,11 @@ void W3DDisplay::init()
 			m_nativeDebugDisplay->setFontWidth( 9 );
 		}
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
+		// BrowserEngine::Initialize receives an IDirect3DDevice8*. It can
+		// never be initialized by an exclusive DX12 gameplay probe.
 		DX8WebBrowser::Initialize();
+#endif
 	}
 
 	// we're now online

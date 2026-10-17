@@ -9,6 +9,10 @@ GEOM = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12TerrainTile
 GPU = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/Presentation/DX12NativeDrawSmoke.cpp").read_text()
 HEADER = (ROOT / "Core/GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h").read_text()
 BASE = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/BaseHeightMap.cpp").read_text()
+WW3D = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/ww3d.cpp").read_text()
+DX12 = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12Backend.cpp").read_text()
+DX8_WRAPPER = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp").read_text()
+DISPLAY = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.cpp").read_text()
 
 
 class NativeTerrainContract(unittest.TestCase):
@@ -74,6 +78,41 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("newROBJ = TheFlatHeightMap;", lod)
         self.assertLess(lod.index("TheWritableGlobalData->m_terrainLOD = TERRAIN_LOD_MAX;"),
                         lod.index("newROBJ = TheFlatHeightMap;"))
+
+
+    def test_real_game_scene_probe_is_explicit_and_not_dx8_preview(self):
+        self.assertIn("W3D_DX12_T01_GAMEPLAY", DX12)
+        self.assertIn("return b04Diagnostic || TerrainGameplayProbeOptIn();", DX12)
+        self.assertIn("if (!DiagnosticOptIn())", DX12)
+        self.assertIn("primaryWindow.Shutdown();", DX12)
+        self.assertIn("W3D_DX12_T01_GAMEPLAY", HEIGHT)
+        self.assertIn("Original heightmap frame=", HEIGHT)
+        self.assertIn("tiles=%u triangles=%u atlas=%s", HEIGHT)
+        self.assertIn("Native game HWND Present count=", DX12)
+
+    def test_dx8_device_creation_stays_disabled_under_dx12_selection(self):
+        for name in ("bool DX8Wrapper::Init(", "bool DX8Wrapper::Set_Render_Device(int dev"):
+            body = DX8_WRAPPER.split(name, 1)[1].split("#endif", 1)[0]
+            self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", body)
+            self.assertIn("return false;", body)
+        self.assertIn("// BrowserEngine::Initialize receives", DISPLAY)
+        self.assertIn("DX8WebBrowser::Initialize();", DISPLAY)
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", DISPLAY)
+
+    def test_real_hwnd_matches_native_display_modes(self):
+        self.assertIn("EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS", DISPLAY)
+        self.assertIn("GetWindowLongPtrW(ApplicationHWnd, GWL_STYLE)", DISPLAY)
+        self.assertIn("setWindowed((style & WS_POPUP) == 0);", DISPLAY)
+        mode = DISPLAY.split("Int W3DDisplay::getDisplayModeCount()", 1)[1]
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", mode)
+        self.assertIn("return 1;", mode.split("#else", 1)[0])
+
+    def test_game_settings_avoid_dx8_render_device_state(self):
+        controls = WW3D.split("void WW3D::Set_Texture_Bitdepth(int bitdepth)", 1)[1]
+        self.assertIn("NativeTerrainTextureBitdepth", controls)
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", controls)
+        self.assertIn("return MULTISAMPLE_MODE_NONE;", controls)
+        self.assertIn("return Has_Active_Device() ? 2u : 0u;", DX12)
 
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)
