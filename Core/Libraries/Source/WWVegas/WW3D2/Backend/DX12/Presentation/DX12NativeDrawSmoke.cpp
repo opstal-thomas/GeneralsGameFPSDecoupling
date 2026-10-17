@@ -11,6 +11,8 @@
 #include "../DX12W3DRenderTargets.h"
 #include "../DX12W3DTextureStages.h"
 #include "../DX12W3DTextures.h"
+#include "../DX12W3DSurfaces.h"
+#include "../DX12W3DSurfaceTransfers.h"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -623,6 +625,106 @@ int wmain()
             return 1;
     }
     draw.SetGrayscaleEnabled(false);
+
+    // R08: the *actual* W3D R07 offscreen RTV is rendered, copied back
+    // synchronously while its frame is still active, then drawn again.
+    // Validate GPU->CPU, CPU->GPU and GPU->GPU transfers on the same frame,
+    // including command allocator reset and fence-safe IA/R07 restoration.
+    {
+        DX12W3DSurfaceTransfers transfers;
+        RenderSurfaceDescription texDesc;
+        texDesc.width = 160; texDesc.height = 120; texDesc.pixelFormat = 2;
+        RenderTexture2DHandle texA = targets.CreateOffscreenTexture(device, texDesc);
+        RenderTexture2DHandle texB = targets.CreateOffscreenTexture(device, texDesc);
+        if (!Check(texA && texB, "allocate R08 real GPU render targets")) return 1;
+        RenderSurfaceHandle aSurface = targets.AcquireTextureLevel(device, texA, 0);
+        RenderSurfaceHandle bSurface = targets.AcquireTextureLevel(device, texB, 0);
+        RenderSurfaceHandle cpuSurface = DX12W3DSurfaces::Create(texDesc);
+        if (!Check(aSurface && bSurface && cpuSurface,
+                   "acquire R08 GPU and CPU surface handles")) return 1;
+        if (!Check(device.BeginFrame(clear), "begin R08 native transfer frame") ||
+            !Check(targets.BeginFrame(device), "begin R08 target ownership") ||
+            !Check(targets.Bind(device, aSurface, nullptr), "bind R08 offscreen RTV") ||
+            !Check(BindVertex(device, red, 0, sizeof(Vertex)),
+                   "bind R08 colored mesh", LastError()) ||
+            !Check(BindIndex(device, indices16, 0), "bind R08 W3D indices", LastError()))
+            return 1;
+        const D3D12_VIEWPORT viewport = {0, 0, 160, 120, 0, 1};
+        const D3D12_RECT scissors = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &scissors);
+        draw.BeginFrame();
+        draw.BindVertex(NativeVertexLayout(red), 4);
+        draw.BindIndex(4);
+        draw.SetBlend(RenderBlendState());
+        draw.SetCull(RENDER_CULL_NONE);
+        draw.SetGrayscaleEnabled(false);
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             false, 0, 1, 0, 4), "draw R08 GPU source", draw.LastError()))
+            return 1;
+
+        const RenderSurfaceRect center = {80, 60, 81, 61};
+        unsigned char rgba[4] = {};
+        if (!Check(transfers.ReadRegion(device, targets, aSurface, rgba, 4, center) == 4 &&
+                   rgba[0] == 0 && rgba[1] == 0 && rgba[2] > 230,
+                   "R08 in-frame GPU readback sees completed opaque source",
+                   transfers.LastError()))
+            return 1;
+
+        // Drawing after the flush proves the R07 OM and R01 IA state has
+        // been rebound on the freshly reset command list.
+        if (!Check(BindVertex(device, green, 0, sizeof(Vertex)),
+                   "bind R08 post-flush green mesh", LastError())) return 1;
+        draw.BindVertex(NativeVertexLayout(green), 4);
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             true, 0, 2, 0, 4),
+                   "draw same frame after R08 flush", draw.LastError()))
+            return 1;
+        if (!Check(transfers.ReadRegion(device, targets, aSurface, rgba, 4, center) == 4 &&
+                   rgba[1] > 230 && rgba[0] < 12 && rgba[2] < 12,
+                   "R08 second draw survives flush and shows green", transfers.LastError()))
+            return 1;
+        const RenderSurfacePoint zero = {0, 0};
+        if (!Check(transfers.Copy(device, targets, aSurface, nullptr,
+                                  cpuSurface, &zero),
+                   "R08 GPU to CPU full-surface copy", transfers.LastError()))
+            return 1;
+        RenderSurfaceMap cpuMap;
+        if (!Check(DX12W3DSurfaces::Lock(cpuSurface, cpuMap, &center, true),
+                   "map R08 CPU copy", DX12W3DSurfaces::LastError())) return 1;
+        const auto * cpuPixel = static_cast<const unsigned char *>(cpuMap.data);
+        const bool correctCPU = cpuPixel[1] > 230 && cpuPixel[0] < 12 && cpuPixel[2] < 12;
+        DX12W3DSurfaces::Unlock(cpuSurface);
+        if (!Check(correctCPU, "R08 GPU image retains BGRA pixel in CPU lock")) return 1;
+        if (!Check(transfers.Copy(device, targets, aSurface, nullptr, bSurface, &zero),
+                   "R08 native GPU to GPU CopyTextureRegion", transfers.LastError()))
+            return 1;
+        if (!Check(transfers.ReadRegion(device, targets, bSurface, rgba, 4, center) == 4 &&
+                   rgba[1] > 230, "R08 copied destination WARP pixel", transfers.LastError()))
+            return 1;
+
+        // RMW surface lock writes the exact region back to a native RTT.
+        RenderSurfaceMap gpuMap;
+        if (!Check(transfers.Lock(device, targets, bSurface, gpuMap, &center, false),
+                   "R08 GPU surface read-modify-write lock", transfers.LastError()))
+            return 1;
+        auto * edit = static_cast<unsigned char *>(gpuMap.data);
+        edit[0] = 255; edit[1] = 0; edit[2] = 0; edit[3] = 255; // blue BGRA
+        if (!Check(transfers.Unlock(device, targets, bSurface) &&
+                   transfers.ReadRegion(device, targets, bSurface, rgba, 4, center) == 4 &&
+                   rgba[0] > 230 && rgba[1] < 12,
+                   "R08 GPU surface unlock submits edited pixel", transfers.LastError()))
+            return 1;
+        if (!Check(targets.Bind(device, nullptr, nullptr) &&
+                   targets.EndFrame(device) && device.EndFrame(0, false) &&
+                   device.WaitForIdle(), "fence R08 surface copy tests", targets.LastError()))
+            return 1;
+        DX12W3DSurfaces::Release(cpuSurface);
+        targets.Release(aSurface); targets.Release(bSurface);
+        DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(texA));
+        DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(texB));
+    }
+
     ReleaseVertex(lit);
     ReleaseVertex(red);
     ReleaseVertex(green);
