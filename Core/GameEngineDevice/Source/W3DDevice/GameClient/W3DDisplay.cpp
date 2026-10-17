@@ -2070,8 +2070,11 @@ AGAIN:
 
 	Bool freezeTime = TheFramePacer->isTimeFrozen() || TheFramePacer->isGameHalted();
 
-	/// @todo: I'm assuming the first view is our main 3D view.
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// This camera reference is only needed by the remaining DX8 shroud/water
+	// render-target updates (T03/T06). DX12 T01 omits those unported passes.
 	W3DView *primaryW3DView=(W3DView *)getFirstView();
+#endif
 
 	if (!freezeTime && TheScriptEngine->isTimeFast())
 	{
