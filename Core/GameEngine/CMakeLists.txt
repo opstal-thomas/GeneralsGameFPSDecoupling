@@ -1198,6 +1198,16 @@ target_compile_definitions(corei_gameengine_private INTERFACE
     IG_DEBUG_STACKTRACE
 )
 
+# The backend is selected for the complete game process, not just WW3D2.
+# z_gameengine/g_gameengine compile shared GameClient.cpp, GameEngine.cpp
+# and other startup callers from this interface. Without this definition
+# they retain legacy DX8 initialization while WW3D2 uses native DX12.
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    target_compile_definitions(corei_gameengine_private INTERFACE
+        W3D_RENDER_BACKEND_DX12=1
+    )
+endif()
+
 target_precompile_headers(corei_gameengine_private INTERFACE
     Include/Precompiled/PreRTS.h
 )

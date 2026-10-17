@@ -228,6 +228,16 @@ target_link_libraries(corei_gameenginedevice_private INTERFACE
     stb
 )
 
+# Shared W3DDisplay / W3DTerrainVisual / HeightMap compile into the two
+# GameEngineDevice libraries (not into WW3D2). Selected DX12 builds must
+# consistently compile their exclusive backend guards and startup traces.
+# The independent DX8 preview remains unaffected.
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    target_compile_definitions(corei_gameenginedevice_private INTERFACE
+        W3D_RENDER_BACKEND_DX12=1
+    )
+endif()
+
 # The DX12 gameplay mirror has hooks in Core/GameEngineDevice as well as
 # WW3D2. The latter's compile definitions are private to the actual WW3D2
 # target and are not inherited by GameEngineDevice source files.

@@ -105,6 +105,9 @@
 #include "meshmdl.h"
 #include "dx8renderer.h"
 #include "Renderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 #include "render2d.h"
 #include "WWLib/bound.h"
 #include "rddesc.h"
@@ -269,6 +272,9 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 	WWDEBUG_SAY(("WW3D::Init hwnd = %p",hwnd));
 	_Hwnd = (HWND)hwnd;
 	Lite = lite;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("WW3D::Init: entered original W3D initialization");
+#endif
 
 	// TheSuperHackers @refactor bobtista 07/08/2026 The renderer is initialized
 	// once here and shut down in WW3D::Shutdown.
@@ -277,6 +283,9 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 		return(WW3D_ERROR_INITIALIZATION_FAILED);
 	}
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("WW3D::Init: native Renderer::Init succeeded; initialize WW3D subsystems");
+#endif
 	WWDEBUG_SAY(("Allocate Debug Resources"));
 	Allocate_Debug_Resources();
 
@@ -288,6 +297,9 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 	** Initialize the dazzle system
 	*/
 	if (!lite) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("WW3D::Init: loading DAZZLE.INI");
+#endif
 		WWDEBUG_SAY(("Init Dazzles"));
 		FileClass * dazzle_ini_file = _TheFileFactory->Get_File(DAZZLE_INI_FILENAME);
 		if (dazzle_ini_file) {
@@ -300,6 +312,9 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 	** Initialize the default static sort lists
 	** Note that DefaultStaticSortLists[0] is unused.
 	*/
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("WW3D::Init: initialize original static sort lists");
+#endif
 	DefaultStaticSortLists = W3DNEW DefaultStaticSortListClass();
 	Reset_Current_Static_Sort_Lists_To_Default();
 
@@ -307,9 +322,15 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 	** Initialize the animation-triggered sound system
 	*/
 	if (!lite) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("WW3D::Init: initialize animated sound manager");
+#endif
 		AnimatedSoundMgrClass::Initialize ();
 		IsInitted = true;
 	}
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("WW3D::Init: complete; returning to W3DDisplay");
+#endif
 	WWDEBUG_SAY(("WW3D Init completed"));
 	return WW3D_ERROR_OK;
 }

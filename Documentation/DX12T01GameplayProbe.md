@@ -82,6 +82,36 @@ than treating every error as missing DirectX 8.
 This is a diagnostics/startup error-handling fix, not proof that the
 experimental DX12-only skirmish now runs. T01 visual acceptance stays open.
 
+## DX12-exclusive compile flag propagation fix
+
+A real Zero Hour launch reported ONLY the `Renderer::Init: attaching actual
+game HWND`, `attached`, `T01 original W3D scene probe enabled`, and
+`native DX12 backend ready` messages, and no visible game frame. Inspection
+found the underlying backend-isolation error: `corei_ww3d2` attaches
+`W3D_RENDER_BACKEND_DX12` only through a PRIVATE link on `z_ww3d2`.
+That definition was therefore **absent** from the compiled Zero Hour/Generals
+`WinMain`, `GameEngine`, `GameClient`, and shared `W3DDisplay` /
+`HeightMap` translation units. They were selecting the legacy DX8 paths
+even while the WW3D2 renderer itself was native DX12.
+
+The original game HWND had already been created and displayed with the
+loading bitmap, so **a new secondary render window is not expected**.
+The renderer presents into that same HWND. CMake now explicitly defines
+`W3D_RENDER_BACKEND_DX12=1` on the game engine, device engine and both
+game WinMain targets, exclusively when `W3D_RENDER_BACKEND=DX12` is chosen.
+The DX8 build/preview mode remains unchanged. The Windows workflow now
+audits the **actual WinMain/GameEngine/GameClient/W3DDisplay/HeightMap
+compiler commands** for this flag, rather than only checking that the
+DX8Backend source was excluded.
+
+This makes the existing W3DDisplay DX12 gating, no-DX8-browser restriction,
+native full-resolution terrain, disabled legacy shader registry, startup
+tracing and window-style synchronization active in the real executable.
+`WW3D::Init` also logs its remaining startup phases after Renderer::Init,
+before returning to W3DDisplay. This does **not** guarantee the first game
+Present or working UI; any further blocker must be investigated from the
+new trace on the latest rebuilt artifact.
+
 ## T01 splash-screen stall diagnostics (new)
 
 The `Install_Final.bmp` splash is painted by the **same main application

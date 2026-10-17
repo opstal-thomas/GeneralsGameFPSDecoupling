@@ -1,5 +1,14 @@
 add_executable(z_generals WIN32)
 
+# WinMain creates the actual HWND and splash before Renderer::Init.
+# Keep its DX12 startup instrumentation compiled for the exclusive
+# backend, independently of the WW3D2 static library's PRIVATE flags.
+if(W3D_RENDER_BACKEND STREQUAL "DX12")
+    target_compile_definitions(z_generals PRIVATE
+        W3D_RENDER_BACKEND_DX12=1
+    )
+endif()
+
 # Use a binary name that doesn't conflict with original game.
 if("${CMAKE_SYSTEM}" MATCHES "Windows")
     set_target_properties(z_generals PROPERTIES OUTPUT_NAME "generalszh${RTS_BUILD_OUTPUT_SUFFIX}")

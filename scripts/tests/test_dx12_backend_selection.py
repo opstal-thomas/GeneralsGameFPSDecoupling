@@ -104,6 +104,43 @@ class DX12BackendSelectionTests(unittest.TestCase):
         self.assertIn("target_link_libraries(corei_ww3d2 INTERFACE "
                       "w3d_dx12_presentation)", cmake)
 
+    def test_dx12_backend_definition_reaches_all_game_startup_targets(self):
+        # WW3D2 is a STATIC library whose PRIVATE link against corei_ww3d2
+        # does not export W3D_RENDER_BACKEND_DX12 to WinMain, GameEngine, or
+        # GameEngineDevice. Every game module must explicitly select it.
+        scoped = {
+            "Core/GameEngine/CMakeLists.txt": "corei_gameengine_private",
+            "Core/GameEngineDevice/CMakeLists.txt": "corei_gameenginedevice_private",
+            "Generals/Code/Main/CMakeLists.txt": "g_generals",
+            "GeneralsMD/Code/Main/CMakeLists.txt": "z_generals",
+        }
+        for relpath, target in scoped.items():
+            with self.subTest(target=target):
+                contents = (ROOT / relpath).read_text(encoding="utf-8")
+                self.assertRegex(
+                    contents,
+                    r'(?s)if\\(W3D_RENDER_BACKEND STREQUAL "DX12"\\)\\s*'
+                    r'target_compile_definitions\\(' + target +
+                    r' (?:INTERFACE|PRIVATE)\\s+W3D_RENDER_BACKEND_DX12=1\\s*\\)\\s*endif\\(\\)'
+                )
+                self.assertNotRegex(
+                    contents,
+                    r'(?m)^\\s*add_compile_definitions\\(W3D_RENDER_BACKEND_DX12'
+                )
+        # DX12-only isolation has to extend beyond WW3D2 to the original
+        # client, display and both actual game-window entry points.
+        for relpath in (
+            "Generals/Code/Main/WinMain.cpp",
+            "GeneralsMD/Code/Main/WinMain.cpp",
+            "Generals/Code/GameEngine/Source/GameClient/GameClient.cpp",
+            "GeneralsMD/Code/GameEngine/Source/GameClient/GameClient.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp",
+        ):
+            with self.subTest(source=relpath):
+                contents = (ROOT / relpath).read_text(encoding="utf-8")
+                self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", contents)
+
     def test_named_bootstrap_preset_is_explicit(self):
         import json
         data = json.loads((ROOT / "CMakePresets.json").read_text(encoding="utf-8"))

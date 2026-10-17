@@ -203,6 +203,31 @@ jobs:
             throw "DX8 Renderer backend must be present, DX12 backend must be absent"
           }
 
+      # Verify actual game-module compiler flags, not only Renderer source selection.
+      # WW3D2 is STATIC and its PRIVATE backend definition is not inherited.
+      - name: Verify DX12 backend flag reaches real game compilation
+        if: startsWith(inputs.preset, 'win32')
+        shell: pwsh
+        run: |
+          $database = "build\${{ inputs.preset }}\compile_commands.json"
+          $compiles = @(Get-Content $database -Raw | ConvertFrom-Json)
+          $game = "${{ inputs.game }}"
+          $sources = @(
+            "$game/Code/Main/WinMain.cpp",
+            "$game/Code/GameEngine/Source/Common/GameEngine.cpp",
+            "$game/Code/GameEngine/Source/GameClient/GameClient.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp"
+          )
+          foreach ($source in $sources) {
+            $matches = @($compiles | Where-Object { ([string]$_.file).Replace('\', '/').EndsWith("/$source") })
+            if ($matches.Count -ne 1) { throw "Expected one compile for $source, found $($matches.Count)" }
+            $command = [string]$matches[0].command + " " + ($matches[0].arguments -join " ")
+            $actualDX12 = $command.Contains("W3D_RENDER_BACKEND_DX12=1")
+            $selectedDX12 = "${{ inputs.renderer_backend }}" -eq "DX12"
+            Write-Host "$source : selectedDX12=$selectedDX12 compiledDX12=$actualDX12"
+            if ($actualDX12 -ne $selectedDX12) { throw "$source has the wrong Renderer backend flag" }
+          }
       - name: Build ${{ inputs.game }} with CMake Using ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Preset
         shell: pwsh
         run: |
