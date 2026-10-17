@@ -17,6 +17,7 @@
 #include "WW3D2/Backend/DX12/DX12W3DTextures.h"
 #include "WW3D2/Backend/DX12/DX12W3DTextureStages.h"
 #include "WW3D2/Backend/DX12/DX12W3DSurfaces.h"
+#include "WW3D2/Backend/DX12/DX12W3DSurfaceTransfers.h"
 #include "WW3D2/Backend/DX12/DX12W3DRenderTargets.h"
 #include "WWMath/vector3.h"
 #include "WWMath/matrix4.h"
@@ -46,6 +47,16 @@ namespace
     unsigned syncInterval = 0;
     DX12W3DTextureStages textureStages;
     DX12W3DRenderTargets renderTargets;
+    DX12W3DSurfaceTransfers surfaceTransfers;
+
+    void RestoreAfterTransfer()
+    {
+        // R08 synchronous GPU readback resets the command-list RS state.
+        // Offscreen R07 viewport is restored by RebindAfterFlush itself.
+        if (renderTargets.IsPrimary() && primaryWindow.IsSceneOpen() &&
+            !primaryWindow.RestorePrimaryViewport())
+            ReportFailure("R08 restore primary viewport");
+    }
     DX12W3DNativeDraw nativeDraw;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
     Vector3 globalAmbient(0.f, 0.f, 0.f);
@@ -197,6 +208,7 @@ void Renderer::Shutdown()
     // Stage references may outlive a native frame; keep texture identity
     // independent of graphics device reset, then drop stage caches.
     textureStages.Clear();
+    surfaceTransfers.Reset();
     renderTargets.Reset();
     nativeDraw.Reset();
     ready = false;
@@ -967,8 +979,13 @@ RenderTexture2DHandle Renderer::Create_Texture_From_Surface( RenderSurfaceHandle
         return nullptr;
     if (renderTargets.Owns(surface))
     {
-        ReportPending("Renderer::Create_Texture_From_Surface: GPU copy is R08");
-        return nullptr;
+        if (!primaryWindow.IsSceneOpen())
+            return nullptr;
+        auto result = surfaceTransfers.ToTexture(
+            primaryWindow.Presentation(), renderTargets, surface, mipLevels);
+        RestoreAfterTransfer();
+        if (!result) OutputDebugStringA(surfaceTransfers.LastError());
+        return result;
     }
     return DX12W3DSurfaces::ToTexture(
         primaryWindow.Presentation().NativeDevice(), surface, mipLevels);
@@ -1031,12 +1048,26 @@ RenderSurfaceHandle Renderer::Acquire_Back_Buffer_Surface()
         ? renderTargets.AcquirePrimaryColor(primaryWindow.Presentation()) : nullptr;
 }
 
-unsigned Renderer::Read_Current_Color_Region(unsigned char * destination, unsigned capacity, int x, int y, unsigned width, unsigned height)
+unsigned Renderer::Read_Current_Color_Region(unsigned char * destination, unsigned capacity,
+                                             int x, int y, unsigned width, unsigned height)
 {
-    // R08: a synchronous transfer/readback must use copyable footprints and
-    // GPU fences. Do not reinterpret an offscreen RTV as a CPU image surface.
-    ReportPending("Renderer::Read_Current_Color_Region (R08 GPU readback)");
-    return 0;
+    if (!ready || renderThread != GetCurrentThreadId() ||
+        !primaryWindow.IsSceneOpen() || !destination || x < 0 || y < 0 ||
+        !width || !height || width > static_cast<unsigned>(INT_MAX) ||
+        height > static_cast<unsigned>(INT_MAX) ||
+        static_cast<unsigned long long>(x) + width > INT_MAX ||
+        static_cast<unsigned long long>(y) + height > INT_MAX)
+        return 0;
+    auto handle = renderTargets.AcquireCurrentColor(primaryWindow.Presentation());
+    if (!handle) return 0;
+    const RenderSurfaceRect rect = {x, y, x + static_cast<int>(width),
+                                   y + static_cast<int>(height)};
+    const unsigned bytes = surfaceTransfers.ReadRegion(
+        primaryWindow.Presentation(), renderTargets, handle, destination, capacity, rect);
+    renderTargets.Release(handle);
+    RestoreAfterTransfer();
+    if (!bytes) OutputDebugStringA(surfaceTransfers.LastError());
+    return bytes;
 }
 
 RenderSurfaceHandle Renderer::Acquire_Current_Depth_Surface()
@@ -1222,7 +1253,11 @@ void Renderer::Lock_Surface(RenderSurfaceHandle surface, RenderSurfaceMap & map,
     if (renderTargets.Owns(surface))
     {
         map = RenderSurfaceMap();
-        ReportPending("Renderer::Lock_Surface: R08 GPU readback");
+        if (!ready || renderThread != GetCurrentThreadId() || !primaryWindow.IsSceneOpen() ||
+            !surfaceTransfers.Lock(primaryWindow.Presentation(), renderTargets,
+                                   surface, map, region, readOnly))
+            OutputDebugStringA(surfaceTransfers.LastError());
+        RestoreAfterTransfer();
         return;
     }
     if (!DX12W3DSurfaces::Lock(surface, map, region, readOnly))
@@ -1233,7 +1268,9 @@ void Renderer::Unlock_Surface(RenderSurfaceHandle surface)
 {
     if (renderTargets.Owns(surface))
     {
-        ReportPending("Renderer::Unlock_Surface: R08 GPU readback");
+        if (!ready || renderThread != GetCurrentThreadId() || !primaryWindow.IsSceneOpen() ||
+            !surfaceTransfers.Unlock(primaryWindow.Presentation(), renderTargets, surface))
+            OutputDebugStringA(surfaceTransfers.LastError());
         return;
     }
     if (!DX12W3DSurfaces::Unlock(surface))
@@ -1244,7 +1281,12 @@ void Renderer::Copy_Surface(RenderSurfaceHandle source, const RenderSurfaceRect 
 {
     if (renderTargets.Owns(source) || renderTargets.Owns(destination))
     {
-        ReportPending("Renderer::Copy_Surface: R08 GPU copy");
+        if (!ready || renderThread != GetCurrentThreadId() ||
+            !primaryWindow.IsSceneOpen() ||
+            !surfaceTransfers.Copy(primaryWindow.Presentation(), renderTargets,
+                                   source, sourceRect, destination, destinationPoint))
+            OutputDebugStringA(surfaceTransfers.LastError());
+        RestoreAfterTransfer();
         return;
     }
     if (!DX12W3DSurfaces::Copy(source, sourceRect, destination, destinationPoint))
@@ -1255,7 +1297,12 @@ void Renderer::Blit_Surface(RenderSurfaceHandle source, const RenderSurfaceRect 
 {
     if (renderTargets.Owns(source) || renderTargets.Owns(destination))
     {
-        ReportPending("Renderer::Blit_Surface: R08 GPU blit");
+        if (!ready || renderThread != GetCurrentThreadId() ||
+            !primaryWindow.IsSceneOpen() ||
+            !surfaceTransfers.Blit(primaryWindow.Presentation(), renderTargets,
+                                   source, sourceRect, destination, destinationRect, filter))
+            OutputDebugStringA(surfaceTransfers.LastError());
+        RestoreAfterTransfer();
         return;
     }
     if (!DX12W3DSurfaces::Blit(source, sourceRect, destination, destinationRect, filter))
