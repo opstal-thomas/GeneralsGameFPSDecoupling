@@ -199,7 +199,7 @@ class R01GeometryBuffers(unittest.TestCase):
         device = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12PresentationDevice.cpp").read_text(encoding="utf-8")
         for token in ("bool DX12PresentationDevice::FlushAndContinue()",
                       "IASetVertexBuffers(", "IASetIndexBuffer(",
-                      "s.WaitForFence(fenceValue)", "s.hasVertexView.fill(false)"):
+                      "s.WaitForFence(fenceValue)", "state.hasVertexView.fill(false)"):
             self.assertIn(token, device)
 
     def test_r02_sorting_terrain_and_water_source_coverage(self):
@@ -224,8 +224,8 @@ class R01GeometryBuffers(unittest.TestCase):
         self.assertIn("Get_Sorting_Index_Array()", index_header)
         for token in ("BindTransientVertex(", "BindTransientIndex(",
                       "UploadTransientCPU(", "RetainFrameResource(resource)",
-                      "D3D12_RESOURCE_STATE_GENERIC_READ", "IASetVertexBuffers(",
-                      "IASetIndexBuffer(", "SetBoundBaseVertexIndex(baseVertexIndex)"):
+                      "D3D12_RESOURCE_STATE_GENERIC_READ", "TrackVertexBinding(",
+                      "TrackIndexBinding(", "SetBoundBaseVertexIndex(baseVertexIndex)"):
             self.assertIn(token, geometry)
         for token in ("BindTransientVertex(", "BindTransientIndex(",
                       "TransientGeometrySnapshot"):
