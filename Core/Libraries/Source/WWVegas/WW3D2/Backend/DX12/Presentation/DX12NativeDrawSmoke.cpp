@@ -558,6 +558,71 @@ int wmain()
     if (!Check(halfBlend, "native opaque plus 50% translucent W3D composite"))
         return 1;
 
+
+    // U01 hardware raster test: a screen-space triangle clipped away from
+    // the center must leave the clear color, even with a valid draw. A
+    // center-containing clip must restore the red pixel; a disabled widget
+    // converts that red pixel to luminance without changing its alpha.
+    for (unsigned uiPass = 0; uiPass < 3; ++uiPass)
+    {
+        if (!Check(device.BeginFrame(clear), "begin native 2D clip/grayscale pass") ||
+            !Check(targets.BeginFrame(device), "bind 2D target") ||
+            !Check(BindVertex(device, red, 0, sizeof(Vertex)),
+                   "bind UI colored geometry", LastError()) ||
+            !Check(BindIndex(device, indices16, 0), "bind UI index buffer", LastError()))
+            return 1;
+        const D3D12_VIEWPORT viewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT excluded = {0, 0, 40, 120};
+        const D3D12_RECT included = {60, 40, 100, 80};
+        device.ActiveCommandList()->RSSetViewports(1, &viewport);
+        device.ActiveCommandList()->RSSetScissorRects(
+            1, uiPass == 0 ? &excluded : &included);
+        draw.BeginFrame();
+        draw.BindVertex(NativeVertexLayout(red), 4);
+        draw.BindIndex(4);
+        draw.SetMaterial(RenderVertexMaterialDescription());
+        draw.SetBlend(RenderBlendState());
+        draw.SetCull(RENDER_CULL_NONE);
+        draw.SetDepthCompare(RENDER_COMPARE_ALWAYS);
+        draw.SetDepthWrite(false);
+        draw.SetLightingEnabled(false);
+        draw.SetSpecularEnabled(false);
+        draw.SetGrayscaleEnabled(uiPass == 2);
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             false, 0, 1, 0, 4),
+                   "draw clipped/tinted screen-space UI primitive", draw.LastError()))
+            return 1;
+        ComPtr<ID3D12Resource> uiReadback;
+        UINT uiPitch = 0;
+        unsigned char unusedUI[4] = {};
+        if (!ReadPixel(device, unusedUI, uiReadback, uiPitch) ||
+            !Check(targets.EndFrame(device), "end native 2D UI target") ||
+            !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+                   "submit clipped UI draw and fence readback", device.LastError()))
+            return 1;
+        void * uiPixels = nullptr;
+        if (!Check(SUCCEEDED(uiReadback->Map(0, nullptr, &uiPixels)) &&
+                   uiPixels != nullptr, "map 2D clipped WARP pixel"))
+            return 1;
+        const auto * px = static_cast<const unsigned char *>(uiPixels) +
+                          60 * uiPitch + 80 * 4;
+        const bool correct = uiPass == 0 ?
+            (px[0] >= 10 && px[0] <= 24 &&
+             px[1] >= 10 && px[1] <= 24 &&
+             px[2] >= 10 && px[2] <= 24) :
+            uiPass == 1 ? (px[2] > 230 && px[1] < 10 && px[0] < 10) :
+            (px[0] >= 70 && px[0] <= 82 &&
+             px[1] >= 70 && px[1] <= 82 &&
+             px[2] >= 70 && px[2] <= 82);
+        if (!correct)
+            std::cerr << "U01 clipped/grayscale WARP pixel pass " << uiPass <<
+                " BGRA=(" << unsigned(px[0]) << "," << unsigned(px[1]) <<
+                "," << unsigned(px[2]) << "," << unsigned(px[3]) << ")\n";
+        uiReadback->Unmap(0, nullptr);
+        if (!Check(correct, "U01 scissor and luminance parity via GPU readback"))
+            return 1;
+    }
+    draw.SetGrayscaleEnabled(false);
     ReleaseVertex(lit);
     ReleaseVertex(red);
     ReleaseVertex(green);

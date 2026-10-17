@@ -37,6 +37,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_loading.py'
       - name: Verify R05 immutable DX12 W3D texture stages and SRV descriptor lifetime
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_descriptors.py'
+      - name: Verify U01 native 2D sprite, glyph scissor, and grayscale contracts
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render2d.py'
       - name: Verify R07 native W3D offscreen color/depth and MSAA target invariants
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render_targets.py'
       - name: Prevent direct DX8 call regressions
