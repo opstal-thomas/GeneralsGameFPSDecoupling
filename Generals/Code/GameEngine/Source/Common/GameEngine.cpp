@@ -611,7 +611,9 @@ void GameEngine::init()
 	{
 #if defined(W3D_RENDER_BACKEND_DX12)
 		char errorCode[96] = {};
-		std::snprintf(errorCode, sizeof(errorCode),
+		// The historical PreRTS CRT headers remap snprintf to _snprintf;
+		// use the checked MSVC CRT entry point for this developer trace.
+		sprintf_s(errorCode, sizeof(errorCode),
 			"GameEngine::init caught ErrorCode 0x%08X",
 			static_cast<unsigned>(ec));
 		DX12StartupTrace::Write(errorCode);
