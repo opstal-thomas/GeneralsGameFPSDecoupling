@@ -310,10 +310,29 @@ int wmain()
     if (!Check(rttInfo.width == 64 && rttInfo.height == 64,
                "R07 offscreen surface describes its GPU dimensions"))
         return 1;
-    RenderSurfaceMap invalidGPUMap;
-    Renderer::Lock_Surface(rttSurface, invalidGPUMap);
-    if (!Check(!invalidGPUMap.data, "R07 GPU targets are not CPU lockable before R08") ||
-        !Check(Renderer::Set_Render_Target_Surfaces(nullptr, dsvSurface),
+    RenderSurfaceMap gpuMap;
+    Renderer::Lock_Surface(rttSurface, gpuMap, nullptr, true);
+    if (!Check(gpuMap.data && gpuMap.rowPitch == 64 * 4,
+               "R08 GPU RTT read-only lock maps fenced D3D12 pixels"))
+        return 1;
+    const unsigned char * pixel = static_cast<const unsigned char *>(gpuMap.data);
+    if (!Check(pixel[0] > 174 && pixel[0] < 209 &&
+               pixel[1] > 110 && pixel[1] < 148 &&
+               pixel[2] > 52 && pixel[2] < 84,
+               "R08 BGRA8 color lock matches native RTV clear"))
+        return 1;
+    Renderer::Unlock_Surface(rttSurface);
+    unsigned char centerBGRA[4] = {};
+    if (!Check(Renderer::Read_Current_Color_Region(
+                   centerBGRA, sizeof(centerBGRA), 32, 32, 1, 1) == 4 &&
+               centerBGRA[0] > 174 && centerBGRA[1] > 110 && centerBGRA[2] > 52,
+               "R08 Renderer screenshot region uses current offscreen GPU target"))
+        return 1;
+    const auto capturedRTT = Renderer::Create_Texture_From_Surface(rttSurface, 1);
+    if (!Check(capturedRTT != nullptr, "R08 GPU surface to native texture conversion"))
+        return 1;
+    Renderer::Release_Texture(reinterpret_cast<RenderTextureHandle>(capturedRTT));
+    if (!Check(Renderer::Set_Render_Target_Surfaces(nullptr, dsvSurface),
                "R07 Renderer supports a depth-only shadow-map pass"))
         return 1;
     auto depthOnlyColor = Renderer::Acquire_Current_Color_Surface();
