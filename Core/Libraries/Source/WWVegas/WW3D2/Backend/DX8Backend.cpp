@@ -200,9 +200,15 @@ void Renderer::Get_Viewport(RenderViewport & viewport)
 }
 // DX8 rendering retains the original glyph/geometry clipping semantics.
 // DX12-only UI callers use the native hardware scissor implementation.
-void Renderer::Set_2D_Scissor(int, int, int, int) {}
+void Renderer::Set_2D_Scissor(int left, int top, int right, int bottom)
+{
+    (void)left; (void)top; (void)right; (void)bottom;
+}
 void Renderer::Clear_2D_Scissor() {}
-void Renderer::Set_2D_Grayscale(bool) {}
+void Renderer::Set_2D_Grayscale(bool enabled)
+{
+    (void)enabled;
+}
 
 void Renderer::Invalidate_Cached_Render_States()
 {
