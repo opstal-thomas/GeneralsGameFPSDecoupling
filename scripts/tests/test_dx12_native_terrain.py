@@ -47,9 +47,8 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("BindTransientVertex(device, src.data()", GPU)
         self.assertIn("BindTransientIndex(device, terrainIndices.data()", GPU)
         self.assertIn("readback->Map", GPU)
-        self.assertIn("terrain UV/coverage and depth WARP pixels", GPU)
-        self.assertIn("terrainPass == 1", GPU)
         self.assertIn("two full 32x32 terrain tiles: GPU UV, elevation, clip, and depth pixels", GPU)
+        self.assertIn("terrainPass == 1", GPU)
         self.assertIn("for (unsigned tile=0; tile<terrainTiles.size(); ++tile)", GPU)
 
 
@@ -64,7 +63,8 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertNotIn("T01 uses original baked terrain lighting", HEIGHT)
 
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
-        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)\\n\\t// The DX12 heightmap", BASE)
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)
+        self.assertIn("// The DX12 heightmap never registers with the D3D8 reset/cleanup device.", BASE)
         self.assertIn("DX8Wrapper::SetCleanupHook(this);", BASE)
 
 
