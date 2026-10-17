@@ -62,6 +62,10 @@ struct DX12PresentationDevice::Impl
     float sourceAspect = 0.f;
     bool recording = false;
     unsigned boundBaseVertexIndex = 0;
+    std::array<D3D12_VERTEX_BUFFER_VIEW, D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexViews = {};
+    std::array<bool, D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> hasVertexView = {};
+    D3D12_INDEX_BUFFER_VIEW indexView = {};
+    bool hasIndexView = false;
     // Resources referenced by a submitted command list cannot be released
     // when their W3D owner is destroyed on the CPU. Keep a per-frame
     // AddRef until the queue signals its fence; handles may be reused.
@@ -493,6 +497,8 @@ bool DX12PresentationDevice::BeginFrame(const float clearColor[4], bool clearCol
     state.CollectRetired();
     state.CollectTransientPages();
     state.boundBaseVertexIndex = 0;
+    state.hasVertexView.fill(false);
+    state.hasIndexView = false;
     if (!state.recordingResources.empty() || !state.recordingObjects.empty())
         return state.Fail("Unsubmitted frame resource/descriptor retention remained", E_FAIL);
     if (!state.Check(state.allocators[index]->Reset(), "Reset frame command allocator"))
@@ -781,9 +787,38 @@ bool DX12PresentationDevice::FlushAndContinue()
         !s.Check(s.commandList->Reset(s.allocators[s.currentBuffer].Get(), nullptr),
                  "Resume DX12 commands after R08 readback"))
         return false;
-    // The B05 graph stores the same command-list COM pointer; it has not
-    // changed and its tracked resource states remain valid after Reset.
-    // RS, OM and root/descriptor bindings must be restored by the caller.
+    // Reattach IA views used before readback. They remain valid because
+    // R01/R02 resource generations are retained by this recording.
+    for (unsigned i = 0; i < s.hasVertexView.size(); ++i)
+        if (s.hasVertexView[i])
+            s.commandList->IASetVertexBuffers(i, 1, &s.vertexViews[i]);
+    if (s.hasIndexView)
+        s.commandList->IASetIndexBuffer(&s.indexView);
+    // The B05 graph stores the same command-list COM pointer and tracked
+    // resource states. RS, OM and root/descriptor bindings are restored
+    // by the R07/primary-window caller.
+    return true;
+}
+
+bool DX12PresentationDevice::TrackVertexBinding(
+    unsigned stream, const D3D12_VERTEX_BUFFER_VIEW * view)
+{
+    Impl & s = *impl_;
+    if (!s.recording || stream >= s.hasVertexView.size())
+        return s.Fail("R08 IA vertex tracking needs valid recording/stream", E_INVALIDARG);
+    s.hasVertexView[stream] = view != nullptr;
+    if (view) s.vertexViews[stream] = *view;
+    s.commandList->IASetVertexBuffers(stream, 1, view);
+    return true;
+}
+bool DX12PresentationDevice::TrackIndexBinding(const D3D12_INDEX_BUFFER_VIEW * view)
+{
+    Impl & s = *impl_;
+    if (!s.recording)
+        return s.Fail("R08 IA index tracking needs active recording", E_INVALIDARG);
+    s.hasIndexView = view != nullptr;
+    if (view) s.indexView = *view;
+    s.commandList->IASetIndexBuffer(view);
     return true;
 }
 

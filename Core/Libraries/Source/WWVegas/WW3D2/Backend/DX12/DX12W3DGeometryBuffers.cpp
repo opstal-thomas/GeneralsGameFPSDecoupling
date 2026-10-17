@@ -399,8 +399,7 @@ namespace DX12W3DGeometryBuffers
         view.BufferLocation = address;
         view.SizeInBytes = bytes;
         view.StrideInBytes = stride;
-        device.ActiveCommandList()->IASetVertexBuffers(0, 1, &view);
-        return true;
+        return device.TrackVertexBinding(0, &view);
     }
 
     bool BindTransientIndex(DX12PresentationDevice & device,
@@ -418,9 +417,8 @@ namespace DX12W3DGeometryBuffers
         view.BufferLocation = address;
         view.SizeInBytes = bytes;
         view.Format = DXGI_FORMAT_R16_UINT;
-        device.ActiveCommandList()->IASetIndexBuffer(&view);
         device.SetBoundBaseVertexIndex(baseVertexIndex);
-        return true;
+        return device.TrackIndexBinding(&view);
     }
 
     bool BindVertex(DX12PresentationDevice & device,
@@ -434,8 +432,7 @@ namespace DX12W3DGeometryBuffers
         {
             // Legacy SetStreamSource(stream, nullptr, stride) removes a stream.
             // Do not accidentally leave the previous W3D vertex view bound.
-            device.ActiveCommandList()->IASetVertexBuffers(stream, 1, nullptr);
-            return true;
+            return device.TrackVertexBinding(stream, nullptr);
         }
         if (stride < handle->state.vertexLayout.stride ||
             static_cast<unsigned long long>(firstVertex) * stride >= handle->state.shadow.size())
@@ -455,8 +452,7 @@ namespace DX12W3DGeometryBuffers
             (handle->state.dynamic ? 0 : offset);
         view.SizeInBytes = countBytes;
         view.StrideInBytes = stride;
-        device.ActiveCommandList()->IASetVertexBuffers(stream, 1, &view);
-        return true;
+        return device.TrackVertexBinding(stream, &view);
     }
 
     bool BindIndex(DX12PresentationDevice & device,
@@ -468,9 +464,8 @@ namespace DX12W3DGeometryBuffers
             return Fail("Index binding requires a native DX12 frame");
         if (!handle)
         {
-            device.ActiveCommandList()->IASetIndexBuffer(nullptr);
             device.SetBoundBaseVertexIndex(0);
-            return true;
+            return device.TrackIndexBinding(nullptr);
         }
         const unsigned elementBytes = handle->state.indexElementBytes;
         if (static_cast<unsigned long long>(firstIndex) * elementBytes >=
@@ -491,9 +486,8 @@ namespace DX12W3DGeometryBuffers
             (handle->state.dynamic ? 0 : offset);
         view.SizeInBytes = countBytes;
         view.Format = elementBytes == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
-        device.ActiveCommandList()->IASetIndexBuffer(&view);
         device.SetBoundBaseVertexIndex(baseVertexIndex);
-        return true;
+        return device.TrackIndexBinding(&view);
     }
 
     ID3D12Resource * NativeVertexResource(RenderVertexBufferHandle handle)

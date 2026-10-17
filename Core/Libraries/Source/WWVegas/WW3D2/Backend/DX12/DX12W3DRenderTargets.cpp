@@ -716,6 +716,17 @@ bool DX12W3DRenderTargets::RebindAfterFlush(DX12PresentationDevice & frame)
     frame.ActiveCommandList()->OMSetRenderTargets(
         color ? 1u : 0u, color ? &rtv : nullptr, FALSE,
         depth ? &dsv : nullptr);
+    // Restored offscreen viewport; primary caller reapplies camera viewport.
+    const unsigned width = c ? c->description.width :
+        d ? d->description.width : frame.Width();
+    const unsigned height = c ? c->description.height :
+        d ? d->description.height : frame.Height();
+    const D3D12_VIEWPORT viewport = {0, 0,
+        static_cast<float>(width), static_cast<float>(height), 0, 1};
+    const D3D12_RECT scissor = {0, 0,
+        static_cast<LONG>(width), static_cast<LONG>(height)};
+    frame.ActiveCommandList()->RSSetViewports(1, &viewport);
+    frame.ActiveCommandList()->RSSetScissorRects(1, &scissor);
     return true;
 }
 unsigned DX12W3DRenderTargets::BoundSampleCount() const

@@ -89,6 +89,10 @@ public:
     // consumers must rebind OM and viewport (command-list Reset clears RS).
     // This intentionally stalls only explicit synchronous readback callers.
     bool FlushAndContinue();
+    // IA buffer views survive the R08 synchronous readback submission's
+    // command-list reset; callers need not rebind the same W3D geometry.
+    bool TrackVertexBinding(unsigned stream, const D3D12_VERTEX_BUFFER_VIEW * view);
+    bool TrackIndexBinding(const D3D12_INDEX_BUFFER_VIEW * view);
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
