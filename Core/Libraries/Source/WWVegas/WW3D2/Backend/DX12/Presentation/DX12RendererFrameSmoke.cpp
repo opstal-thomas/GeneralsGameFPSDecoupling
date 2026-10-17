@@ -379,6 +379,14 @@ int wmain()
     Renderer::Bind_Vertex_Buffer(gpuVertex, 0, 12);
     Renderer::Bind_Index_Buffer(gpuIndex, 0);
     Renderer::Clear(true, false, Vector3(0.3f, 0.5f, 0.7f), 1.f);
+    unsigned char swapchainBGRA[4] = {};
+    if (!Check(Renderer::Read_Current_Color_Region(
+                   swapchainBGRA, sizeof(swapchainBGRA), 12, 12, 1, 1) == 4 &&
+               swapchainBGRA[0] > 162 && swapchainBGRA[0] < 195 &&
+               swapchainBGRA[1] > 110 && swapchainBGRA[1] < 148 &&
+               swapchainBGRA[2] > 62 && swapchainBGRA[2] < 92,
+               "R08 screenshot reads current RGBA swapchain as legacy BGRA"))
+        return 1;
     Renderer::Release_Vertex_Buffer(gpuVertex); // fence pins in-flight D3D12 buffers
     Renderer::Release_Index_Buffer(gpuIndex);
     Renderer::End_Scene(false); // command list submission without presentation
