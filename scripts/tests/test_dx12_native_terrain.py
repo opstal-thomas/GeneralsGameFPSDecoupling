@@ -16,6 +16,7 @@ class NativeTerrainContract(unittest.TestCase):
         start = HEIGHT.index("void HeightMapRenderObjClass::Render(")
         native = HEIGHT[start:HEIGHT.index("#endif", start)]
         self.assertIn("m_vertexBufferBackup", native)
+        self.assertIn("m_treeBuffer->setIsTerrain()", native)
         self.assertIn("getVertexBufferBackup(tileX, tileY)", native)
         self.assertIn("RenderDynamicVertexBinding vertex", native)
         self.assertIn("Renderer::Bind_Dynamic_Vertex_Buffer(vertex)", native)

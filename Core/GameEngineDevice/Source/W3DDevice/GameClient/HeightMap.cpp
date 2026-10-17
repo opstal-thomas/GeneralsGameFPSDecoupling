@@ -1953,6 +1953,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// not read a D3D8 buffer or invoke the secondary gameplay preview.
 	if (Is_Hidden() || !m_vertexBufferBackup || m_x <= 1 || m_y <= 1)
 		return;
+	// Keep the legacy scene-pass handoff used for tree/opaque ordering.
+	// This merely marks the pass; it does not call the DX8 tree renderer.
+	if (m_treeBuffer)
+		m_treeBuffer->setIsTerrain();
 	Renderer::Set_Light_Environment(rinfo.light_environment);
 	Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, Transform);
 	Renderer::Set_Material(m_vertexMaterialClass);
