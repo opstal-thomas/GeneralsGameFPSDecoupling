@@ -759,6 +759,34 @@ unsigned DX12PresentationDevice::BoundBaseVertexIndex() const
     return impl_->boundBaseVertexIndex;
 }
 
+bool DX12PresentationDevice::FlushAndContinue()
+{
+    Impl & s = *impl_;
+    if (!s.recording || !s.commandList || !s.queue || !s.fence)
+        return s.Fail("R08 flush requires active DX12 frame recording", E_INVALIDARG);
+    if (!s.Check(s.commandList->Close(), "Close R08 readback segment"))
+        return false;
+    ID3D12CommandList * lists[] = {s.commandList.Get()};
+    s.queue->ExecuteCommandLists(1, lists);
+    const UINT64 fenceValue = s.nextFence++;
+    if (!s.Check(s.queue->Signal(s.fence.Get(), fenceValue),
+                 "Signal R08 synchronous readback segment"))
+        return false;
+    s.frameFences[s.currentBuffer] = fenceValue;
+    // Retained resources and descriptor heaps remain pinned by the current
+    // recording until EndFrame. The wait protects command allocator Reset.
+    if (!s.WaitForFence(fenceValue))
+        return false;
+    if (!s.Check(s.allocators[s.currentBuffer]->Reset(), "Reset R08 segment allocator") ||
+        !s.Check(s.commandList->Reset(s.allocators[s.currentBuffer].Get(), nullptr),
+                 "Resume DX12 commands after R08 readback"))
+        return false;
+    // The B05 graph stores the same command-list COM pointer; it has not
+    // changed and its tracked resource states remain valid after Reset.
+    // RS, OM and root/descriptor bindings must be restored by the caller.
+    return true;
+}
+
 bool DX12PresentationDevice::WaitForIdle()
 {
     // Waiting for queued work does not submit an *open* frame.

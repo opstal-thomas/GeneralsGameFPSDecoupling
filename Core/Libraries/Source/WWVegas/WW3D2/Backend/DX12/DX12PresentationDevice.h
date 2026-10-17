@@ -84,6 +84,11 @@ public:
     // DrawIndexedInstanced, not IASetIndexBuffer; cache for B07 submission.
     void SetBoundBaseVertexIndex(unsigned index);
     unsigned BoundBaseVertexIndex() const;
+    // R08: submit recorded draws/copies, wait for the readback fence and
+    // reopen the same frame. Keep B05 tracked resource states and ordinal;
+    // consumers must rebind OM and viewport (command-list Reset clears RS).
+    // This intentionally stalls only explicit synchronous readback callers.
+    bool FlushAndContinue();
     bool WaitForIdle();
     bool Resize(unsigned width, unsigned height);
 
