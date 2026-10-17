@@ -610,13 +610,13 @@ int wmain()
             (px[0] >= 10 && px[0] <= 24 &&
              px[1] >= 10 && px[1] <= 24 &&
              px[2] >= 10 && px[2] <= 24) :
-            uiPass == 1 ? (px[2] > 230 && px[1] < 10 && px[0] < 10) :
+            uiPass == 1 ? (px[0] > 230 && px[1] < 10 && px[2] < 10) :
             (px[0] >= 70 && px[0] <= 82 &&
              px[1] >= 70 && px[1] <= 82 &&
              px[2] >= 70 && px[2] <= 82);
         if (!correct)
             std::cerr << "U01 clipped/grayscale WARP pixel pass " << uiPass <<
-                " BGRA=(" << unsigned(px[0]) << "," << unsigned(px[1]) <<
+                " RGBA=(" << unsigned(px[0]) << "," << unsigned(px[1]) <<
                 "," << unsigned(px[2]) << "," << unsigned(px[3]) << ")\n";
         uiReadback->Unmap(0, nullptr);
         if (!Check(correct, "U01 scissor and luminance parity via GPU readback"))
