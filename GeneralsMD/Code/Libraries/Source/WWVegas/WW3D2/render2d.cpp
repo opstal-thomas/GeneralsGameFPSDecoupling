@@ -653,7 +653,7 @@ void Render2DClass::Render()
         DynamicVBAccessClass::WriteLockClass lock(&vb);
         const FVFInfoClass & info = vb.FVF_Info();
         unsigned char * out =
-            static_cast<unsigned char *>(lock.Get_Formatted_Vertex_Array());
+            reinterpret_cast<unsigned char *>(lock.Get_Formatted_Vertex_Array());
         for (int i = 0; i < Vertices.Count(); ++i)
         {
             *reinterpret_cast<Vector3 *>(out + info.Get_Location_Offset()) =
