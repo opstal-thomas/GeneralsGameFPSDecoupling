@@ -109,6 +109,13 @@ public:
 	void	Enable_Alpha(bool b);
 	void	Enable_Grayscale(bool b);///<added for generals to draw disabled button states - MW
 	void  Enable_Texturing(bool b);
+    // U01: the original 2D geometry shares this clip with text subclasses.
+    void Set_Clip_Rect(const RectClass & rect)
+    {
+        NativeClipRect = rect;
+        NativeClipEnabled = true;
+    }
+    void Enable_Clip(bool enabled) { NativeClipEnabled = enabled; }
 
 	ShaderClass *			Get_Shader() { return &Shader; }
 	static ShaderClass	Get_Default_Shader();
@@ -164,6 +171,8 @@ protected:
 	SimpleDynVecClass<unsigned long>		Colors;
 	bool											IsHidden;
 	bool											IsGrayScale;
+    RectClass NativeClipRect;
+    bool NativeClipEnabled;
 	float											ZValue;
 
 	static RectClass							ScreenResolution;
@@ -200,9 +209,9 @@ public:
 	void	Set_Wrapping_Width (float width)					{ WrapWidth = width; }
 
 	// Clipping support
-	void	Set_Clipping_Rect( const RectClass &rect )	{ ClipRect = rect; IsClippedEnabled = true; }
+	void	Set_Clipping_Rect( const RectClass &rect )	{ ClipRect = rect; IsClippedEnabled = true; Set_Clip_Rect(rect); }
 	bool	Is_Clipping_Enabled() const				{ return IsClippedEnabled; }
-	void	Enable_Clipping( bool onoff )						{ IsClippedEnabled = onoff; }
+	void	Enable_Clipping( bool onoff )						{ IsClippedEnabled = onoff; Enable_Clip(onoff); }
 
 	void	Draw_Text( const char * text, unsigned long color = 0xFFFFFFFF );
 	void	Draw_Text( const WCHAR * text, unsigned long color = 0xFFFFFFFF );

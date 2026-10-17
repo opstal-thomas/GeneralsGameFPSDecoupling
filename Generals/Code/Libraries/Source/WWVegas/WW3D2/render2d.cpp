@@ -51,6 +51,8 @@
 #include "WWDebug/wwprofile.h"
 #include "WWDebug/wwmemlog.h"
 #include "assetmgr.h"
+#include <cmath>
+#include <algorithm>
 
 RectClass							Render2DClass::ScreenResolution( 0,0,0,0 );
 
@@ -66,6 +68,7 @@ Render2DClass::Render2DClass( TextureClass* tex ) :
 	IsHidden( false ),
 	IsGrayScale (false)
 {
+	NativeClipEnabled = false;
 	Set_Texture( tex );
    Shader = Get_Default_Shader();
 }
@@ -560,7 +563,30 @@ void Render2DClass::Render()
     viewport.height = static_cast<unsigned>(height);
     viewport.min_z = 0.f;
     viewport.max_z = 1.f;
+    RenderViewport previousViewport = {};
+    Renderer::Get_Viewport(previousViewport);
     Renderer::Set_Viewport(viewport);
+    if (NativeClipEnabled)
+    {
+        // Render2D transforms screen coordinates to NDC in Convert_Vert.
+        // Use the same transform for clipping, including the half-pixel bias.
+        const float l = (NativeClipRect.Left * CoordinateScale.X +
+                         BiasedCoordinateOffset.X + 1.f) * width * 0.5f;
+        const float r = (NativeClipRect.Right * CoordinateScale.X +
+                         BiasedCoordinateOffset.X + 1.f) * width * 0.5f;
+        const float t = (1.f - NativeClipRect.Top * CoordinateScale.Y -
+                         BiasedCoordinateOffset.Y) * height * 0.5f;
+        const float b = (1.f - NativeClipRect.Bottom * CoordinateScale.Y -
+                         BiasedCoordinateOffset.Y) * height * 0.5f;
+        const float xmin = (std::max)(0.f, (std::min)(l, r));
+        const float ymin = (std::max)(0.f, (std::min)(t, b));
+        const float xmax = (std::min)(static_cast<float>(width), (std::max)(l, r));
+        const float ymax = (std::min)(static_cast<float>(height), (std::max)(t, b));
+        Renderer::Set_2D_Scissor(
+            static_cast<int>(std::floor(xmin)), static_cast<int>(std::floor(ymin)),
+            static_cast<int>(std::ceil((std::max)(xmin, xmax))),
+            static_cast<int>(std::ceil((std::max)(ymin, ymax))));
+    }
     Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, identity);
     Renderer::Set_Transform(RENDER_TRANSFORM_VIEW, identity);
     Renderer::Set_Transform(RENDER_TRANSFORM_PROJECTION, identity);
@@ -604,20 +630,15 @@ void Render2DClass::Render()
     spriteShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
     Renderer::Set_Shader(spriteShader);
     Renderer::Set_Vertex_Lighting(false); // UI vertex colors are prelit.
-    if (IsGrayScale)
-    {
-        // Match the historical no-DOT3 fallback until the specialized
-        // grayscale pixel shader is migrated (U01/M03).
-        Renderer::Set_Texture_Factor(0x60606060u);
-        Renderer::Apply_Texture_Stage_Color(0, RenderTextureStageChannel(
-            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE,
-            RENDER_TEXARG_TEXTURE_FACTOR));
-        Renderer::Apply_Texture_Stage_Alpha(0, RenderTextureStageChannel(
-            RENDER_TEXOP_MODULATE, RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE));
-    }
+    // Native shader converts textured, tinted disabled controls to grayscale.
+    // Avoid carrying the prior UI conversion state into later world draws.
+    Renderer::Set_2D_Grayscale(IsGrayScale);
     Renderer::Draw_Triangles(0, static_cast<unsigned short>(Indices.Count() / 3),
                              0, static_cast<unsigned short>(Vertices.Count()));
     Renderer::Unbind_Sorting_Geometry();
+    Renderer::Set_2D_Grayscale(false);
+    Renderer::Clear_2D_Scissor();
+    Renderer::Set_Viewport(previousViewport);
     Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, savedWorld);
     Renderer::Set_Transform(RENDER_TRANSFORM_VIEW, savedView);
     Renderer::Set_Transform(RENDER_TRANSFORM_PROJECTION, savedProjection);
@@ -759,7 +780,7 @@ void	Render2DTextClass::Reset()
 	DrawExtents = RectClass( 0,0,0,0 );
 	TotalExtents = RectClass( 0,0,0,0 );
 	ClipRect.Set (0, 0, 0, 0);
-	IsClippedEnabled = false;
+	Enable_Clipping(false);
 }
 
 void	Render2DTextClass::Set_Font( Font3DInstanceClass *font )
@@ -789,6 +810,16 @@ void	Render2DTextClass::Draw_Char( WCHAR ch, unsigned long color )
 	//	Check to see if this character is clipped
 	//
 	bool is_clipped = false;
+#if defined(W3D_RENDER_BACKEND_DX12)
+    // Emit partly visible glyphs and let the native raster scissor crop
+    // their atlas quads; DX8 historically discarded these glyphs entirely.
+    if (IsClippedEnabled &&
+        (Cursor.X + Font->Char_Width(ch) <= ClipRect.Left ||
+         Cursor.X >= ClipRect.Right ||
+         Cursor.Y + char_height <= ClipRect.Top ||
+         Cursor.Y >= ClipRect.Bottom))
+        is_clipped = true;
+#else
 	if (	IsClippedEnabled &&
 			(Cursor.X < ClipRect.Left ||
 			 Cursor.X + char_spacing > ClipRect.Right ||
@@ -797,6 +828,7 @@ void	Render2DTextClass::Draw_Char( WCHAR ch, unsigned long color )
 	{
 		is_clipped = true;
 	}
+#endif
 
 	if ( ch != (WCHAR)' ' && !is_clipped ) {
 		RectClass screen( Cursor.X, Cursor.Y, Cursor.X + Font->Char_Width(ch), Cursor.Y + char_height );
