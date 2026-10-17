@@ -322,15 +322,45 @@ namespace DX12W3DSurfaces
             for (int y = 0; y < dh; ++y)
                 for (int x = 0; x < dw; ++x)
                 {
-                    const unsigned sx = std::min(static_cast<unsigned>(sw - 1),
-                                                static_cast<unsigned>((static_cast<std::uint64_t>(x) * sw) / dw));
-                    const unsigned sy = std::min(static_cast<unsigned>(sh - 1),
-                                                static_cast<unsigned>((static_cast<std::uint64_t>(y) * sh) / dh));
                     auto * dest = b.pixels.data() + static_cast<std::size_t>(target.top + y) * b.pitch +
                                    static_cast<std::size_t>(target.left + x) * bytes;
-                    std::memcpy(dest, input.data() + (sy * sw + sx) * bytes, bytes);
+                    // R08 TRIANGLE is bilinear in the original source
+                    // pixel-center convention. Never interpolate packed
+                    // 16-bit/depth formats as if their individual bytes
+                    // were independent colors.
+                    if (filter == RENDER_SURFACE_BLIT_TRIANGLE && bytes == 4)
+                    {
+                        const float fx = (static_cast<float>(x) + 0.5f) * sw / dw - 0.5f;
+                        const float fy = (static_cast<float>(y) + 0.5f) * sh / dh - 0.5f;
+                        const float px = (std::max)(0.f, (std::min)(fx, float(sw - 1)));
+                        const float py = (std::max)(0.f, (std::min)(fy, float(sh - 1)));
+                        const int x0 = static_cast<int>(std::floor(px));
+                        const int y0 = static_cast<int>(std::floor(py));
+                        const int x1 = (std::min)(x0 + 1, sw - 1);
+                        const int y1 = (std::min)(y0 + 1, sh - 1);
+                        const float wx = px - x0, wy = py - y0;
+                        for (unsigned channel = 0; channel < 4; ++channel)
+                        {
+                            const auto sample = [&](int sx, int sy) -> float
+                            {
+                                return input[(static_cast<std::size_t>(sy) * sw + sx) * 4 + channel];
+                            };
+                            const float top = sample(x0, y0) * (1.f - wx) + sample(x1, y0) * wx;
+                            const float bottom = sample(x0, y1) * (1.f - wx) + sample(x1, y1) * wx;
+                            dest[channel] = static_cast<std::uint8_t>(
+                                (std::min)(255.f, top * (1.f - wy) + bottom * wy + 0.5f));
+                        }
+                    }
+                    else
+                    {
+                        const unsigned sx = (std::min)(static_cast<unsigned>(sw - 1),
+                            static_cast<unsigned>((static_cast<std::uint64_t>(x) * sw) / dw));
+                        const unsigned sy = (std::min)(static_cast<unsigned>(sh - 1),
+                            static_cast<unsigned>((static_cast<std::uint64_t>(y) * sh) / dh));
+                        std::memcpy(dest, input.data() + (sy * sw + sx) * bytes, bytes);
+                    }
                 }
-            return true; // nearest filtering; R06 owns visual filtering parity
+            return true;
         };
         if (from == to) { std::lock_guard<std::mutex> guard(a.mutex); return work(); }
         std::scoped_lock guard(a.mutex, b.mutex);
