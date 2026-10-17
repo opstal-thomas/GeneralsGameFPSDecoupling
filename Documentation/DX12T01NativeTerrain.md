@@ -47,3 +47,7 @@ The native base-pass renderer preserves `m_treeBuffer->setIsTerrain()`, the orig
 ## Selected-backend real-game scene probe
 
 An opt-in launch attempt is now available via W3D_DX12_T01_GAMEPLAY=1 on actual Generals and Zero Hour DX12-exclusive executables. It enters the original game HWND and WW3D scene (not B10 or the mirrored preview), prints native Present and authoritative heightmap tile/triangle/atlas evidence, and refuses DX8Wrapper device creation. Normal DX12 game startup remains fail-closed. See [DX12-T01 game-scene acceptance guide](DX12T01GameplayProbe.md). These source changes have not established that an interactive skirmish boots, renders, or matches DX8; only user-run installed-game comparison can close this acceptance gate.
+
+### T01-only game-scene isolation
+
+The opt-in game-scene probe keeps unfinished water, shroud and shadow GPU paths disabled under the exclusive DX12 selection, because these still execute D3D8 device methods (notably WaterRenderObjClass::ReAcquireResources). They are not implemented or marked complete; original DX8 builds retain the full code paths. See [T01 gameplay probe notes](DX12T01GameplayProbe.md).

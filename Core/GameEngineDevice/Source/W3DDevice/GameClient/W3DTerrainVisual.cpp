@@ -219,19 +219,25 @@ void W3DTerrainVisual::init()
 		TheTerrainTracksRenderObjClassSystem = NEW TerrainTracksRenderObjClassSystem;
 		TheTerrainTracksRenderObjClassSystem->init(W3DDisplay::m_3DScene);
 
-		// initialize object shadow drawing system
+		// Create the manager so W3D callers retain their scene ownership.
+		// Initializing the old DX8 shadow buffers is independent T09 work.
 		TheW3DShadowManager = NEW W3DShadowManager;
+#if !defined(W3D_RENDER_BACKEND_DX12)
  		TheW3DShadowManager->init();
 
-		// create a water plane render object
+		// T03 water still calls D3D8 device methods directly during init.
+		// Omit water visuals from the T01-only DX12 scene acceptance probe:
+		// no DX8 fallback, and no synthetic water substitute.
 		TheWaterRenderObj=m_waterRenderObject = NEW_REF( WaterRenderObjClass, () );
 		m_waterRenderObject->init(TheGlobalData->m_waterPositionZ, TheGlobalData->m_waterExtentX, TheGlobalData->m_waterExtentY, W3DDisplay::m_3DScene, (WaterRenderObjClass::WaterType)TheGlobalData->m_waterType);	//create a water plane that's 128x128 units
 		m_waterRenderObject->Set_Position(Vector3(TheGlobalData->m_waterPositionX,TheGlobalData->m_waterPositionY,TheGlobalData->m_waterPositionZ));	//place water in world
+#endif
 
 		// create smudge rendering system.
 		TheSmudgeManager = NEW(W3DSmudgeManager);
 		TheSmudgeManager->init();
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
 #ifdef DO_UNIT_TIMINGS
 #pragma MESSAGE("********************* WARNING- Doing UNIT TIMINGS. ")
 #else
@@ -250,6 +256,7 @@ void W3DTerrainVisual::init()
 			m_waterRenderObject->toggleCloudLayer(true);
 		else
 			m_waterRenderObject->toggleCloudLayer(false);
+#endif
 	}
 
 	// set the vertex animated water properties

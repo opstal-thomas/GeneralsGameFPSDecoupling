@@ -68,3 +68,14 @@ CI can build Generals/Zero Hour and run deterministic WARP heightmap tests,
 but without the installed game data and an interactive skirmish it cannot
 validate in-game terrain parity. T02 textures, T03 water, T06 shroud,
 T07 roads, U03 UI and V03 playable single player remain independent.
+
+## Deliberately excluded non-T01 renderers
+
+During this selected DX12-only developer game-scene probe, the game leaves
+legacy water initialization and rendering (T03), shroud GPU updates (T06),
+and projected/stencil shadows (T09) out of the scene. These are NOT DX12
+implementations or silent DX8 fallbacks: they remain separate incomplete
+milestones, while genuine terrain and supported original W3D meshes still
+use native DX12 submission. This avoids dereferencing the null DX8 device
+in WaterRenderObjClass::ReAcquireResources. All normal DX8 game builds
+retain the original water/shroud/shadow behavior.

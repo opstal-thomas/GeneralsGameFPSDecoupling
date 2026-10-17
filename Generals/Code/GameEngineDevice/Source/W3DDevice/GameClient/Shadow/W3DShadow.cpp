@@ -71,6 +71,13 @@ void PrepareShadows()
 //DECLARE_PERF_TIMER(shadowsRender)
 void DoShadows(RenderInfoClass & rinfo, Bool stencilPass)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T01's opt-in W3D scene does not execute the unported DX8-only
+	// stencil and projected-shadow paths. T09 implements these natively.
+	(void)rinfo;
+	(void)stencilPass;
+	return;
+#endif
 	//USE_PERF_TIMER(shadowsRender)
 	shadowCameraFrustum=&rinfo.Camera.Get_Frustum();
 	Int projectionCount=0;

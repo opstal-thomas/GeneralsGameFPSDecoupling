@@ -2015,10 +2015,14 @@ AGAIN:
 			//update the shroud surface here since it may be needed by reflections
 			if (TheTerrainRenderObject->getMap())	//make sure a valid map is loaded into terrain.
 			{
+#if !defined(W3D_RENDER_BACKEND_DX12)
+				// T06 is not ported: shroud updates depend on DX8 framebuffer
+				// handling. T01 native terrain comparison omits this overlay.
 				if (TheTerrainRenderObject->getShroud())
 				{
 					TheTerrainRenderObject->getShroud()->render(primaryW3DView->get3DCamera());
 				}
+#endif
 			}
 		}
 	}
@@ -2049,13 +2053,17 @@ AGAIN:
 
 			TheParticleSystemManager->DRAW();
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
+			// DX8-only T03 water RTT / shadow projection are not T01.
+			// Avoid dispatching either while reaching the original terrain.
 			if (TheWaterRenderObj && TheGlobalData->m_waterType == 2)
-				TheWaterRenderObj->updateRenderTargetTextures(primaryW3DView->get3DCamera());	//do a render into each texture
+				TheWaterRenderObj->updateRenderTargetTextures(primaryW3DView->get3DCamera());
 
 			//Can't render into textures while rendering to screen so these textures need to be updated
 			//before we enter main rendering loop.
 			if (TheW3DProjectedShadowManager)
 				TheW3DProjectedShadowManager->updateRenderTargetTextures();
+#endif
 		}
 
 		viewsUpdated = FALSE;

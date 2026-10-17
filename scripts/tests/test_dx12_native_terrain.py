@@ -13,6 +13,9 @@ WW3D = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/ww3d.cpp").read_text()
 DX12 = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12Backend.cpp").read_text()
 DX8_WRAPPER = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp").read_text()
 DISPLAY = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.cpp").read_text()
+TERRAIN_VISUAL = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainVisual.cpp").read_text()
+SHADOW_GENERALS = (ROOT / "Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
+SHADOW_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
 
 
 class NativeTerrainContract(unittest.TestCase):
@@ -113,6 +116,17 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", controls)
         self.assertIn("return MULTISAMPLE_MODE_NONE;", controls)
         self.assertIn("return Has_Active_Device() ? 2u : 0u;", DX12)
+
+
+    def test_t01_game_probe_does_not_execute_unported_water_shroud_or_shadows(self):
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", TERRAIN_VISUAL)
+        self.assertIn("TheWaterRenderObj=m_waterRenderObject = NEW_REF( WaterRenderObjClass", TERRAIN_VISUAL)
+        self.assertIn("DX8-only T03 water RTT / shadow projection", DISPLAY)
+        self.assertIn("T06 is not ported: shroud updates", DISPLAY)
+        for source in (SHADOW_GENERALS, SHADOW_ZERO_HOUR):
+            start = source.split("void DoShadows(RenderInfoClass & rinfo, Bool stencilPass)", 1)[1]
+            self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", start[:500])
+            self.assertIn("return;", start.split("#endif", 1)[0])
 
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)
