@@ -16,6 +16,7 @@ on:
       - 'scripts/tests/test_dx12_texture_loading.py'
       - 'scripts/tests/test_dx12_texture_descriptors.py'
       - 'scripts/tests/test_dx12_render_targets.py'
+      - 'scripts/tests/test_dx12_surface_transfers.py'
       - 'scripts/tests/test_dx12_render2d.py'
       - 'Documentation/DX12OnlyLaunchCheckpoint.md'
       - '.github/workflows/dx12-shader-validation.yml'
@@ -48,6 +49,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_descriptors.py'
       - name: Verify U01 native 2D sprite clipping and grayscale source contracts
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render2d.py'
+      - name: Verify R08 surface GPU transfer and WARP contracts
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_surface_transfers.py'
       - name: Verify R07 native W3D offscreen color/depth and MSAA target invariants
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render_targets.py'
 
