@@ -68,8 +68,8 @@ class R01GeometryBuffers(unittest.TestCase):
             "D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER",
             "D3D12_RESOURCE_STATE_GENERIC_READ",
             "CopyBufferRegion(",
-            "IASetVertexBuffers(",
-            "IASetIndexBuffer(",
+            "TrackVertexBinding(",
+            "TrackIndexBinding(",
             "DXGI_FORMAT_R16_UINT",
             "RENDER_MAP_DISCARD",
             "RENDER_MAP_NO_OVERWRITE",
@@ -194,6 +194,13 @@ class R01GeometryBuffers(unittest.TestCase):
                         section.index("Renderer::Shutdown();"))
         self.assertLess(section.index("DynamicIBAccessClass::_Deinit();"),
                         section.index("Renderer::Shutdown();"))
+
+    def test_r08_split_submission_restores_geometry_views(self):
+        device = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12PresentationDevice.cpp").read_text(encoding="utf-8")
+        for token in ("bool DX12PresentationDevice::FlushAndContinue()",
+                      "IASetVertexBuffers(", "IASetIndexBuffer(",
+                      "s.WaitForFence(fenceValue)", "s.hasVertexView.fill(false)"):
+            self.assertIn(token, device)
 
     def test_r02_sorting_terrain_and_water_source_coverage(self):
         vertex = (WW3D / "dx8vertexbuffer.cpp").read_text(encoding="utf-8")

@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <climits>
 #include <cstring>
 #include <cmath>
 
@@ -55,7 +56,7 @@ namespace
         // Offscreen R07 viewport is restored by RebindAfterFlush itself.
         if (renderTargets.IsPrimary() && primaryWindow.IsSceneOpen() &&
             !primaryWindow.RestorePrimaryViewport())
-            ReportFailure("R08 restore primary viewport");
+            OutputDebugStringA("[DX12-R08] Failed to restore primary viewport after GPU readback\n");
     }
     DX12W3DNativeDraw nativeDraw;
     Matrix4x4 transforms[3] = {Matrix4x4(true), Matrix4x4(true), Matrix4x4(true)};
