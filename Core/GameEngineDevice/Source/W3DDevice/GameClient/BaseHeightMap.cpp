@@ -345,6 +345,12 @@ void BaseHeightMapRenderObjClass::adjustTerrainLOD(Int adj)
 	if (TheGlobalData->m_terrainLOD ==TERRAIN_LOD_AUTOMATIC) {
 		TheWritableGlobalData->m_terrainLOD=TERRAIN_LOD_MAX;
 	}
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T01: the full-resolution HeightMapRenderObjClass is the only native
+	// terrain renderer. Never switch to DX8-only FlatHeightMapRenderObjClass
+	// when the user changes terrain quality/LOD at runtime.
+	TheWritableGlobalData->m_terrainLOD = TERRAIN_LOD_MAX;
+#endif
 
 	if (m_map==nullptr) return;
 	if (m_shroud)

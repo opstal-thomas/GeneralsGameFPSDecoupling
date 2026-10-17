@@ -62,6 +62,16 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("m_nativeDynamicVertices.clear();", HEIGHT.split("void HeightMapRenderObjClass::freeIndexVertexBuffers()", 1)[1])
         self.assertNotIn("T01 uses original baked terrain lighting", HEIGHT)
 
+    def test_dx12_lod_changes_cannot_select_legacy_flatheightmap(self):
+        lod = BASE.split("void BaseHeightMapRenderObjClass::adjustTerrainLOD(Int adj)", 1)[1]
+        lod = lod.split("void BaseHeightMapRenderObjClass::ReleaseResources()", 1)[0]
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", lod)
+        self.assertIn("TheWritableGlobalData->m_terrainLOD = TERRAIN_LOD_MAX;", lod)
+        self.assertIn("newROBJ = TheHeightMap;", lod)
+        self.assertIn("newROBJ = TheFlatHeightMap;", lod)
+        self.assertLess(lod.index("TheWritableGlobalData->m_terrainLOD = TERRAIN_LOD_MAX;"),
+                        lod.index("newROBJ = TheFlatHeightMap;"))
+
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)
         self.assertIn("// The DX12 heightmap never registers with the D3D8 reset/cleanup device.", BASE)

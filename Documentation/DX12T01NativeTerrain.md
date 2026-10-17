@@ -35,3 +35,7 @@ Recommended independent next milestone after completing B10/T01 gameplay accepta
 ## T01 follow-up changes
 
 A second integration commit restores CPU-side dynamic W3D terrain lighting on a separate native vertex snapshot (retaining the untouched static atlas UVs/heights/color baseline), stops registering the DX12 heightmap with D3D8 cleanup, and strengthens WARP checks to draw two adjacent **full** 32x32-cell tiles rather than only two quads. The original W3D DX8 path is guarded and unchanged. These tests cannot substitute for a playable DX12-only skirmish and visual comparison.
+
+## LOD backend isolation
+
+`BaseHeightMapRenderObjClass::adjustTerrainLOD` forces `TERRAIN_LOD_MAX` only in exclusive DX12 configurations. The existing low-detail fallback switches to `FlatHeightMapRenderObjClass`, which still performs legacy DX8 terrain rendering and is therefore forbidden when T01 is selected. Normal DX8 builds retain the original automatic/manual quality selection. Full-resolution native geometry remains active after terrain quality changes.
