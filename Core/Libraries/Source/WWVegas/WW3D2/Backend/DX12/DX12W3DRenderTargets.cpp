@@ -705,6 +705,12 @@ bool DX12W3DRenderTargets::RebindAfterFlush(DX12PresentationDevice & frame)
     if ((c && !impl_->PrepareView(*c, frame)) ||
         (d && !impl_->PrepareView(*d, frame)))
         return false;
+    // An active MSAA color readback resolves the multisample RTV to its
+    // single-sample texture. Re-enter the original render/depth states
+    // before any more draw calls, not merely its OM descriptors.
+    if ((c && !impl_->Transition(*c, frame, D3D12_RESOURCE_STATE_RENDER_TARGET)) ||
+        (d && !impl_->Transition(*d, frame, D3D12_RESOURCE_STATE_DEPTH_WRITE)))
+        return false;
     const bool color = c || !d;
     const bool depth = d || !c;
     const auto rtv = color ? impl_->View(c, frame, false) :
