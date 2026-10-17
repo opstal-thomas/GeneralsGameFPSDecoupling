@@ -50,8 +50,11 @@
 #ifndef USE_FLAT_HEIGHT_MAP // Flat height map uses flattened textures. jba. [3/20/2003]
 
 #include <stdlib.h>
-#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW)
+#if defined(W3D_ENABLE_DX12_GAMEPLAY_PREVIEW) || defined(W3D_RENDER_BACKEND_DX12)
 #include <vector>
+#endif
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12TerrainTileGeometry.h"
 #endif
 #include <WW3D2/assetmgr.h>
 #include <WW3D2/texture.h>
@@ -328,8 +331,10 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 			lightRay[lightIndex].Set(-lightPos.x, -lightPos.y, -lightPos.z);
 		}
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(pVB);
 		VERTEX_FORMAT *vbHardware = (VERTEX_FORMAT*)lockVtxBuffer.Get_Vertex_Array();
+#endif
 		VERTEX_FORMAT *vBase = data;
 		// Note that we are building the vertex buffer data in the memory buffer, data.
 		// At the bottom, we will copy the final vertex data for one cell into the
@@ -534,8 +539,10 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, VERTEX_FORMAT *
 				// Now copy the set of vertices into the hardware buffer.
 				// We don't copy the whole vertex buffer because we often update only
 				// a couple of rows and its a lot faster to just copy the ones that change.
+#if !defined(W3D_RENDER_BACKEND_DX12)
 				Int offset = pCurVertices - vBase;
 				memcpy(vbHardware+offset, pCurVertices, 4*sizeof(VERTEX_FORMAT));
+#endif
 			}
 		}
 		return 0; //success.
@@ -1286,6 +1293,9 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 	{
 		//requested heightmap different from old one.
 		freeIndexVertexBuffers();
+		// DX12 submits authoritative CPU tiles via R02 upload pages rather
+		// than constructing D3D8 buffers. The DX8 path is unchanged.
+#if !defined(W3D_RENDER_BACKEND_DX12)
 		//Create static index buffers.  These will index the vertex buffers holding the map.
 		m_indexBuffer=NEW_REF(DX8IndexBufferClass,(VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2*3));
 
@@ -1309,6 +1319,7 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 			}
 		}
 
+#endif
 		//Get number of vertex buffers needed to hold current map
 		//First round dimensions to next multiple of VERTEX_BUFFER_TILE_LENGTH since that's our block size
 		m_numVBTilesX=1;
@@ -1331,12 +1342,21 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 
 		m_vertexBufferTiles = NEW DX8VertexBufferClass*[m_numVertexBufferTiles];
 		m_vertexBufferBackup = NEW VERTEX_FORMAT [m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM];
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// Padding in partially populated 32x32 tiles is never indexed, but
+		// deterministic upload bytes also make GPU validation repeatable.
+		memset(m_vertexBufferBackup, 0, m_numVertexBufferTiles * HEIGHTMAP_VERTEX_NUM * sizeof(VERTEX_FORMAT));
+#endif
 
 		for (i=0; i<m_numVertexBufferTiles; i++) {
+#if defined(W3D_RENDER_BACKEND_DX12)
+			m_vertexBufferTiles[i] = nullptr;
+#else
 #ifdef USE_NORMALS
 			m_vertexBufferTiles[i] = NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZNUV2,HEIGHTMAP_VERTEX_NUM,DX8VertexBufferClass::USAGE_DEFAULT));
 #else
 			m_vertexBufferTiles[i] = NEW_REF(DX8VertexBufferClass,(DX8_VERTEX_FORMAT,HEIGHTMAP_VERTEX_NUM,DX8VertexBufferClass::USAGE_DEFAULT));
+#endif
 #endif
 		}
 
@@ -1359,6 +1379,12 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 //=============================================================================
 void HeightMapRenderObjClass::On_Frame_Update()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T01 uses original baked terrain lighting. The legacy dynamic-light
+	// updater writes into D3D8 hardware buffers; M03 must migrate its
+	// per-vertex dynamic lighting before this can be enabled on DX12.
+	return;
+#endif
 	BaseHeightMapRenderObjClass::On_Frame_Update();
 	Int i,j,k;
 	Int originX,originY;
@@ -1882,6 +1908,71 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera, const Vector3 *c
 void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 {
 	//USE_PERF_TIMER(Terrain_Render)
+
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T01: native authoritative heightmap draw. Preserve the WorldHeightMap
+	// samples, FLIP_TRIANGLES cell orientation, atlas UVs and baked diffuse
+	// colors already written to m_vertexBufferBackup by updateVB(). This does
+	// not read a D3D8 buffer or invoke the secondary gameplay preview.
+	if (Is_Hidden() || !m_vertexBufferBackup || m_x <= 1 || m_y <= 1)
+		return;
+	Renderer::Set_Light_Environment(rinfo.light_environment);
+	Renderer::Set_Transform(RENDER_TRANSFORM_WORLD, Transform);
+	Renderer::Set_Material(m_vertexMaterialClass);
+	Renderer::Set_Shader(m_shaderClass);
+	// doTheLight() already baked normal-derived lighting into the original
+	// per-vertex colors. Do not illuminate them a second time.
+	Renderer::Set_Vertex_Lighting(false);
+	Renderer::Set_Texture(0, m_disableTextures ? nullptr : m_stageZeroTexture);
+	Renderer::Set_Texture(1, nullptr);
+	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP);
+	Renderer::Set_Texture_Address(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP);
+	Renderer::Apply_Texture_Stage_Color(0, RenderTextureStageChannel(
+		m_disableTextures ? RENDER_TEXOP_SELECT_ARG1 : RENDER_TEXOP_MODULATE,
+		m_disableTextures ? RENDER_TEXARG_DIFFUSE : RENDER_TEXARG_TEXTURE,
+		RENDER_TEXARG_DIFFUSE));
+	Renderer::Apply_Texture_Stage_Alpha(0, RenderTextureStageChannel(
+		RENDER_TEXOP_SELECT_ARG1, RENDER_TEXARG_DIFFUSE));
+	Renderer::Apply_Texture_Stage_Color(1, RenderTextureStageChannel());
+	Renderer::Apply_Texture_Stage_Alpha(1, RenderTextureStageChannel());
+
+	for (Int tileY = 0; tileY < m_numVBTilesY; ++tileY)
+		for (Int tileX = 0; tileX < m_numVBTilesX; ++tileX)
+		{
+			const Int remainingX = m_x - 1 - tileX * VERTEX_BUFFER_TILE_LENGTH;
+			const Int remainingY = m_y - 1 - tileY * VERTEX_BUFFER_TILE_LENGTH;
+			if (remainingX <= 0 || remainingY <= 0)
+				continue;
+			const unsigned cols = static_cast<unsigned>(
+				remainingX < VERTEX_BUFFER_TILE_LENGTH ? remainingX : VERTEX_BUFFER_TILE_LENGTH);
+			const unsigned rows = static_cast<unsigned>(
+				remainingY < VERTEX_BUFFER_TILE_LENGTH ? remainingY : VERTEX_BUFFER_TILE_LENGTH);
+
+			// Edge tiles still use the source's full 32-cell row stride.
+			// Never draw the unused cells outside a map's actual boundary.
+			std::vector<unsigned short> indices;
+			if (!DX12TerrainTileGeometry::BuildIndices(
+				VERTEX_BUFFER_TILE_LENGTH, cols, rows, indices))
+				continue;
+			RenderDynamicVertexBinding vertex;
+			vertex.cpuData = getVertexBufferBackup(tileX, tileY);
+			vertex.vertexCount = HEIGHTMAP_VERTEX_NUM;
+			vertex.stride = sizeof(VERTEX_FORMAT);
+			vertex.legacyVertexFormat = DX8_VERTEX_FORMAT;
+			Renderer::Bind_Dynamic_Vertex_Buffer(vertex);
+
+			RenderDynamicIndexBinding index;
+			index.cpuData = indices.data();
+			index.indexCount = static_cast<unsigned short>(indices.size());
+			Renderer::Bind_Dynamic_Index_Buffer(index, 0);
+			Renderer::Draw_Triangles(0, static_cast<unsigned short>(indices.size() / 3),
+				0, HEIGHTMAP_VERTEX_NUM);
+		}
+	Renderer::Set_Texture(0, nullptr);
+	Renderer::Set_Texture(1, nullptr);
+	return; // T02/T03/T06/T07 overlay paths are separately tracked.
+#endif
+
 
 	Int i,j,devicePasses;
 	W3DShaderManager::ShaderTypes st;

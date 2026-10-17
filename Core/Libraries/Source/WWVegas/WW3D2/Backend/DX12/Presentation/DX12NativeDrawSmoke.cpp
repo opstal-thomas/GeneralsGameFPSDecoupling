@@ -13,6 +13,7 @@
 #include "../DX12W3DTextures.h"
 #include "../DX12W3DSurfaces.h"
 #include "../DX12W3DSurfaceTransfers.h"
+#include "../DX12TerrainTileGeometry.h"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 using namespace DX12W3DGeometryBuffers;
@@ -495,6 +497,161 @@ int wmain()
     DX12W3DTextures::Release(handle0);
     DX12W3DTextures::Release(handle1);
     ReleaseVertex(textured);
+
+
+    // T01: exact original 32-cell heightmap indexing, clipped edge cells,
+    // R02 transient submission and native atlas sampling. This exercises the
+    // same BuildIndices function called by HeightMapRenderObjClass::Render.
+    std::vector<std::uint16_t> terrainIndices;
+    if (!Check(DX12TerrainTileGeometry::BuildIndices(32, 32, 32, terrainIndices) &&
+               terrainIndices.size() == 6144 && terrainIndices[6143] == 4094,
+               "full-resolution terrain tile topology") ||
+        !Check(DX12TerrainTileGeometry::BuildIndices(32, 2, 2, terrainIndices) &&
+               terrainIndices.size() == 24 &&
+               terrainIndices[12] == 128 && terrainIndices[13] == 130 &&
+               terrainIndices[14] == 131,
+               "clipped terrain tile must preserve original 32-cell row pitch") ||
+        !Check(!DX12TerrainTileGeometry::BuildIndices(32, 33, 1, terrainIndices) &&
+               !DX12TerrainTileGeometry::BuildIndices(128, 1, 1, terrainIndices),
+               "invalid cell coverage and R16 overflow are rejected") ||
+        !Check(DX12TerrainTileGeometry::BuildIndices(32, 2, 1, terrainIndices) &&
+               terrainIndices.size() == 12 &&
+               terrainIndices[0] == 0 && terrainIndices[1] == 2 &&
+               terrainIndices[2] == 3 && terrainIndices[3] == 0 &&
+               terrainIndices[4] == 1 && terrainIndices[5] == 2,
+               "T01 cell triangle winding matches the DX8 heightmap"))
+        return 1;
+
+    std::vector<TexturedVertex> terrainVertices(32u * 32u * 4u);
+    // Four independent vertices per cell. UVs point to separate texels in
+    // the original 16-bit terrain atlas; no preview texture is involved.
+    for (unsigned cell = 0; cell < 2; ++cell)
+    {
+        const float x0 = cell == 0 ? -0.8f : 0.f;
+        const float x1 = cell == 0 ? 0.f : 0.8f;
+        const float corners[4][3] = {
+            {x0,-0.8f,0.8f}, {x1,-0.8f,0.8f},
+            {x1,0.8f,0.8f}, {x0,0.8f,0.8f}
+        };
+        for (unsigned corner=0; corner<4; ++corner)
+        {
+            TexturedVertex & v = terrainVertices[cell*4+corner];
+            std::memcpy(v.xyz, corners[corner], sizeof(v.xyz));
+            v.diffuse = 0xffffffff;
+            v.uv0[0] = cell == 0 ? 0.25f : 0.75f;
+            v.uv0[1] = 0.5f;
+            v.uv1[0] = v.uv1[1] = 0.f;
+        }
+    }
+    RenderTexture2DDescription terrainAtlasDesc;
+    terrainAtlasDesc.width = 2;
+    terrainAtlasDesc.height = 1;
+    terrainAtlasDesc.pixelFormat = 6u; // W3D A1R5G5B5, native R04 conversion
+    terrainAtlasDesc.mipLevels = 1;
+    auto * terrainAtlas = DX12W3DTextures::Create2D(device.NativeDevice(), terrainAtlasDesc);
+    if (!Check(terrainAtlas != nullptr, "create original terrain atlas pixel format"))
+        return 1;
+    RenderSurfaceMap terrainAtlasMap;
+    if (!Check(DX12W3DTextures::Map2D(terrainAtlas, 0, terrainAtlasMap) &&
+               terrainAtlasMap.data != nullptr, "map native A1R5G5B5 texture"))
+        return 1;
+    const std::uint16_t terrainTexels[2] = {0xfc00u, 0x83e0u}; // red, green
+    std::memcpy(terrainAtlasMap.data, terrainTexels, sizeof(terrainTexels));
+    if (!Check(DX12W3DTextures::Unmap2D(terrainAtlas, 0),
+               "publish terrain atlas mip"))
+        return 1;
+    DX12W3DVertexLayout terrainLayout;
+    if (!Check(DX12W3DVertexLayouts::DecodeLegacyFVF(0x0242u, terrainLayout),
+               "decode original XYZ|DIFFUSE|TEX2 terrain vertex stream"))
+        return 1;
+    const RenderTextureStageChannel terrainColor(RENDER_TEXOP_MODULATE,
+        RENDER_TEXARG_TEXTURE, RENDER_TEXARG_DIFFUSE);
+    for (unsigned terrainPass = 0; terrainPass < 2; ++terrainPass)
+    {
+        if (!Check(device.BeginFrame(clear), "begin authoritative terrain WARP frame") ||
+            !Check(targets.BeginFrame(device), "bind terrain R07 depth/color"))
+            return 1;
+        const D3D12_VIEWPORT terrainViewport = {0, 0, 160.f, 120.f, 0.f, 1.f};
+        const D3D12_RECT terrainScissor = {0, 0, 160, 120};
+        device.ActiveCommandList()->RSSetViewports(1, &terrainViewport);
+        device.ActiveCommandList()->RSSetScissorRects(1, &terrainScissor);
+        draw.BeginFrame();
+        draw.SetCull(RENDER_CULL_NONE);
+        draw.SetBlend(RenderBlendState());
+        draw.SetDepthWrite(true);
+        draw.SetMaterial(RenderVertexMaterialDescription());
+        // The second pass draws a closer original W3D mesh before terrain.
+        // Terrain must respect its depth even though it is submitted later.
+        if (terrainPass == 1)
+        {
+            if (!Check(BindVertex(device, red, 0, sizeof(Vertex)) &&
+                       BindIndex(device, indices16, 0),
+                       "bind opaque obstacle ahead of terrain", LastError()))
+                return 1;
+            draw.BindVertex(NativeVertexLayout(red), 4);
+            draw.BindIndex(4);
+            textureStages.Bind(0, nullptr);
+            draw.SetTextureChannel(0, false, RenderTextureStageChannel());
+            if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                                 false, 0, 1, 0, 4),
+                       "draw depth occluder before terrain", draw.LastError()))
+                return 1;
+        }
+        if (!Check(BindTransientVertex(device, terrainVertices.data(),
+                         static_cast<unsigned>(terrainVertices.size()*sizeof(TexturedVertex)),
+                         sizeof(TexturedVertex), 0x0242u) &&
+                   BindTransientIndex(device, terrainIndices.data(),
+                         static_cast<unsigned>(terrainIndices.size()*sizeof(std::uint16_t)), 0u),
+                   "snapshot authoritative terrain through fence-owned R02 pages",
+                   LastError()))
+            return 1;
+        draw.BindVertex(&terrainLayout, static_cast<unsigned>(terrainVertices.size()));
+        draw.BindIndex(static_cast<unsigned>(terrainIndices.size()));
+        if (!Check(textureStages.Bind(0, reinterpret_cast<RenderTextureHandle>(terrainAtlas)) &&
+                   textureStages.SetAddress(0, RENDER_SAMPLER_AXIS_U, RENDER_SAMPLER_CLAMP) &&
+                   textureStages.SetAddress(0, RENDER_SAMPLER_AXIS_V, RENDER_SAMPLER_CLAMP),
+                   "bind authoritative 16-bit terrain atlas and clamp sampler"))
+            return 1;
+        draw.SetTextureChannel(0, false, terrainColor);
+        draw.SetTextureChannel(0, true, RenderTextureStageChannel(
+            RENDER_TEXOP_SELECT_ARG1, RENDER_TEXARG_DIFFUSE));
+        draw.SetTextureChannel(1, false, RenderTextureStageChannel());
+        draw.SetTextureChannel(1, true, RenderTextureStageChannel());
+        if (!Check(draw.Draw(device, targets, textureStages, Identity, Identity,
+                             false, 0, 4, 0, 4096),
+                   "draw both native heightmap cells", draw.LastError()))
+            return 1;
+        ComPtr<ID3D12Resource> terrainReadback;
+        UINT terrainPitch = 0;
+        unsigned char unusedTerrain[4] = {};
+        if (!ReadPixel(device, unusedTerrain, terrainReadback, terrainPitch) ||
+            !Check(targets.EndFrame(device), "release terrain render targets") ||
+            !Check(device.EndFrame(0, false) && device.WaitForIdle(),
+                   "fence native terrain draw before checking pixels", device.LastError()))
+            return 1;
+        void * terrainPixels = nullptr;
+        if (!Check(SUCCEEDED(terrainReadback->Map(0, nullptr, &terrainPixels)) &&
+                   terrainPixels != nullptr, "map terrain WARP color pixels"))
+            return 1;
+        const unsigned char * pixels = static_cast<const unsigned char *>(terrainPixels);
+        const unsigned char * left = pixels + 60*terrainPitch + 40*4;
+        const unsigned char * right = pixels + 60*terrainPitch + 120*4;
+        const unsigned char * front = pixels + 60*terrainPitch + 80*4;
+        const bool colors = left[0] > 170 && left[1] < 80 &&
+                            right[1] > 170 && right[0] < 80;
+        const bool depth = terrainPass == 0 ||
+            (front[0] > 170 && front[1] < 80 && front[2] < 80);
+        if (!colors || !depth)
+            std::cerr << "T01 terrain readback: left=(" << unsigned(left[0]) << ","
+                      << unsigned(left[1]) << ") right=(" << unsigned(right[0])
+                      << "," << unsigned(right[1]) << ") center=(" <<
+                      unsigned(front[0]) << "," << unsigned(front[1]) << ")\n";
+        terrainReadback->Unmap(0, nullptr);
+        if (!Check(colors && depth, "terrain UV/coverage and depth WARP pixels"))
+            return 1;
+    }
+    textureStages.Bind(0, nullptr);
+    DX12W3DTextures::Release(reinterpret_cast<RenderTextureHandle>(terrainAtlas));
 
     // B07: a real WARP readback of opaque followed by sorted-style
     // 50%-alpha geometry. This is not an in-game DX12-only comparison:
