@@ -1105,8 +1105,114 @@ RenderSurfaceHandle Renderer::Acquire_Texture_Surface_Level( RenderTexture2DHand
 
 void Renderer::Update_Texture(RenderTextureHandle source, RenderTextureHandle destination)
 {
-    if (!DX12W3DTextures::Update(source, destination))
-        OutputDebugStringA(DX12W3DTextures::LastError());
+    if (source && source == destination)
+        return;
+    const bool sourceRTT = DX12W3DTextures::IsAttachment(source);
+    const bool targetRTT = DX12W3DTextures::IsAttachment(destination);
+    if (!sourceRTT && !targetRTT)
+    {
+        if (!DX12W3DTextures::Update(source, destination))
+            OutputDebugStringA(DX12W3DTextures::LastError());
+        return;
+    }
+    if (!ready || !primaryWindow.IsSceneOpen() ||
+        renderThread != GetCurrentThreadId() ||
+        !source || !destination)
+    {
+        OutputDebugStringA("[DX12-R08] GPU texture update requires live render frame\\n");
+        return;
+    }
+    // R07 single-mip BGRA8 textures cannot use the R04 CPU mip shadow
+    // update (which would overwrite GPU-rendered pixels). Bridge through
+    // real retained R07 surface levels and R08 GPU copies instead.
+    RenderTextureLevelDescription a, b;
+    DX12W3DTextures::Describe(source, 0, a);
+    DX12W3DTextures::Describe(destination, 0, b);
+    if (!a.width || !a.height || a.width != b.width ||
+        a.height != b.height || (a.pixelFormat != 2 && a.pixelFormat != 3) ||
+        (b.pixelFormat != 2 && b.pixelFormat != 3))
+    {
+        OutputDebugStringA("[DX12-R08] Cannot update unequal or non-BGRA GPU texture dimensions\\n");
+        return;
+    }
+    const auto extent = RenderSurfaceRect{0, 0,
+        static_cast<int>(a.width), static_cast<int>(a.height)};
+    const RenderSurfacePoint origin = {0, 0};
+    RenderSurfaceHandle src = nullptr, dst = nullptr, temp = nullptr;
+    bool success = false;
+    auto & frame = primaryWindow.Presentation();
+    // For non-render-target R04 managed textures, use the original CPU
+    // generation. For attachments never read a stale CPU shadow.
+    RenderSurfaceDescription cpu;
+    cpu.width = a.width; cpu.height = a.height; cpu.pixelFormat = 2;
+    if (sourceRTT)
+        src = renderTargets.AcquireTextureLevel(frame,
+            reinterpret_cast<RenderTexture2DHandle>(source), 0);
+    else
+    {
+        RenderSurfaceMap map;
+        temp = DX12W3DSurfaces::Create(cpu);
+        if (temp && DX12W3DTextures::Map2D(
+                reinterpret_cast<RenderTexture2DHandle>(source), 0, map))
+        {
+            RenderSurfaceMap output;
+            if (DX12W3DSurfaces::Lock(temp, output))
+            {
+                for (unsigned y = 0; y < a.height; ++y)
+                    std::memcpy(static_cast<unsigned char *>(output.data) +
+                                    static_cast<std::size_t>(y) * output.rowPitch,
+                                static_cast<const unsigned char *>(map.data) +
+                                    static_cast<std::size_t>(y) * map.rowPitch,
+                                a.width * 4u);
+                DX12W3DSurfaces::Unlock(temp);
+                src = temp;
+            }
+            DX12W3DTextures::Unmap2D(reinterpret_cast<RenderTexture2DHandle>(source), 0);
+        }
+    }
+    if (targetRTT)
+        dst = renderTargets.AcquireTextureLevel(frame,
+            reinterpret_cast<RenderTexture2DHandle>(destination), 0);
+    else
+        dst = DX12W3DSurfaces::Create(cpu);
+    if (src && dst)
+        success = surfaceTransfers.Copy(frame, renderTargets, src, &extent, dst, &origin);
+    if (success && !targetRTT)
+    {
+        RenderSurfaceMap updated, staging;
+        success = DX12W3DSurfaces::Lock(dst, staging, nullptr, true);
+        if (success)
+        {
+            success = DX12W3DTextures::Map2D(
+                reinterpret_cast<RenderTexture2DHandle>(destination), 0, updated);
+            if (success)
+            {
+                for (unsigned y = 0; y < a.height; ++y)
+                    std::memcpy(static_cast<unsigned char *>(updated.data) +
+                                    static_cast<std::size_t>(y) * updated.rowPitch,
+                                static_cast<const unsigned char *>(staging.data) +
+                                    static_cast<std::size_t>(y) * staging.rowPitch,
+                                a.width * 4u);
+                success = DX12W3DTextures::Unmap2D(
+                    reinterpret_cast<RenderTexture2DHandle>(destination), 0);
+            }
+            DX12W3DSurfaces::Unlock(dst);
+        }
+    }
+    if (src && sourceRTT) renderTargets.Release(src);
+    if (dst)
+    {
+        if (targetRTT) renderTargets.Release(dst);
+        else DX12W3DSurfaces::Release(dst);
+    }
+    if (temp) DX12W3DSurfaces::Release(temp);
+    RestoreAfterTransfer();
+    if (!success)
+    {
+        OutputDebugStringA("[DX12-R08] GPU texture update failed: ");
+        OutputDebugStringA(surfaceTransfers.LastError());
+        OutputDebugStringA("\\n");
+    }
 }
 
 void Renderer::Map_Texture_2D(RenderTexture2DHandle texture, unsigned level,
