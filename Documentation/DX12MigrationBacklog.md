@@ -163,7 +163,7 @@
 
 | ID | Priority | Effort | Depends on | Current state | Scope and acceptance check |
 |---|---|---|---|---|---|
-| **DX12-U01** | P0 | L | `DX12-B05`, `DX12-R02`, `DX12-R04` | Open | **Add native 2D quad, color, image and clipping renderer.** Sprites, lines, panels and textured UI quads draw on the game's DX12 back buffer with correct alpha and scissor. |
+| **DX12-U01** | P0 | L | `DX12-B05`, `DX12-R02`, `DX12-R04` | **In progress: original Render2D indexed sprite/glyph geometry routed to selected native DX12 draw path; Win32 build validation pending** | [Native 2D implementation notes](DX12Native2D.md): the two original `Render2DClass::Render` implementations now select fence-safe R02 CPU transient vertex/index buffers, original W3D textures and shader states on DX12, with a DX8-only original branch preserved. Remaining: complete glyph/bitmap format parity, grayscale DOT3, transforms/clip stacks, transformed postprocess quads, and DX12-only in-game HUD/menu validation. |
 | **DX12-U02** | P0 | L | `DX12-U01`, `DX12-R04` | Open | **Port fonts, glyph atlases and text layout.** Localized text, chat, tooltips, labels, hotkeys and outlined/drop-shadow fonts render legibly without DX8 glyph surfaces. |
 | **DX12-U03** | P0 | L | `DX12-U01`, `DX12-U02`, `DX12-T06` | Open | **Port command bar, selection HUD, health indicators and minimap.** A human can select units, issue orders and read essential battle information in a DX12-only skirmish. |
 | **DX12-U04** | P0 | L | `DX12-U01`, `DX12-U02` | Open | **Port title screen, options, mission UI and loading screens.** Menus, dialogs and loading transitions are visible and functional without DX8 initialization. |
