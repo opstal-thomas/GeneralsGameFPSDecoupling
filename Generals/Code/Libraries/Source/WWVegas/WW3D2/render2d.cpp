@@ -627,6 +627,13 @@ void Render2DClass::Render()
     Renderer::Bind_Dynamic_Vertex_Buffer(vb);
     Renderer::Bind_Dynamic_Index_Buffer(ib, 0);
     ShaderClass spriteShader = IsGrayScale ? ShaderClass::_PresetOpaqueShader : Shader;
+    if (IsGrayScale)
+    {
+        // The old grayscale DOT3 pass always sampled stage 0, even though
+        // _PresetOpaqueShader has different fixed-function material defaults.
+        spriteShader.Set_Texturing(ShaderClass::TEXTURING_ENABLE);
+        spriteShader.Set_Primary_Gradient(ShaderClass::GRADIENT_MODULATE);
+    }
     spriteShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
     Renderer::Set_Shader(spriteShader);
     Renderer::Set_Vertex_Lighting(false); // UI vertex colors are prelit.
