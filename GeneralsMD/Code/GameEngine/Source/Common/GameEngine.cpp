@@ -758,6 +758,14 @@ void GameEngine::init()
 		{
 			RELEASE_CRASHLOCALIZED("ERROR:D3DFailurePrompt", "ERROR:D3DFailureMessage");
 		}
+		else if (ec == ERROR_DX12_PROBE_NOT_ENABLED)
+		{
+			RELEASE_CRASH(("DX12-only developer build: normal gameplay launch is not enabled. Set W3D_DX12_T01_GAMEPLAY=1 in the environment of the actual game executable, then relaunch. This test build is not yet a playable DX12 release."));
+		}
+		else if (ec == ERROR_INVALID_DX12)
+		{
+			RELEASE_CRASH(("Direct3D 12 game initialization failed. This is NOT a missing DirectX 8 error. Capture the [DX12 startup] and [DX12 backend] debugger messages to diagnose the device, window, or resolution failure."));
+		}
 	}
 	catch (INIException e)
 	{

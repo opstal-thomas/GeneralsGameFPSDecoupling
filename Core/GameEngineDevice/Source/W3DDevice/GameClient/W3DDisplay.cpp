@@ -856,8 +856,31 @@ void W3DDisplay::init()
 		{
 			SortingRendererClass::SetMinVertexBufferSize(1);
 		}
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// A DX12-exclusive game build is deliberately not a finished release.
+		// Refuse ordinary game startup with its OWN error rather than mapping
+		// it to the original misleading "DirectX 8.1 required" dialog.
+		const auto isDX12DeveloperOptIn = [](const char * name) {
+			char value[8] = {};
+			return GetEnvironmentVariableA(name, value, sizeof(value)) == 1 &&
+				value[0] == '1';
+		};
+		if (!isDX12DeveloperOptIn("W3D_DX12_T01_GAMEPLAY") &&
+			!isDX12DeveloperOptIn("W3D_DX12_B04_DIAGNOSTIC"))
+		{
+			OutputDebugStringA("[DX12 startup] Developer opt-in missing: set W3D_DX12_T01_GAMEPLAY=1 in the game process environment.\n");
+			throw ERROR_DX12_PROBE_NOT_ENABLED;
+		}
+#endif
 		if (WW3D::Init( ApplicationHWnd ) != WW3D_ERROR_OK)
-			throw ERROR_INVALID_D3D;	//failed to initialize.  User probably doesn't have DX 8.1
+		{
+#if defined(W3D_RENDER_BACKEND_DX12)
+			OutputDebugStringA("[DX12 startup] WW3D::Init failed; inspect [DX12 backend] device/HWND diagnostics.\n");
+			throw ERROR_INVALID_DX12;
+#else
+			throw ERROR_INVALID_D3D;	// Original DX8 reference initialization error.
+#endif
+		}
 
 		WW3D::Set_Prelit_Mode( WW3D::PRELIT_MODE_LIGHTMAP_MULTI_PASS );
 		WW3D::Set_Collision_Box_Display_Mask(0x00);	///<set to 0xff to make collision boxes visible
@@ -870,7 +893,11 @@ void W3DDisplay::init()
 		// fullscreen/style transitions; the DX12 probe must not request a
 		// swap-chain mode that disagrees with the primary window.
 		const LONG_PTR style = GetWindowLongPtrW(ApplicationHWnd, GWL_STYLE);
-		setWindowed((style & WS_POPUP) == 0);
+		// Mirror DX12PrimaryWindow::IsBorderless exactly. Popup windows
+		// WITH captions are windowed, not fullscreen DX12 swap chains.
+		const bool borderless = (style & WS_POPUP) != 0 &&
+			(style & WS_CAPTION) == 0;
+		setWindowed(!borderless);
 #else
 		setWindowed( TheGlobalData->m_windowed );
 #endif
@@ -955,9 +982,12 @@ void W3DDisplay::init()
 		{
 			WW3D::Shutdown();
 			WWMath::Shutdown();
-			throw ERROR_INVALID_D3D;	//failed to initialize.  User probably doesn't have DX 8.1
-			DEBUG_CRASH( ("Unable to set render device") );
-			return;
+#if defined(W3D_RENDER_BACKEND_DX12)
+			OutputDebugStringA("[DX12 startup] All native display-mode attempts failed; inspect [DX12 backend] resolution diagnostics.\n");
+			throw ERROR_INVALID_DX12;
+#else
+			throw ERROR_INVALID_D3D;	// Original DX8 reference error.
+#endif
 		}
 		WW3D::Set_Texture_Bitdepth(getBitDepth());
 

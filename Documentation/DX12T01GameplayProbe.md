@@ -33,6 +33,55 @@ settings, and DX8 terrain buffers. DX8Wrapper::Init and Set_Render_Device
 explicitly reject requests when the selected backend is DX12; no DX8
 renderer fallback is provided.
 
+## Correcting the old "DirectX 8 required" startup message
+
+The earlier DX12-exclusive developer artifact mapped **every** W3D renderer
+init or display-mode failure onto the original `ERROR_INVALID_D3D` dialog.
+That localized message incorrectly told users DirectX 8.1 was required.
+The corrected executable instead distinguishes:
+
+- **DX12 game probe not enabled**: `ERROR_DX12_PROBE_NOT_ENABLED`. Normal
+  DX12-only game startup is deliberately fail-closed. Set the developer
+  flag in the environment inherited by the **actual game process**.
+- **Native Direct3D 12 initialization failed**: `ERROR_INVALID_DX12`.
+  Device attach, game HWND, or resolution configuration failed after the
+  flag was enabled. This does **not** imply DirectX 8 is missing.
+- **Original DX8 renderer initialization failed**: `ERROR_INVALID_D3D`.
+  Only the normal DX8 executable retains its original localized dialog.
+
+To avoid launching an old executable or a launcher that doesn't inherit
+your developer environment, open PowerShell in the game's working directory
+and invoke the DX12-exclusive **game binary**, not the old preview or the
+B10 standalone test app, from the **same PowerShell process**:
+
+~~~powershell
+$env:W3D_DX12_T01_GAMEPLAY = "1"
+Write-Host "DX12 terrain developer flag: $env:W3D_DX12_T01_GAMEPLAY"
+& ".\\<actual-DX12-exclusive-Zero-Hour-game-executable>.exe"
+~~~
+
+Replace the placeholder with the actual executable filename from the
+downloaded Zero Hour bootstrap artifact and verify the original game data
+is present. You can select WARP by setting `W3D_DX12_GAME_WARP=1`,
+although the first hardware test should normally leave it unset.
+If the message still specifically says that *DirectX 8 is required*
+after using the corrected artifact, verify which EXE was launched:
+a previous DX12 build and the normal DX8 executable still contain the old
+error mapping.
+
+If the new DX12 device-failure message appears, capture DebugView or
+debugger `OutputDebugString` lines beginning with `[DX12 startup]` and
+`[DX12 backend]`. The native resolution path now reports whether it
+rejected an unsupported mode, disagreed with HWND decoration/borderless
+style, failed a Win32 resize, or could not synchronize the DX12 swap chain.
+The T01 window mode classification uses the same popup **and no caption**
+condition as `DX12PrimaryWindow::IsBorderless`. Report that log with
+the branch commit and screenshot: we can then fix the exact failure rather
+than treating every error as missing DirectX 8.
+
+This is a diagnostics/startup error-handling fix, not proof that the
+experimental DX12-only skirmish now runs. T01 visual acceptance stays open.
+
 ## Evidence of real terrain
 
 Capture the game's OutputDebugString messages (Sysinternals DebugView or

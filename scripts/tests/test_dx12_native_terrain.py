@@ -16,6 +16,9 @@ DISPLAY = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.
 TERRAIN_VISUAL = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainVisual.cpp").read_text()
 SHADOW_GENERALS = (ROOT / "Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
 SHADOW_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
+STARTUP_ERRORS = (ROOT / "Core/GameEngine/Include/Common/Errors.h").read_text()
+GAME_ENGINE_GENERAL = (ROOT / "Generals/Code/GameEngine/Source/Common/GameEngine.cpp").read_text()
+GAME_ENGINE_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngine/Source/Common/GameEngine.cpp").read_text()
 
 
 class NativeTerrainContract(unittest.TestCase):
@@ -105,7 +108,9 @@ class NativeTerrainContract(unittest.TestCase):
     def test_real_hwnd_matches_native_display_modes(self):
         self.assertIn("EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS", DISPLAY)
         self.assertIn("GetWindowLongPtrW(ApplicationHWnd, GWL_STYLE)", DISPLAY)
-        self.assertIn("setWindowed((style & WS_POPUP) == 0);", DISPLAY)
+        self.assertIn("const bool borderless = (style & WS_POPUP) != 0", DISPLAY)
+        self.assertIn("(style & WS_CAPTION) == 0;", DISPLAY)
+        self.assertIn("setWindowed(!borderless);", DISPLAY)
         mode = DISPLAY.split("Int W3DDisplay::getDisplayModeCount()", 1)[1]
         self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", mode)
         self.assertIn("return 1;", mode.split("#else", 1)[0])
@@ -127,6 +132,35 @@ class NativeTerrainContract(unittest.TestCase):
             start = source.split("void DoShadows(RenderInfoClass & rinfo, Bool stencilPass)", 1)[1]
             self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", start[:500])
             self.assertIn("return;", start.split("#endif", 1)[0])
+
+    def test_dx12_startup_does_not_show_the_legacy_dx8_requirement(self):
+        self.assertIn("ERROR_INVALID_D3D", STARTUP_ERRORS)
+        self.assertIn("ERROR_DX12_PROBE_NOT_ENABLED", STARTUP_ERRORS)
+        self.assertIn("ERROR_INVALID_DX12", STARTUP_ERRORS)
+        start = DISPLAY.index("void W3DDisplay::init()")
+        body = DISPLAY[start:]
+        self.assertLess(body.index('isDX12DeveloperOptIn("W3D_DX12_T01_GAMEPLAY")'),
+                        body.index("WW3D::Init( ApplicationHWnd )"))
+        self.assertIn("throw ERROR_DX12_PROBE_NOT_ENABLED;", body)
+        self.assertEqual(body.count("throw ERROR_INVALID_DX12;"), 2)
+        self.assertEqual(body.count("throw ERROR_INVALID_D3D;"), 2)
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", body)
+        for game_engine in (GAME_ENGINE_GENERAL, GAME_ENGINE_ZERO_HOUR):
+            self.assertIn('RELEASE_CRASHLOCALIZED("ERROR:D3DFailurePrompt", '
+                          '"ERROR:D3DFailureMessage")', game_engine)
+            self.assertIn("ec == ERROR_DX12_PROBE_NOT_ENABLED", game_engine)
+            self.assertIn("ec == ERROR_INVALID_DX12", game_engine)
+            self.assertIn("W3D_DX12_T01_GAMEPLAY=1", game_engine)
+            self.assertIn("Capture the [DX12 startup]", game_engine)
+
+    def test_dx12_resolution_errors_are_diagnostic_instead_of_dx8_errors(self):
+        self.assertIn("RejectNativeResolution(", DX12)
+        for reason in ("renderer is not initialized", "unsupported bit depth or window mode",
+                       "window mode disagrees with existing HWND style",
+                       "invalid game HWND", "Win32 window resize failed",
+                       "native swap-chain synchronization failed"):
+            self.assertIn(reason, DX12)
+        self.assertIn("ReportFailure(\"Renderer::Set_Device_Resolution\")", DX12)
 
     def test_dx12_terrain_does_not_register_dx8_cleanup(self):
         self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", BASE)

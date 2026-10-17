@@ -134,30 +134,49 @@ namespace
                (PackChannel(green) << 8) | PackChannel(blue);
     }
 
+    bool RejectNativeResolution(const char * reason, int width, int height,
+                                int bits, int windowed)
+    {
+        char message[320] = {};
+        std::snprintf(message, sizeof(message),
+            "[DX12 startup] Set_Render_Device rejected: %s (requested %dx%d, %d-bit, windowed=%d).\n",
+            reason, width, height, bits, windowed);
+        OutputDebugStringA(message);
+        return false;
+    }
+
     bool SetNativeResolution(int width, int height, int bits, int windowed,
                              bool resizeWindow)
     {
-        if (!ready || primaryWindow.IsSceneOpen() ||
-            renderThread != GetCurrentThreadId() ||
-            (bits != -1 && bits != 32) ||
+        if (!ready)
+            return RejectNativeResolution("renderer is not initialized",
+                width, height, bits, windowed);
+        if (primaryWindow.IsSceneOpen() || renderThread != GetCurrentThreadId())
+            return RejectNativeResolution("scene open or wrong render thread",
+                width, height, bits, windowed);
+        if ((bits != -1 && bits != 32) ||
             (windowed != -1 && windowed != 0 && windowed != 1))
-            return false;
+            return RejectNativeResolution("unsupported bit depth or window mode",
+                width, height, bits, windowed);
 
         // DX12-B06 owns exclusive-fullscreen policy. B04 permits either a
         // decorated window or an already-borderless HWND, not style mutation.
         if (windowed != -1 &&
             (windowed == 0) != primaryWindow.IsBorderless())
-            return false;
+            return RejectNativeResolution("window mode disagrees with existing HWND style",
+                width, height, bits, windowed);
 
         auto & device = primaryWindow.Presentation();
         if (width == -1) width = static_cast<int>(device.Width());
         if (height == -1) height = static_cast<int>(device.Height());
         if (width <= 0 || height <= 0)
-            return false;
+            return RejectNativeResolution("invalid client dimensions",
+                width, height, bits, windowed);
 
         HWND hwnd = static_cast<HWND>(primaryWindow.Window());
         if (!hwnd || !IsWindow(hwnd))
-            return false;
+            return RejectNativeResolution("invalid game HWND",
+                width, height, bits, windowed);
         if (resizeWindow)
         {
             const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
@@ -168,7 +187,8 @@ namespace
                               adjusted.right - adjusted.left,
                               adjusted.bottom - adjusted.top,
                               SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED))
-                return false;
+                return RejectNativeResolution("Win32 window resize failed",
+                    width, height, bits, windowed);
         }
         else
         {
@@ -176,9 +196,16 @@ namespace
             if (!GetClientRect(hwnd, &client) ||
                 client.right - client.left != width ||
                 client.bottom - client.top != height)
-                return false; // refuse a mismatched logical vs physical size
+                return RejectNativeResolution("logical resolution differs from HWND client area",
+                    width, height, bits, windowed);
         }
-        return primaryWindow.Synchronize() == DX12PrimaryWindow::Status::Ready;
+        if (primaryWindow.Synchronize() != DX12PrimaryWindow::Status::Ready)
+        {
+            ReportFailure("Renderer::Set_Device_Resolution");
+            return RejectNativeResolution("native swap-chain synchronization failed",
+                width, height, bits, windowed);
+        }
+        return true;
     }
 }
 

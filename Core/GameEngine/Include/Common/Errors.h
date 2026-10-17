@@ -61,7 +61,9 @@ enum ErrorCode CPP_11(: UnsignedInt)
 	ERROR_INVALID_FILE_VERSION	= (ERROR_BASE + 0x0003),		///< Unrecognized file version.
 	ERROR_CORRUPT_FILE_FORMAT		= (ERROR_BASE + 0x0004),		///< Invalid file format.
 	ERROR_BAD_INI								= (ERROR_BASE + 0x0005),		///< Bad INI data.
-	ERROR_INVALID_D3D						= (ERROR_BASE + 0x0006),    ///< Error initing D3D
+	ERROR_INVALID_D3D						= (ERROR_BASE + 0x0006),    ///< Error initing D3D8 (legacy backend)
+	ERROR_DX12_PROBE_NOT_ENABLED		= (ERROR_BASE + 0x0007),    ///< DX12-only game requires explicit developer opt-in
+	ERROR_INVALID_DX12					= (ERROR_BASE + 0x0008),    ///< Native DX12 device or presentation initialization failed
 
 	ERROR_LAST
 };
