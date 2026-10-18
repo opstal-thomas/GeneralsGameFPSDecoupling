@@ -596,6 +596,12 @@ TerrainTracksRenderObjClassSystem::~TerrainTracksRenderObjClassSystem()
 //=============================================================================
 void TerrainTracksRenderObjClassSystem::ReAcquireResources()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T07 GPU track overlays are unported. Preserve the CPU track
+	// bookkeeping but exclude graphics resource allocations from T01.
+	ReleaseResources();
+	return;
+#endif
 	Int i;
 	const Int numModules=TheGlobalData->m_maxTerrainTracks;
 
@@ -800,6 +806,11 @@ void TerrainTracksRenderObjClassSystem::update()
 //=============================================================================
 void TerrainTracksRenderObjClassSystem::flush()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T07 overlays are omitted from the exclusive T01 scene, no DX8 fallback.
+	m_edgesToFlush = 0;
+	return;
+#endif
 /** @todo: Optimize system by drawing tracks as triangle strips and use dynamic vertex buffer access.
 May also try rendering all tracks with one call to W3D/D3D by grouping them by texture.
 Try improving the fit to vertical surfaces like cliffs.

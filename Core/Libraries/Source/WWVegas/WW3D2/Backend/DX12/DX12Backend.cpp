@@ -49,6 +49,8 @@ namespace
     // The renderer remains fail-closed in ordinary DX12 game configurations.
     bool terrainGameplayProbe = false;
     unsigned probePresentedFrames = 0;
+    bool firstNativeBeginScene = false;
+    bool firstNativeSceneReady = false;
     unsigned renderThread = 0;
     unsigned syncInterval = 0;
     DX12W3DTextureStages textureStages;
@@ -336,6 +338,11 @@ void Renderer::Begin_Scene()
     if (!ready || renderThread != GetCurrentThreadId() ||
         primaryWindow.IsSceneOpen())
         return;
+    if (!firstNativeBeginScene)
+    {
+        firstNativeBeginScene = true;
+        DX12StartupTrace::Write("Renderer::Begin_Scene: first native game HWND frame requested");
+    }
     if (!primaryWindow.BeginScene())
     {
         if (primaryWindow.CurrentStatus() == DX12PrimaryWindow::Status::Failed)
@@ -357,6 +364,11 @@ void Renderer::Begin_Scene()
     // performed by the native draw pass after its root signature is set.
     if (!textureStages.PrepareBound(primaryWindow.Presentation()))
         OutputDebugStringA(textureStages.LastError());
+    if (!firstNativeSceneReady)
+    {
+        firstNativeSceneReady = true;
+        DX12StartupTrace::Write("Renderer::Begin_Scene: first native command list and render targets ready");
+    }
 }
 
 void Renderer::End_Scene(bool flip_frame)

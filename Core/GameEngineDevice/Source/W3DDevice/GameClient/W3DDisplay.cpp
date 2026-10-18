@@ -1981,6 +1981,14 @@ void W3DDisplay::draw()
 {
 	//USE_PERF_TIMER(W3DDisplay_draw)
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	static bool firstDX12DrawEntered = false;
+	if (!firstDX12DrawEntered)
+	{
+		firstDX12DrawEntered = true;
+		DX12StartupTrace::Write("W3DDisplay::draw first game-frame entry");
+	}
+#endif
 	extern HWND ApplicationHWnd;
 	if (ApplicationHWnd && ::IsIconic(ApplicationHWnd)) {
 		return;
@@ -2161,6 +2169,14 @@ AGAIN:
 			static Bool couldRender = true;
 			if ((TheGlobalData->m_breakTheMovie == FALSE) && (TheGlobalData->m_disableRender == false) && WW3D::Begin_Render( true, true, Vector3( 0.0f, 0.0f, 0.0f ), TheWaterTransparency->m_minWaterOpacity ) == WW3D_ERROR_OK)
 			{
+#if defined(W3D_RENDER_BACKEND_DX12)
+				static bool firstDX12BeginRender = false;
+				if (!firstDX12BeginRender)
+				{
+					firstDX12BeginRender = true;
+					DX12StartupTrace::Write("W3DDisplay: first WW3D::Begin_Render returned OK");
+				}
+#endif
 
 				if(TheGlobalData->m_loadScreenRender == TRUE)
 				{
@@ -2177,6 +2193,14 @@ AGAIN:
 
 				// draw all views of the world
 				drawViews();
+#if defined(W3D_RENDER_BACKEND_DX12)
+				static bool firstDX12ViewsDrawn = false;
+				if (!firstDX12ViewsDrawn)
+				{
+					firstDX12ViewsDrawn = true;
+					DX12StartupTrace::Write("W3DDisplay: first drawViews completed");
+				}
+#endif
 
 				// draw the user interface
 				TheInGameUI->DRAW();
@@ -2258,6 +2282,14 @@ AGAIN:
 				}
 #endif
 				// render is all done!
+#if defined(W3D_RENDER_BACKEND_DX12)
+				static bool firstDX12EndRender = false;
+				if (!firstDX12EndRender)
+				{
+					firstDX12EndRender = true;
+					DX12StartupTrace::Write("W3DDisplay: first scene/UI frame reached WW3D::End_Render");
+				}
+#endif
 				WW3D::End_Render();
 			}
 			else

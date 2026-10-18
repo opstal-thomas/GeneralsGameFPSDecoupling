@@ -64,6 +64,9 @@
 #include "WW3D2/coltype.h"
 #include "WW3D2/coltest.h"
 #include "WW3D2/assetmgr.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "WW3D2/Backend/DX12/DX12StartupTrace.h"
+#endif
 
 
 
@@ -205,6 +208,9 @@ W3DTerrainVisual::~W3DTerrainVisual()
 //-------------------------------------------------------------------------------------------------
 void W3DTerrainVisual::init()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::init entered");
+#endif
 
 	// extend
 	TerrainVisual::init();
@@ -212,16 +218,28 @@ void W3DTerrainVisual::init()
 	m_terrainRenderObject = NEW_REF( HeightMapRenderObjClass, () );
 	m_terrainRenderObject->Set_Collision_Type( PICK_TYPE_TERRAIN );
 	TheTerrainRenderObject = m_terrainRenderObject;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual: original heightmap render object constructed");
+#endif
 
 	if (!TheGlobalData->m_headless)
 	{
 		// initialize track drawing system
 		TheTerrainTracksRenderObjClassSystem = NEW TerrainTracksRenderObjClassSystem;
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DTerrainVisual: initialize terrain-track CPU manager (T07 GPU path omitted)");
+#endif
 		TheTerrainTracksRenderObjClassSystem->init(W3DDisplay::m_3DScene);
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DTerrainVisual: terrain-track CPU manager initialized");
+#endif
 
 		// Create the manager so W3D callers retain their scene ownership.
 		// Initializing the old DX8 shadow buffers is independent T09 work.
 		TheW3DShadowManager = NEW W3DShadowManager;
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DTerrainVisual: shadow manager bookkeeping constructed (T09 GPU path omitted)");
+#endif
 #if !defined(W3D_RENDER_BACKEND_DX12)
  		TheW3DShadowManager->init();
 
@@ -235,7 +253,13 @@ void W3DTerrainVisual::init()
 
 		// create smudge rendering system.
 		TheSmudgeManager = NEW(W3DSmudgeManager);
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DTerrainVisual: initialize smudge CPU manager (GPU effects omitted)");
+#endif
 		TheSmudgeManager->init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("W3DTerrainVisual: smudge CPU manager initialized");
+#endif
 
 #if !defined(W3D_RENDER_BACKEND_DX12)
 #ifdef DO_UNIT_TIMINGS
@@ -279,6 +303,9 @@ void W3DTerrainVisual::init()
 																								TheGlobalData->m_vertexWaterAttenuationC[ waterSettingIndex ],
 																								TheGlobalData->m_vertexWaterAttenuationRange[ waterSettingIndex ] );
 	m_isWaterGridRenderingEnabled = FALSE;
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::init completed; returning to GameClient");
+#endif
 
 #ifdef DO_SEISMIC_SIMULATIONS
   m_seismicSimulationList.clear();

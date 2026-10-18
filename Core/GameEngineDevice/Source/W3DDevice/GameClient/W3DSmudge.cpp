@@ -81,6 +81,12 @@ static_assert(SMUDGE_DRAW_SIZE * 5 < 0x10000, "Vertex index exceeds 16-bit limit
 
 void W3DSmudgeManager::ReAcquireResources()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Keep the SmudgeManager CPU lifecycle but omit unported framebuffer
+	// copy GPU resources in the native T01 comparison.
+	ReleaseResources();
+	return;
+#endif
 	ReleaseResources();
 
 	RenderSurfaceHandle surface = Renderer::Acquire_Back_Buffer_Surface();
@@ -155,6 +161,9 @@ Int copyRect(unsigned char *buf, Int bufSize, int oX, int oY, int width, int hei
 
 Bool W3DSmudgeManager::testHardwareSupport()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	return FALSE; // Smudge RTT compatibility testing is not part of T01.
+#endif
 	if (m_hardwareSupportStatus == SMUDGE_SUPPORT_UNKNOWN)
 	{
 		//we have not done the test yet.
@@ -259,6 +268,10 @@ Bool W3DSmudgeManager::testHardwareSupport()
 
 void W3DSmudgeManager::render(RenderInfoClass &rinfo)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	m_smudgeCountLastFrame = 0;
+	return; // Unported overlay; never dispatch DX8 fallback for T01.
+#endif
 	//Verify that the card supports the effect.
 	if (!testHardwareSupport())
 		return;
