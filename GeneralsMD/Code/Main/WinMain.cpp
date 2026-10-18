@@ -297,6 +297,21 @@ static const char *messageToString(unsigned int message)
 LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 													WPARAM wParam, LPARAM lParam )
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// The splash uses this SAME HWND. A windowed DX12 swap chain can
+	// retain its original client size and never receive WM_SIZE, leaving
+	// gDoPaint=true and painting Install_Final.bmp over the game forever.
+	// Stop GDI splash painting only after this HWND actually presented.
+	static const UINT dx12FirstPresentMessage =
+		RegisterWindowMessageW(L"GeneralsDX12T01FirstPresent");
+	if (dx12FirstPresentMessage && message == dx12FirstPresentMessage &&
+		hWnd == ApplicationHWnd)
+	{
+		gDoPaint = false;
+		DX12StartupTrace::Write("Main game HWND: disabled splash WM_PAINT after first native DX12 Present");
+		return 0;
+	}
+#endif
 
 	try
 	{

@@ -181,6 +181,23 @@ class NativeTerrainContract(unittest.TestCase):
         self.assertIn("mode = RM_POLYGON;", setter[:330])
         self.assertIn("TheDisplay->drawImage(image", MOUSE)
 
+    def test_first_actual_dx12_present_stops_gdi_splash_overpaint(self):
+        # A resize is not guaranteed when DX12 attaches to the original
+        # client-sized window, especially in windowed mode.
+        registration = 'RegisterWindowMessageW(L"GeneralsDX12T01FirstPresent")'
+        self.assertIn(registration, DX12)
+        self.assertIn("PostMessageW(static_cast<HWND>(primaryWindow.Window())", DX12)
+        present = DX12.split('Renderer::End_Scene: first actual native game HWND present succeeded', 1)[1]
+        self.assertIn("PostMessageW(", present[:700])
+        for main in (MAIN_GENERALS, MAIN_ZERO_HOUR):
+            with self.subTest(main=main[:60]):
+                self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", main)
+                self.assertIn(registration, main)
+                self.assertIn("gDoPaint = false;", main)
+                self.assertIn("hWnd == ApplicationHWnd", main)
+                self.assertIn("disabled splash WM_PAINT after first native DX12 Present", main)
+                self.assertIn("Install_Final.bmp", main)
+
     def test_t01_omits_unported_terrain_track_and_smudge_gpu_operations(self):
         # The original terrain visual still creates its CPU effect managers;
         # T01 must not silently call their unported GPU paths.

@@ -299,3 +299,29 @@ native terrain until `Original heightmap frame=N tiles=N triangles=N
 atlas=native` reports nonzero tiles/triangles, followed by in-game
 DX8 comparison. All DX12-exclusive builds remain fail-closed without
 `W3D_DX12_T01_GAMEPLAY=1`.
+
+## First native Present stops GDI splash repaint (2026-10-19)
+
+The original WinMain paints `Install_Final.bmp` in `WM_PAINT` while
+`gDoPaint` is true. In the normal DX8 application, `WM_SIZE` or the
+fullscreen startup path clears that flag. The exclusive DX12 renderer
+attaches to the already-created HWND; **windowed mode may retain the
+initial client dimensions**, so no `WM_SIZE` occurs. Repeated Windows
+paint messages can then overwrite native DX12 frames with the splash.
+
+The DX12-only T01 renderer now posts a process-local registered window
+message on **the same actual game HWND, only after its first successful
+native Present**. Both game WinMain implementations receive it and disable
+further splash GDI painting. It does not fabricate a frame, disable the
+splash on failed DX12 initialization, change the DX8 code path or create
+another window. The startup log must show, in order:
+
+`Renderer::End_Scene: first actual native game HWND present succeeded`
+
+`Main game HWND: disabled splash WM_PAINT after first native DX12 Present`
+
+If the first message appears without the second, inspect the logged
+`first Present splash handoff failed` Win32 error or whether the
+original application is dispatching window messages. Actual game
+terrain atlas rendering still requires nonzero authoritative
+heightmap tiles/triangles in a skirmish and visual comparison.

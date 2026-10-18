@@ -391,7 +391,17 @@ void Renderer::End_Scene(bool flip_frame)
     else if (terrainGameplayProbe && flip_frame)
     {
         if (probePresentedFrames == 0)
+        {
             DX12StartupTrace::Write("Renderer::End_Scene: first actual native game HWND present succeeded");
+            // The original window procedure may still be GDI painting
+            // Install_Final.bmp when no WM_SIZE occurred during DX12 attach.
+            // Signal ownership handoff ONLY after actual native Present.
+            const UINT message = RegisterWindowMessageW(L"GeneralsDX12T01FirstPresent");
+            if (!message || !PostMessageW(static_cast<HWND>(primaryWindow.Window()),
+                                           message, 0, 0))
+                DX12StartupTrace::WriteWin32Failure(
+                    "Renderer::End_Scene: first Present splash handoff failed");
+        }
         // Signal that the actual selected game-HWND command list presented.
         // HeightMapRenderObjClass separately reports native terrain tiles;
         // a present alone never counts as terrain acceptance.

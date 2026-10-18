@@ -82,3 +82,15 @@ It also excludes unported shroud and snow GPU resources and maps
 hardware/model cursor modes onto native 2D sprite rendering.
 Normal DX8 builds are unchanged. The original game frame/terrain
 acceptance gate remains open until actual installed-game proof.
+
+## Splash-to-native HWND ownership handoff (2026-10-19)
+
+The original `Install_Final.bmp` GDI `WM_PAINT` path could remain
+enabled in **windowed** DX12-only games: an in-place DXGI swap-chain
+attach need not cause the `WM_SIZE` event that clears
+`gDoPaint` in legacy WinMain. To avoid an apparently stuck splash
+masking valid frames, the DX12 T01 backend now notifies the existing
+game HWND through a registered message after the **first successful
+native Present**. Both Generals and Zero Hour then cease splash
+painting. This is exclusive to DX12 and does not claim terrain was
+submitted or that installed-game acceptance passed.
