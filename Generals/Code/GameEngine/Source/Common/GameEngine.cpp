@@ -654,8 +654,14 @@ void GameEngine::init()
 	DX12StartupTrace::Write("GameEngine::init complete; resetting subsystems");
 #endif
 	resetSubsystems();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameEngine::init: original game subsystems reset successfully");
+#endif
 
 	HideControlBar();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameEngine::init complete; main game loop can begin");
+#endif
 }
 
 /** -----------------------------------------------------------------------------------------------
@@ -848,6 +854,9 @@ extern HWND ApplicationHWnd;
  */
 void GameEngine::execute()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("GameEngine::execute entered original game loop");
+#endif
 #if defined(RTS_DEBUG)
 	DWORD startTime = timeGetTime() / 1000;
 #endif
@@ -907,6 +916,14 @@ void GameEngine::execute()
 					// compute a frame
 					if (diagnoseFps)
 						fpsSampleFrameStarted = timeGetTime();
+#if defined(W3D_RENDER_BACKEND_DX12)
+					static bool firstNativeT01EngineUpdate = true;
+					if (firstNativeT01EngineUpdate)
+					{
+						firstNativeT01EngineUpdate = false;
+						DX12StartupTrace::Write("GameEngine::execute: first original game update begins");
+					}
+#endif
 					update();
 					if (diagnoseFps)
 						fpsSampleFrameUpdated = timeGetTime();

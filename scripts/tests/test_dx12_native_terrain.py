@@ -18,6 +18,8 @@ SHADOW_GENERALS = (ROOT / "Generals/Code/GameEngineDevice/Source/W3DDevice/GameC
 SHADOW_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
 TERRAIN_TRACKS = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp").read_text()
 SMUDGES = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp").read_text()
+MOUSE = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp").read_text()
+SNOW = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSnow.cpp").read_text()
 DX12_TRACE = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12StartupTrace.h").read_text()
 MAIN_GENERALS = (ROOT / "Generals/Code/Main/WinMain.cpp").read_text()
 MAIN_ZERO_HOUR = (ROOT / "GeneralsMD/Code/Main/WinMain.cpp").read_text()
@@ -140,6 +142,45 @@ class NativeTerrainContract(unittest.TestCase):
             self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", start[:500])
             self.assertIn("return;", start.split("#endif", 1)[0])
 
+    def test_dx12_uninitialized_shadow_children_never_enter_reset_or_shutdown(self):
+        # Without init(), W3DProjectedShadowManager::reset/ReleaseResources
+        # dereferences m_W3DShadowTextureManager (which stays null). This
+        # happens in GameEngine::resetSubsystems after GameClient init.
+        self.assertIn("TheW3DShadowManager->Reset();", TERRAIN_VISUAL)
+        for shadow in (SHADOW_GENERALS, SHADOW_ZERO_HOUR):
+            with self.subTest(game=shadow[:60]):
+                ctor = shadow.split("W3DShadowManager::W3DShadowManager()", 1)[1]
+                ctor = ctor.split("W3DShadowManager::~W3DShadowManager()", 1)[0]
+                self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", ctor)
+                self.assertIn("NEW W3DVolumetricShadowManager", ctor)
+                self.assertIn("NEW W3DProjectedShadowManager", ctor)
+                self.assertIn("TheW3DProjectedShadowManager->reset();", shadow)
+
+    def test_selected_dx12_shroud_shader_and_snow_gpu_paths_are_isolated(self):
+        ctor = BASE.split("BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass()", 1)[1]
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", ctor[:4000])
+        self.assertIn("m_shroud = nullptr;", ctor[:4000])
+        reacquire = BASE.split("void BaseHeightMapRenderObjClass::ReAcquireResources()", 1)[1]
+        self.assertIn("#if !defined(W3D_RENDER_BACKEND_DX12)", reacquire[:800])
+        self.assertIn("W3DShaderManager::init();", reacquire)
+        self.assertIn("TheW3DShadowManager->ReAcquireResources();", reacquire)
+        for signature in ("Bool W3DSnowManager::ReAcquireResources()",
+                          "void W3DSnowManager::render(RenderInfoClass &rinfo)"):
+            with self.subTest(signature=signature):
+                native = SNOW.split(signature, 1)[1].split("#endif", 1)[0]
+                self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", native)
+                self.assertIn("return", native)
+        self.assertIn("No legacy shader registry was initialized by the native T01 path", DISPLAY)
+
+    def test_dx12_cursor_mode_uses_native_2d_instead_of_dx8_hardware_thread(self):
+        init = MOUSE.split("void W3DMouse::init()", 1)[1].split("void W3DMouse::reset()", 1)[0]
+        setter = MOUSE.split("void W3DMouse::setRedrawMode(RedrawMode mode)", 1)[1]
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", init)
+        self.assertIn("setRedrawMode(RM_POLYGON);", init)
+        self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", setter[:330])
+        self.assertIn("mode = RM_POLYGON;", setter[:330])
+        self.assertIn("TheDisplay->drawImage(image", MOUSE)
+
     def test_t01_omits_unported_terrain_track_and_smudge_gpu_operations(self):
         # The original terrain visual still creates its CPU effect managers;
         # T01 must not silently call their unported GPU paths.
@@ -230,6 +271,9 @@ class NativeTerrainContract(unittest.TestCase):
                 self.assertIn(stage, client)
         for game_engine in (GAME_ENGINE_GENERAL, GAME_ENGINE_ZERO_HOUR):
             self.assertIn('GameEngine::init entered', game_engine)
+            self.assertIn('original game subsystems reset successfully', game_engine)
+            self.assertIn('GameEngine::execute entered original game loop', game_engine)
+            self.assertIn('first original game update begins', game_engine)
             self.assertIn('GameEngine: TheGameClient initialized', game_engine)
             self.assertIn('GameEngine::init caught ErrorCode', game_engine)
             self.assertIn('GameEngine::init caught unexpected exception', game_engine)

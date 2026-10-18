@@ -230,3 +230,13 @@
 > audits the relevant actual compiler commands. Normal DX8 and preview paths
 > remain unchanged. **T01 gameplay and atlas visual acceptance remain open.**
 > See [DX12 T01 gameplay probe](DX12T01GameplayProbe.md).
+
+> **T01 startup lifecycle fix (2026-10-19):** A definite null-dereference
+> risk was found after GameClient initialization: a DX12-only
+> `W3DProjectedShadowManager` was constructed without its DX8 initializer,
+> then reset during `GameEngine::resetSubsystems()` and eventually released
+> during shutdown. The T01-only path now avoids constructing that unported
+> child manager, keeps the game-facing manager, isolates shroud/snow GPU
+> resources, and uses native 2D cursors. More compile-command and source
+> contract checks plus startup trace checkpoints cover the fix. **Neither
+> a first in-game DX12 Present nor native atlas parity has been verified.**

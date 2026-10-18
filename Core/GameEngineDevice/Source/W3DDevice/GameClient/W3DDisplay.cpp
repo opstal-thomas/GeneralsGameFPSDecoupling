@@ -471,8 +471,11 @@ W3DDisplay::~W3DDisplay()
 
 	// shutdown
 	Debug_Statistics::Shutdown_Statistics();
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// No legacy shader registry was initialized by the native T01 path.
 	if (!TheGlobalData->m_headless)
 		W3DShaderManager::shutdown();
+#endif
 	m_assetManager->Free_Assets();
 	delete m_assetManager;
 	if (!TheGlobalData->m_headless)

@@ -451,11 +451,17 @@ void GameClient::init()
 	if( TheMouse )
 	{
 		// finish initializing the mouse.
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize native-compatible mouse runtime");
+#endif
 		TheMouse->init();
 		TheMouse->initCapture();
 		TheMouse->setPosition( 0, 0 );
 		TheMouse->setMouseLimits();
 		TheMouse->setName("TheMouse");
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: native-compatible mouse runtime initialized");
+#endif
 	}
 
 	// create the video player
@@ -486,8 +492,14 @@ void GameClient::init()
 	TheSnowManager = createSnowManager();
 	if (TheSnowManager)
 	{
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize snow CPU manager; DX8 GPU sprites omitted");
+#endif
 		TheSnowManager->init();
 		TheSnowManager->setName("TheSnowManager");
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: snow CPU manager initialized");
+#endif
 	}
 
 #if defined(W3D_RENDER_BACKEND_DX12)

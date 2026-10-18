@@ -68,3 +68,17 @@ completion, `W3DDisplay::draw`, `WW3D::Begin_Render`, native
 heightmap tile/triangle submission sampling the authoritative terrain atlas.
 No real-game startup or side-by-side parity has been confirmed by CI.
 See [DX12T01GameplayProbe.md](DX12T01GameplayProbe.md).
+
+## 2026-10-19: shadow reset/startup defect
+
+Source inspection found that the DX12 T01 path constructed
+`W3DProjectedShadowManager` without calling its initializer, but
+`GameEngine::resetSubsystems()` still invoked its `reset()`.
+That routine dereferences a texture manager left null by the skipped
+DX8-only initialization, and shutdown repeats the invalid access.
+The selected DX12 T01 path now retains the outer shadow manager for
+callers without constructing the legacy GPU child managers.
+It also excludes unported shroud and snow GPU resources and maps
+hardware/model cursor modes onto native 2D sprite rendering.
+Normal DX8 builds are unchanged. The original game frame/terrain
+acceptance gate remains open until actual installed-game proof.

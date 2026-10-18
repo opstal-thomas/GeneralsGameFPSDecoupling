@@ -438,11 +438,17 @@ void GameClient::init()
 	if( TheMouse )
 	{
 		// finish initializing the mouse.
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: initialize native-compatible mouse runtime");
+#endif
 		TheMouse->init();
 		TheMouse->initCapture();
 		TheMouse->setPosition( 0, 0 );
 		TheMouse->setMouseLimits();
 		TheMouse->setName("TheMouse");
+#if defined(W3D_RENDER_BACKEND_DX12)
+		DX12StartupTrace::Write("GameClient: native-compatible mouse runtime initialized");
+#endif
 	}
 
 	// create the video player

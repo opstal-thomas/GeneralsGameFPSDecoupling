@@ -265,3 +265,37 @@ translation units in both normal and selected DX12 builds. The static
 tests and WARP smoke cannot substitute for installed-game gameplay evidence.
 T01 acceptance stays open until real native presentation and authoritative
 map atlas comparisons succeed.
+
+## 2026-10-19: native T01 shadow-reset crash path fixed
+
+The source-backed startup investigation found a concrete invalid lifecycle:
+`W3DTerrainVisual::init()` constructed `W3DShadowManager`, deliberately
+skipped `W3DShadowManager::init()` in DX12, but retained partially initialized
+`W3DProjectedShadowManager` children. `GameEngine::init()` always calls
+`resetSubsystems()`, which eventually calls `W3DTerrainVisual::reset()`
+and `W3DShadowManager::Reset()`. The legacy projected-shadow reset
+dereferences `m_W3DShadowTextureManager`, initialized only by the skipped
+T09 `init()`. Shutdown had the same bug via `ReleaseResources()`.
+
+The exclusive DX12 T01 path now retains the game-facing
+`W3DShadowManager` but **does not construct its DX8-only child managers**.
+The ordinary DX8 build still creates/initializes all shadow managers
+unchanged. Renderer shroud objects and snow GPU passes are similarly
+excluded from the T01 base heightmap path; their underlying gameplay
+logic and CPU managers remain intact. Hardware/model DX8 cursor modes
+are redirected to the already supported U01 2D image rendering.
+No unported feature is marked completed.
+
+The new runtime trace must show the source-verified lifecycle checkpoints:
+`W3DTerrainVisual::reset complete`, `GameEngine::init: original game
+subsystems reset successfully`, `GameEngine::init complete; main game
+loop can begin`, `GameEngine::execute entered original game loop`,
+then the first `W3DDisplay::draw`, native `Begin_Scene` and
+`Renderer::End_Scene: first actual native game HWND present succeeded`.
+Only the actual installed-game execution with the original data can
+establish the success of the fix. If no Present appears, use the last
+checkpoint to isolate the next failure. A Present is not evidence of
+native terrain until `Original heightmap frame=N tiles=N triangles=N
+atlas=native` reports nonzero tiles/triangles, followed by in-game
+DX8 comparison. All DX12-exclusive builds remain fail-closed without
+`W3D_DX12_T01_GAMEPLAY=1`.
