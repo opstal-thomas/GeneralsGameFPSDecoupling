@@ -220,3 +220,13 @@
 - Validation: [W3D renderer Win32 matrix](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38803009784) and [shader/WARP validation](https://github.com/opstal-thomas/GeneralsGameFPSDecoupling/actions/runs/38803009756), both green at the audited baseline.
 
 **Change control:** Keep existing DX8 default stable until the DX12-only branch passes the corresponding milestone; do not merge incomplete replacement behind the working DX8 path without an explicit opt-in.
+
+> **DX12-T01 Zero Hour startup investigation (2026-10-18):** The user
+> runtime trace at `35fcba0` reached `GameClient: initialize original
+> terrain visual` after the game HWND, WW3D, GameClient and shell UI initialized,
+> but did not establish a first native Present. Exclusive DX12 T01 now traces
+> sub-stages of the original terrain visual and first native frame, excludes
+> unported track/smudge GPU effects while retaining CPU-side managers, and
+> audits the relevant actual compiler commands. Normal DX8 and preview paths
+> remain unchanged. **T01 gameplay and atlas visual acceptance remain open.**
+> See [DX12 T01 gameplay probe](DX12T01GameplayProbe.md).

@@ -16,6 +16,8 @@ DISPLAY = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.
 TERRAIN_VISUAL = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainVisual.cpp").read_text()
 SHADOW_GENERALS = (ROOT / "Generals/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
 SHADOW_ZERO_HOUR = (ROOT / "GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/Shadow/W3DShadow.cpp").read_text()
+TERRAIN_TRACKS = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp").read_text()
+SMUDGES = (ROOT / "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp").read_text()
 DX12_TRACE = (ROOT / "Core/Libraries/Source/WWVegas/WW3D2/Backend/DX12/DX12StartupTrace.h").read_text()
 MAIN_GENERALS = (ROOT / "Generals/Code/Main/WinMain.cpp").read_text()
 MAIN_ZERO_HOUR = (ROOT / "GeneralsMD/Code/Main/WinMain.cpp").read_text()
@@ -137,6 +139,47 @@ class NativeTerrainContract(unittest.TestCase):
             start = source.split("void DoShadows(RenderInfoClass & rinfo, Bool stencilPass)", 1)[1]
             self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", start[:500])
             self.assertIn("return;", start.split("#endif", 1)[0])
+
+    def test_t01_omits_unported_terrain_track_and_smudge_gpu_operations(self):
+        # The original terrain visual still creates its CPU effect managers;
+        # T01 must not silently call their unported GPU paths.
+        functions = (
+            (TERRAIN_TRACKS, "void TerrainTracksRenderObjClassSystem::ReAcquireResources()"),
+            (TERRAIN_TRACKS, "void TerrainTracksRenderObjClassSystem::flush()"),
+            (SMUDGES, "void W3DSmudgeManager::ReAcquireResources()"),
+            (SMUDGES, "void W3DSmudgeManager::render(RenderInfoClass &rinfo)"),
+            (SMUDGES, "Bool W3DSmudgeManager::testHardwareSupport()"),
+        )
+        for source, signature in functions:
+            with self.subTest(signature=signature):
+                native = source.split(signature, 1)[1].split("#endif", 1)[0]
+                self.assertIn("#if defined(W3D_RENDER_BACKEND_DX12)", native)
+                self.assertRegex(native, r"\breturn(?:\s+FALSE)?;")
+                self.assertNotIn("NEW_REF(DX8", native)
+                self.assertNotIn("Renderer::Draw_", native)
+        self.assertIn("TheTerrainTracksRenderObjClassSystem->init(W3DDisplay::m_3DScene);", TERRAIN_VISUAL)
+        self.assertIn("TheSmudgeManager->init();", TERRAIN_VISUAL)
+        self.assertIn("original heightmap render object constructed", TERRAIN_VISUAL)
+
+    def test_t01_traces_terrain_init_and_native_first_frame_boundaries(self):
+        for stage in (
+            "W3DTerrainVisual::init entered",
+            "terrain-track CPU manager initialized",
+            "shadow manager bookkeeping constructed",
+            "smudge CPU manager initialized",
+            "W3DTerrainVisual::init completed",
+        ):
+            self.assertIn(stage, TERRAIN_VISUAL)
+        for stage in (
+            "W3DDisplay::draw first game-frame entry",
+            "first WW3D::Begin_Render returned OK",
+            "first drawViews completed",
+            "first scene/UI frame reached WW3D::End_Render",
+        ):
+            self.assertIn(stage, DISPLAY)
+        self.assertIn("first native game HWND frame requested", DX12)
+        self.assertIn("first native command list and render targets ready", DX12)
+        self.assertIn("first actual native game HWND present succeeded", DX12)
 
     def test_dx12_startup_does_not_show_the_legacy_dx8_requirement(self):
         self.assertIn("ERROR_INVALID_D3D", STARTUP_ERRORS)

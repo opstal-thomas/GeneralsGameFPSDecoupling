@@ -208,3 +208,60 @@ milestones, while genuine terrain and supported original W3D meshes still
 use native DX12 submission. This avoids dereferencing the null DX8 device
 in WaterRenderObjClass::ReAcquireResources. All normal DX8 game builds
 retain the original water/shroud/shadow behavior.
+
+## 2026-10-18: Zero Hour terrain-init isolation and first-frame diagnostics
+
+The latest installed Zero Hour trace on commit `35fcba0` reaches
+`GameClient: initialize original terrain visual`, **not** the subsequent
+`GameClient: terrain visual initialized` stage. This narrows the next
+investigation to `W3DTerrainVisual::init()`, but a log tail alone does not
+prove which call (if any) crashes, throws or stalls.
+
+Exclusive DX12 T01 now instruments that original initialization routine
+and retains terrain-track and smudge *CPU bookkeeping* while omitting their
+unported GPU buffer and framebuffer-copy effect paths. Shadow and water
+rendering remain out of the existing T01 probe. All optional GPU-effect
+omissions are compile-time DX12-only, with no DirectX 8 fallback. These
+effects are **not** declared migrated or rendered by this checkpoint.
+The legacy-named DX8Vertex/IndexBuffer classes can already be backed by
+native Renderer buffers; their names alone do not prove D3D8 dispatch.
+
+Inspect the following ordered checkpoints in
+`%TEMP%\GeneralsDX12Startup.log` for the **same process ID**:
+
+1. `W3DTerrainVisual::init entered`
+2. `W3DTerrainVisual: original heightmap render object constructed`
+3. `W3DTerrainVisual: terrain-track CPU manager initialized`
+4. `W3DTerrainVisual: shadow manager bookkeeping constructed (T09 GPU path omitted)`
+5. `W3DTerrainVisual: smudge CPU manager initialized`
+6. `W3DTerrainVisual::init completed; returning to GameClient`
+7. `GameClient: terrain visual initialized`
+8. `W3DDisplay::draw first game-frame entry`
+9. `W3DDisplay: first WW3D::Begin_Render returned OK`
+10. `Renderer::Begin_Scene: first native game HWND frame requested`
+11. `Renderer::Begin_Scene: first native command list and render targets ready`
+12. `W3DDisplay: first drawViews completed` (only after the loading-screen pass)
+13. `W3DDisplay: first scene/UI frame reached WW3D::End_Render`
+14. `Renderer::End_Scene: first actual native game HWND present succeeded`
+
+`Begin_Render returned OK` is **not** proof of successful Begin_Scene or
+present. The original `HWND` is the splash window itself and should become
+the game window; no second preview window will appear. Native first Present
+does **not** prove original terrain rendering. Open an actual skirmish and
+capture both nonzero `Original heightmap frame=N tiles=N triangles=N
+atlas=native` and `Native game HWND Present count=N` in DebugView.
+Check terrain atlas material mapping and scrolling against the DX8 executable.
+
+Use the latest successful Zero Hour `win32-dx12-bootstrap` artifact from
+the renderer-validation Actions run at the new commit. Do not mistake the
+separate WARP/B10 checkpoint for the original Zero Hour game executable.
+Set `W3D_DX12_T01_GAMEPLAY=1` in the process environment and clear the old
+startup log before launch. A missing stage identifies the last observed
+initialization boundary, **not** automatically its root cause.
+
+The Windows CI audit now checks backend definitions in the actual compile
+commands for the original terrain visual, terrain tracks and smudge
+translation units in both normal and selected DX12 builds. The static
+tests and WARP smoke cannot substitute for installed-game gameplay evidence.
+T01 acceptance stays open until real native presentation and authoritative
+map atlas comparisons succeed.

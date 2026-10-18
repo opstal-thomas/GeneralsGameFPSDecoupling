@@ -217,7 +217,10 @@ jobs:
             "$game/Code/GameEngine/Source/Common/GameEngine.cpp",
             "$game/Code/GameEngine/Source/GameClient/GameClient.cpp",
             "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DDisplay.cpp",
-            "Core/GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp"
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainVisual.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DTerrainTracks.cpp",
+            "Core/GameEngineDevice/Source/W3DDevice/GameClient/W3DSmudge.cpp"
           )
           foreach ($source in $sources) {
             $matches = @($compiles | Where-Object { ([string]$_.file).Replace('\', '/').EndsWith("/$source") })

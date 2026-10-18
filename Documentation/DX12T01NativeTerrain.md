@@ -51,3 +51,20 @@ An opt-in launch attempt is now available via W3D_DX12_T01_GAMEPLAY=1 on actual 
 ### T01-only game-scene isolation
 
 The opt-in game-scene probe keeps unfinished water, shroud and shadow GPU paths disabled under the exclusive DX12 selection, because these still execute D3D8 device methods (notably WaterRenderObjClass::ReAcquireResources). They are not implemented or marked complete; original DX8 builds retain the full code paths. See [T01 gameplay probe notes](DX12T01GameplayProbe.md).
+
+## Original-game startup isolation update (2026-10-18)
+
+An installed Zero Hour executable on `35fcba0` reached the
+`GameClient: initialize original terrain visual` checkpoint, with no
+subsequent known presented frame. The DX12 T01-only route now records each
+stage of the original terrain-visual initialization, keeps track and smudge
+CPU managers, but excludes their still-unported GPU overlays. Normal DX8
+and DX8-based preview configurations retain their existing paths.
+
+The next required observed sequence is original terrain-visual init
+completion, `W3DDisplay::draw`, `WW3D::Begin_Render`, native
+`Renderer::Begin_Scene` (command list, RTV/DSV), original scene draw,
+`Renderer::End_Scene` Present on the actual game HWND, then a nonzero
+heightmap tile/triangle submission sampling the authoritative terrain atlas.
+No real-game startup or side-by-side parity has been confirmed by CI.
+See [DX12T01GameplayProbe.md](DX12T01GameplayProbe.md).
