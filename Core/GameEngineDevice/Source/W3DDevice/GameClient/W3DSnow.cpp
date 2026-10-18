@@ -72,6 +72,11 @@ void W3DSnowManager::ReleaseResources()
 Bool W3DSnowManager::ReAcquireResources()
 {
 	ReleaseResources();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Snow GPU sprites and their legacy index buffers are not part of
+	// T01. Keep the weather simulation and CPU manager functional.
+	return TRUE;
+#endif
 
 	if (!TheWeatherSetting->m_snowEnabled)
 		return TRUE;	//no need for resources if snow is disabled.
@@ -317,6 +322,10 @@ flush_particles:
 
 void W3DSnowManager::render(RenderInfoClass &rinfo)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Skip unported weather draw instead of calling the DX8 sprite path.
+	return;
+#endif
 	if (!TheWeatherSetting->m_snowEnabled || !m_isVisible)
 		return;
 

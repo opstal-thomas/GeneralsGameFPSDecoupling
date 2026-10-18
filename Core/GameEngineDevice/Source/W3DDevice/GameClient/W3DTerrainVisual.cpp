@@ -318,14 +318,23 @@ void W3DTerrainVisual::init()
 //-------------------------------------------------------------------------------------------------
 void W3DTerrainVisual::reset()
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::reset entered");
+#endif
 
 	// extend
 	TerrainVisual::reset();
 
 	m_terrainRenderObject->reset();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::reset: native terrain bookkeeping reset");
+#endif
 
 	if (TheW3DShadowManager)
 		TheW3DShadowManager->Reset();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::reset: disabled T09 shadow manager reset is safe");
+#endif
 
 	if (TheSmudgeManager)
 		TheSmudgeManager->reset();
@@ -353,6 +362,9 @@ void W3DTerrainVisual::reset()
   m_seismicSimulationList.clear();
 #endif
 
+#if defined(W3D_RENDER_BACKEND_DX12)
+	DX12StartupTrace::Write("W3DTerrainVisual::reset complete");
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -335,6 +335,13 @@ void W3DMouse::init()
 
 	//check if system already initialized and texture assets loaded.
 	Win32Mouse::init();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// R06 hardware cursor and W3D model cursor paths are not native T01.
+	// Use the already-migrated U01 2D sprite path on the render thread.
+	// Retain genuine Win32 cursors when explicitly configured.
+	if (m_currentRedrawMode == RM_DX8 || m_currentRedrawMode == RM_W3D)
+		setRedrawMode(RM_POLYGON);
+#endif
 	setCursor(ARROW);	//set default starting cursor image
 
 	WWASSERT(!thread.Is_Running());
@@ -596,6 +603,12 @@ void W3DMouse::draw()
 
 void W3DMouse::setRedrawMode(RedrawMode mode)
 {
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Prevent options/reinitialization from restoring DX8 cursor surfaces,
+	// a separate cursor thread or an unported 3D cursor render path.
+	if (mode == RM_DX8 || mode == RM_W3D)
+		mode = RM_POLYGON;
+#endif
 	MouseCursor cursor = getMouseCursor();
 
 	//Turn off the previous cursor mode

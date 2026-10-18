@@ -299,7 +299,12 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass()
 #ifdef DO_ROADS
 	m_roadBuffer = NEW W3DRoadBuffer;
 #endif
-#if ENABLE_CONFIGURABLE_SHROUD
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// T06 shroud textures and GPU updates are unported. The authoritative
+	// WorldHeightMap and gameplay fog logic do not depend on this DX8
+	// render overlay; never construct it during a T01-only game launch.
+	m_shroud = nullptr;
+#elif ENABLE_CONFIGURABLE_SHROUD
 	if (TheGlobalData->m_shroudOn)
 		m_shroud = NEW W3DShroud;
 	else
@@ -438,8 +443,10 @@ void BaseHeightMapRenderObjClass::ReleaseResources()
 	if (TheSnowManager)
 		((W3DSnowManager *)TheSnowManager)->ReleaseResources();
 
-	//Release any resources that may be used by custom pixel/vertex shaders
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// The DX12 T01 scene never initialized the DX8 shader registry.
 	W3DShaderManager::shutdown();
+#endif
 #ifdef DO_ROADS
 	if (m_roadBuffer) {
 		m_roadBuffer->freeRoadBuffers();
@@ -454,18 +461,24 @@ void BaseHeightMapRenderObjClass::ReleaseResources()
 //=============================================================================
 void BaseHeightMapRenderObjClass::ReAcquireResources()
 {
-	W3DShaderManager::init();	//reaquire resources which may be needed by custom shaders
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// T02/T03/T06/T09: these still use legacy D3D8 render targets and
+	// are deliberately not part of the T01-only native heightmap pass.
+	W3DShaderManager::init();
 
 	if (TheWaterRenderObj)
 		TheWaterRenderObj->ReAcquireResources();
+#endif
 
 	if (TheTerrainTracksRenderObjClassSystem)
 		TheTerrainTracksRenderObjClassSystem->ReAcquireResources();
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
 	if (TheW3DShadowManager)
 		TheW3DShadowManager->ReAcquireResources();
 	if (m_shroud)
 		m_shroud->ReAcquireResources();
+#endif
 
 	if (m_map)
 	{

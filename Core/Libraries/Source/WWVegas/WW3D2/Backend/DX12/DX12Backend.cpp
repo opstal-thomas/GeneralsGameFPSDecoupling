@@ -280,6 +280,8 @@ void Renderer::Shutdown()
     ready = false;
     terrainGameplayProbe = false;
     probePresentedFrames = 0;
+    firstNativeBeginScene = false;
+    firstNativeSceneReady = false;
     renderThread = 0;
     syncInterval = 0;
     primaryWindow.Shutdown();
@@ -363,7 +365,11 @@ void Renderer::Begin_Scene()
     // once per command list. Actual shader-visible root-table binding is
     // performed by the native draw pass after its root signature is set.
     if (!textureStages.PrepareBound(primaryWindow.Presentation()))
+    {
+        DX12StartupTrace::Write("Renderer::Begin_Scene: native texture-stage preparation failed");
         OutputDebugStringA(textureStages.LastError());
+        return;
+    }
     if (!firstNativeSceneReady)
     {
         firstNativeSceneReady = true;

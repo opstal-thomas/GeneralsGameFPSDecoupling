@@ -120,8 +120,14 @@ W3DShadowManager::W3DShadowManager()
 
 	LightPosWorld[0]=lightRay*SUN_DISTANCE_FROM_GROUND;
 
+#if !defined(W3D_RENDER_BACKEND_DX12)
+	// The original T09 managers allocate D3D8-only surfaces in init().
+	// In native T01 there is deliberately no shadow GPU implementation:
+	// do not construct their partially initialized objects. Game callers
+	// retain TheW3DShadowManager, while guarded child pointers stay null.
 	TheW3DVolumetricShadowManager = NEW W3DVolumetricShadowManager;
 	TheProjectedShadowManager = TheW3DProjectedShadowManager = NEW W3DProjectedShadowManager;
+#endif
 }
 
 W3DShadowManager::~W3DShadowManager()
