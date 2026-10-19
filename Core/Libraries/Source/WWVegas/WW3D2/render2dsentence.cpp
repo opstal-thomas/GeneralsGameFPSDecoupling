@@ -40,6 +40,9 @@
 #include "WWDebug/wwprofile.h"
 #include "WWDebug/wwmemlog.h"
 #include "Renderer.h"
+#if defined(W3D_RENDER_BACKEND_DX12)
+#include "Backend/DX12/DX12StartupTrace.h"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -201,6 +204,12 @@ Render2DSentenceClass::Render ()
 	//	Build any textures that are pending
 	//
 	Build_Textures ();
+#if defined(W3D_RENDER_BACKEND_DX12)
+	// Failed native atlas allocations remain pending for a later frame.
+	// Do not draw opaque untextured quads in place of missing glyphs.
+	if (PendingSurfaces.Count () > 0)
+		return;
+#endif
 
 	//
 	//	Ask each renderer to draw its contents
@@ -342,7 +351,9 @@ Render2DSentenceClass::Build_Textures ()
 	//
 	//	Convert all pending surfaces to textures
 	//
-	for (int index = 0; index < PendingSurfaces.Count (); index ++) {
+	// Consume only successfully uploaded glyph pages. Native allocation
+	// failures retain the original CPU surface for retry after recovery.
+	for (int index = 0; index < PendingSurfaces.Count (); ) {
 		PendingSurfaceStruct &surface_info = PendingSurfaces[index];
 		SurfaceClass *curr_surface = surface_info.Surface;
 
@@ -355,8 +366,33 @@ Render2DSentenceClass::Build_Textures ()
 		//
 		//	Create the new texture
 		//
+#if defined(W3D_RENDER_BACKEND_DX12)
+		// U02: normal sampled textures cannot provide R07 writable surface
+		// views in DX12. Convert the populated A4R4G4B4 CPU glyph surface
+		// directly to the native BGRA8 sampled texture, preserving alpha.
+		TextureClass *new_texture = W3DNEW TextureClass (curr_surface, MIP_LEVELS_1);
+		if (new_texture == nullptr || new_texture->Peek_Render_Texture() == nullptr)
+		{
+			static bool loggedNativeGlyphUploadFailure = false;
+			if (!loggedNativeGlyphUploadFailure)
+			{
+				loggedNativeGlyphUploadFailure = true;
+				DX12StartupTrace::Write("U02: native glyph atlas upload unavailable; will retry");
+			}
+			REF_PTR_RELEASE (new_texture);
+			++index; // Keep CPU surface and pending glyph geometry.
+			continue;
+		}
+		static bool loggedFirstNativeGlyphAtlas = false;
+		if (!loggedFirstNativeGlyphAtlas)
+		{
+			loggedFirstNativeGlyphAtlas = true;
+			DX12StartupTrace::Write("U02: first native glyph atlas converted and bound");
+		}
+#else
 		TextureClass *new_texture = W3DNEW TextureClass (desc.Width, desc.Width, WW3D_FORMAT_A4R4G4B4, MIP_LEVELS_1);
 		SurfaceClass *texture_surface = new_texture->Get_Surface_Level ();
+#endif
 
 		new_texture->Get_Filter().Set_U_Addr_Mode(TextureFilterClass::TEXTURE_ADDRESS_CLAMP);
 		new_texture->Get_Filter().Set_V_Addr_Mode(TextureFilterClass::TEXTURE_ADDRESS_CLAMP);
@@ -367,8 +403,10 @@ Render2DSentenceClass::Build_Textures ()
 		//
 		//	Copy the contents of the texture from the surface
 		//
+#if !defined(W3D_RENDER_BACKEND_DX12)
 		Renderer::Copy_Surface (curr_surface->Peek_Render_Surface (), nullptr, texture_surface->Peek_Render_Surface (), nullptr);
 		REF_PTR_RELEASE (texture_surface);
+#endif
 
 		//
 		//	Assign this texture to any renderers that need it
@@ -383,13 +421,7 @@ Render2DSentenceClass::Build_Textures ()
 		//
 		REF_PTR_RELEASE (new_texture);
 		REF_PTR_RELEASE (curr_surface);
-	}
-
-	//
-	//	Reset the list
-	//
-	if (PendingSurfaces.Count()>0) {
-		PendingSurfaces.Delete_All ();
+		PendingSurfaces.Delete (index);
 	}
 }
 
