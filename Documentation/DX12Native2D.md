@@ -76,3 +76,16 @@ compile-time branch.
 - **V03:** a playable DX12-only single-player skirmish and matched
   DX8-vs-DX12 screenshot comparisons. This remains intentionally gated;
   a source or WARP pass is not an in-game parity proof.
+
+## U02 continuation — 2026-10-19
+
+The original sentence renderer used `Get_Surface_Level()` on an ordinary
+sampled texture to copy glyph pixels, but the exclusive DX12 implementation
+only grants surface levels for R07 GPU render targets. U02 now passes the
+populated GDI A4R4G4B4 `SurfaceClass` to the native
+`TextureClass(SurfaceClass*, MIP_LEVELS_1)` conversion path. BGRA8 texture
+upload preserves glyph coverage and feeds the original U01 text quads.
+Failed uploads stay pending for retry and are not drawn untextured. The DX8
+branch retains its original copy path. A WARP GPU readback verifies packed
+glyph alpha; installed-game text, menu, HUD and localization parity remain
+separate U02/U03/U04/V03 acceptance gates.

@@ -39,6 +39,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_texture_descriptors.py'
       - name: Verify U01 native 2D sprite, glyph scissor, and grayscale contracts
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_render2d.py'
+      - name: Verify U02 native font atlas ownership and UI text contracts
+        run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_font_atlas.py'
       - name: Verify R08 GPU surface readback, blit, locks and synchronization
         run: python3 -m unittest discover -s scripts/tests -p 'test_dx12_surface_transfers.py'
       - name: Verify T01 native terrain geometry and atlas isolation
