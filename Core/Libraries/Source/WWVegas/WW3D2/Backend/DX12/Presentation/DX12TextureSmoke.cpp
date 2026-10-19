@@ -320,6 +320,33 @@ int wmain()
     DX12W3DSurfaces::Release(sourceSurface);
     DX12W3DSurfaces::Release(clonedSurface);
 
+    // U02: The original GDI sentence renderer writes A4R4G4B4 glyph
+    // coverage into a CPU SurfaceClass before converting it into a sampled
+    // texture. Verify the alpha nibble expansion on a real WARP upload.
+    RenderSurfaceDescription glyphSurfaceDesc;
+    glyphSurfaceDesc.width = glyphSurfaceDesc.height = 2;
+    glyphSurfaceDesc.pixelFormat = 7; // WW3D_FORMAT_A4R4G4B4
+    auto glyphSurface = DX12W3DSurfaces::Create(glyphSurfaceDesc);
+    if (!Check(glyphSurface && DX12W3DSurfaces::Lock(glyphSurface, surfaceMap) &&
+               surfaceMap.rowPitch == 4, "U02 lock packed 4-bit glyph coverage"))
+        return 1;
+    const std::uint16_t glyphPixels[] = {
+        0xFFFF, 0x8FFF, // solid white; half-transparent white
+        0x0FFF, 0xF000  // fully transparent white; opaque black
+    };
+    for (unsigned y = 0; y < 2; ++y)
+        std::memcpy(static_cast<std::uint8_t *>(surfaceMap.data) +
+                    y * surfaceMap.rowPitch, glyphPixels + y * 2, 4);
+    if (!Check(DX12W3DSurfaces::Unlock(glyphSurface),
+               "U02 unlock populated GDI-style glyph atlas"))
+        return 1;
+    auto glyphAtlas = DX12W3DSurfaces::ToTexture(
+        device.NativeDevice(), glyphSurface, 1);
+    if (!Check(glyphAtlas && MipCount(T(glyphAtlas)) == 1,
+               "U02 convert packed glyph atlas into sampled DX12 BGRA8 texture"))
+        return 1;
+    DX12W3DSurfaces::Release(glyphSurface);
+
     // Validate filesystem TGA parsing in the backend, without a D3DX loader.
     // The game archive DDS/TGA loader already decodes via FileFactory into
     // the very same neutral Map_Texture_* entry points.
@@ -359,13 +386,15 @@ int wmain()
         !Check(Prepare(device, T(cube)), "Upload cube faces") ||
         !Check(Prepare(device, T(volume)), "Upload volume slices") ||
         !Check(Prepare(device, T(fromSurface)),
-               "Upload native W3D CPU surface and generated mip levels"))
+               "Upload native W3D CPU surface and generated mip levels") ||
+        !Check(Prepare(device, T(glyphAtlas)),
+               "U02 upload packed-alpha glyph atlas to actual WARP GPU"))
         return 1;
     if (!Check(NativeResource(T(main)) &&
                NativeResource(T(main))->GetDesc().Format == DXGI_FORMAT_B8G8R8A8_UNORM,
                "Actual D3D12 default-heap BGRA8 GPU texture"))
         return 1;
-    Readback rgbaReadback, bcReadback, mipReadback, surfaceReadback, versionReadback;
+    Readback rgbaReadback, bcReadback, mipReadback, surfaceReadback, versionReadback, glyphReadback;
     if (!Check(CopyMipToReadback(device, T(main), 0, rgbaReadback),
                "Copy original texture from GPU") ||
         !Check(CopyMipToReadback(device, T(bc), 1, bcReadback),
@@ -373,7 +402,9 @@ int wmain()
         !Check(CopyMipToReadback(device, T(copied), 2, mipReadback),
                "Readback updated 1x1 mip") ||
         !Check(CopyMipToReadback(device, T(fromSurface), 1, surfaceReadback),
-               "Readback W3D CPU surface 2x2 box-filtered mip"))
+               "Readback W3D CPU surface 2x2 box-filtered mip") ||
+        !Check(CopyMipToReadback(device, T(glyphAtlas), 0, glyphReadback),
+               "U02 read back native glyph atlas BGRA8 from WARP"))
         return 1;
     // Recording an update during the same command list must not overwrite
     // the GPU generation already copied to rgbaReadback.
@@ -398,6 +429,13 @@ int wmain()
     Release(T(copied));
     Release(T(bc));
     Release(T(fromSurface));
+    Release(T(glyphAtlas));
+    const std::uint8_t glyphRow0[] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x88
+    };
+    const std::uint8_t glyphRow1[] = {
+        0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF
+    };
     if (!Check(device.InFlightResourceCount() >= 14, "GPU upload staging pinned") ||
         !Check(device.EndFrame(0), "Submit texture copies") ||
         !Check(device.WaitForIdle(), "Wait WARP texture uploads") ||
@@ -414,6 +452,11 @@ int wmain()
         !Check(EqualsReadback(versionReadback, 0,
                    reinterpret_cast<const std::uint8_t *>("\xE1\xD2\xC3\xB4"), 4),
                "Replacement GPU generation received new W3D CPU pixels") ||
+        !Check(EqualsReadback(glyphReadback, 0, glyphRow0, sizeof(glyphRow0)) &&
+               EqualsReadback(glyphReadback,
+                              glyphReadback.footprint.Footprint.RowPitch,
+                              glyphRow1, sizeof(glyphRow1)),
+               "U02 actual WARP glyph atlas BGRA8 matches 4-bit alpha coverage") ||
         !Check(device.InFlightResourceCount() == 0,
                "Staging and texture generations retired by native fence"))
         return 1;
@@ -432,7 +475,8 @@ int wmain()
     Release(T(volume));
     Release(T(bc3));
     device.Shutdown();
-    std::cout << "R04 PASS: W3D DDS BC mip uploads, packed and uncompressed pixels, "
-                 "cube/volume maps, TGA/palette/surface fallback, fence lifetime, GPU readback and reset\n";
+    std::cout << "R04/U02 PASS: W3D DDS BC mip uploads, packed and uncompressed pixels, "
+                 "GDI glyph atlas 4-bit alpha, cube/volume maps, TGA/palette/surface fallback, "
+                 "fence lifetime, GPU readback and reset\n";
     return 0;
 }
